@@ -40,3 +40,10 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------
+中文说明：
+本项目使用 BSD 3-Clause License 许可，允许自由使用、复制、修改和分发，但须保留版权声明和许可条款。
+禁止用于违法、侵权或伤害他人的行为。本库不保证适用性、稳定性或安全性，使用者自行承担风险。
+在使用本库的二次开发或派生项目中，应在文档或显著位置注明：
+“本项目使用 LikesProgram 库（作者：龙兵寅，官网：https://likesprogram.com，GitHub：https://github.com/likesprogram/LikesProgram）”
