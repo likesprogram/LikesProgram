@@ -1,41 +1,67 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
+# ================= Visual Studio =================
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+*.ncb
+*.sdf
+*.opensdf
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+*.ipch
 *.pdb
+*.obj
+*.iobj
+*.pch
+*.res
+*.ilk
+*.idb
+*.aps
+*.sbr
+*.log
+*.tlog/
+*.lastbuildstate
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# ================= Build 输出 =================
+Debug/
+Release/
+x64/
+x86/
+bin/
+build/
+out/
 
-# Fortran module files
-*.mod
-*.smod
+# ================= CMake =================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# ================= VSCode =================
+.vscode/
 
-# Executables
-*.exe
-*.out
-*.app
+# ================= 临时文件 =================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.DS_Store
 
-# debug information files
-*.dwo
+# ================= 第三方库 build 文件 =================
+third_party/*/build/
+
+# ================= 保留的源码和文档 =================
+# 只跟踪以下文件类型
+!*.cpp
+!*.c
+!*.h
+!*.hpp
+!*.inl
+!*.sln
+!*.vcxproj
+!*.txt
+!*.md
+!*.json
+!LICENSE
+!NOTICE
