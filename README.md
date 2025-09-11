@@ -231,10 +231,10 @@ namespace VectorTest {
 }
 ```
 
-#### 1.3、Vector3：三维向量类
-#### 1.4、Vector4：4维向量类
+#### 1.3、Vector3：三维向量类 (未完成)
+#### 1.4、Vector4：4维向量类 (未完成)
 
-### 2、String：国际化字符串工具
+### 2、String：国际化字符串工具 (未完成)
 
 ### 3、Timer：高精度计时器
 
@@ -337,6 +337,6 @@ namespace TimerTest {
 }
 ```
 
-### 4、Logger：灵活的日志系统
-### 5、ThreadPool：线程池
-### 6、CoreUtils：辅助工具类
+### 4、Logger：灵活的日志系统 (未完成)
+### 5、ThreadPool：线程池 (未完成)
+### 6、CoreUtils：辅助工具类 (未完成)
