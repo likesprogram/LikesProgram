@@ -1,9 +1,52 @@
 # LikesProgram
 
 ## 介绍
-`LikesProgram` 是一个 **C++ 通用工具库**，提供丰富、高效且易用的类库和工具函数，帮助开发者在各种项目中减少重复代码、提升开发效率，并保证性能和可扩展性。  
+`LikesProgram` 是一个 **C++ 通用工具库**，提供丰富、高效且易用的类库和工具函数，帮助开发者在各种项目中减少重复代码、提升开发效率，并保证性能和可扩展性。
+本库面向多种场景，包括性能分析、数学计算、日志管理、多线程任务调度、国际化字符串处理等，设计时注重易用性和可扩展性。
 
-## 功能列表
+## 功能概览
+LikesProgram
+├─ Math（数学工具）
+│  ├─ 常量：PI、EPSILON、INFINITY
+│  ├─ 函数：UpdateMax、EMA、NsToMs、NsToS、MsToNs、SToNs
+│  ├─ Vector（二位向量）
+│  ├─ Vector3（三维向量）
+│  └─ Vector4（四维向量）
+├─ Timer（高精度计时器）
+│  ├─ 单线程计时
+│  ├─ 多线程计时
+│  └─ 时间转换与字符串输出
+├─ Logger（日志系统）
+│  ├─ 多级别日志
+│  └─ 多种输出方式
+├─ ThreadPool（线程池管理）
+├─ String（国际化字符串）
+│  ├─ UTF-8 / UTF-16 / UTF-32 支持
+│  └─ 编码转换工具
+├─ CoreUtils（系统与辅助工具）
+│  ├─ 获取本机 MAC 地址
+│  ├─ 获取本机 IP 地址
+│  └─ 生成 UUID
+└─ Config（配置管理）
+   ├─ 支持继承 Serializer 自定义序列化格式
+   └─ 默认 JSON 支持
+
+## 使用须知
+
+LikesProgram 开源并允许自由使用和二次开发，但请注意：
+
+1. 使用本库的二次开发或派生项目 **必须在文档或显著位置注明**：
+    > “本项目使用了 LikesProgram 库（作者：龙兵寅，官网：[likesprogram.com](https://likesprogram.com)，Github：[github.com/likesprogram/LikesProgram](https://github.com/likesprogram/LikesProgram)”
+
+2. 禁止用于违法、侵权或伤害他人的行为。
+3. 本库不保证适用性、稳定性或安全性，使用者自行承担风险。
+4. 本库遵循 **BSD 3-Clause License**。允许自由使用、复制、修改和分发，但必须保留上述署名声明。
+
+## 许可证
+
+本库采用 **BSD 3-Clause License**，详见 LICENSE 文件。
+
+## 功能详解
 
 ### 1、Math：数学工具
 
