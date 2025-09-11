@@ -8,7 +8,7 @@
 ```
 LikesProgram
 ├─ Math（数学工具）
-│  ├─ 常量：PI、EPSILON、INFINITY
+│  ├─ 常量：PI、EPSILON、INF
 │  ├─ 函数：UpdateMax、EMA、NsToMs、NsToS、MsToNs、SToNs
 │  ├─ Vector（二位向量）
 │  ├─ Vector3（三维向量）
