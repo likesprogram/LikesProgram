@@ -1,0 +1,26 @@
+LikesProgram NOTICE
+==================
+
+Project: LikesProgram
+Author: 龙兵寅
+Website: https://likesprogram.com
+GitHub: https://github.com/likesprogram/LikesProgram
+
+This project is licensed under BSD 3-Clause License.
+
+Third-party components
+----------------------
+Currently, LikesProgram does not include any third-party libraries or resources.
+If third-party code or resources are added in the future, list them below:
+
+- [Library/Resource Name] - License Type - URL
+  Description of how it is used in LikesProgram.
+
+Acknowledgments
+----------------
+Any derivative work, modification, or redistribution based on this project
+must include an acknowledgment in the documentation or other prominent place:
+
+   “This project uses LikesProgram library (Author: 龙兵寅, 
+    Website: https://likesprogram.com, 
+    GitHub: https://github.com/likesprogram/LikesProgram)”
