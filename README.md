@@ -5,6 +5,7 @@
 本库面向多种场景，包括性能分析、数学计算、日志管理、多线程任务调度、国际化字符串处理等，设计时注重易用性和可扩展性。
 
 ## 功能概览
+```
 LikesProgram
 ├─ Math（数学工具）
 │  ├─ 常量：PI、EPSILON、INFINITY
@@ -30,6 +31,7 @@ LikesProgram
 └─ Config（配置管理）
    ├─ 支持继承 Serializer 自定义序列化格式
    └─ 默认 JSON 支持
+```
 
 ## 使用须知
 
