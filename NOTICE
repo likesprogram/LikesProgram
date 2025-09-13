@@ -13,8 +13,8 @@ Third-party components
 Currently, LikesProgram does not include any third-party libraries or resources.
 If third-party code or resources are added in the future, list them below:
 
-- [Library/Resource Name] - License Type - URL
-  Description of how it is used in LikesProgram.
+- UnicodeData.txt - Unicode License - https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
+  Used to generate Unicode case mapping tables in LikesProgram (BMP/SMP conversion functions).
 
 Acknowledgments
 ----------------

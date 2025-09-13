@@ -132,17 +132,30 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
+    <ClCompile Include="src\LikesProgram\unicode\CaseBMP.cpp" />
+    <ClCompile Include="src\LikesProgram\unicode\CaseSMP.cpp" />
+    <ClCompile Include="src\LikesProgram\unicode\Convert.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\LikesProgram\Timer.cpp" />
     <ClCompile Include="src\LikesProgram\math\Vector.cpp" />
+    <ClCompile Include="src\LikesProgram\String.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Timer.hpp" />
     <ClInclude Include="include\LikesProgram\math\Math.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector.hpp" />
+    <ClInclude Include="include\LikesProgram\unicode\Case.hpp" />
+    <ClInclude Include="include\LikesProgram\unicode\Convert.hpp" />
+    <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
+    <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />
+    <ClInclude Include="include\test\UnicodeTest.hpp" />
     <ClInclude Include="include\test\VectorTest .hpp" />
+    <ClInclude Include="include\LikesProgram\String.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

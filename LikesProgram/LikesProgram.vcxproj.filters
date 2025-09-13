@@ -27,6 +27,18 @@
     <ClCompile Include="src\LikesProgram\math\Vector.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\String.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\unicode\CaseBMP.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\unicode\CaseSMP.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\unicode\Convert.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
@@ -47,5 +59,26 @@
     <ClInclude Include="include\test\VectorTest .hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="include\LikesProgram\String.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\StringTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\UnicodeTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\unicode\Case.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\unicode\Convert.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
   </ItemGroup>
 </Project>
