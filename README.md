@@ -24,7 +24,7 @@ LikesProgram
 │  └─ Convert（编码转换）
 │      ├─ UTF-8 ⇄ UTF-16 ⇄ UTF-32
 │      └─ UTF-16 ⇄ GBK
-├─ String（国际化字符串）
+├─ String（Unicode 字符串类）
 │  ├─ UTF-8 / UTF-16 / UTF-32 支持
 │  └─ 编码转换工具
 ├─ Logger（日志系统）
