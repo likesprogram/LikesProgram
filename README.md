@@ -570,7 +570,153 @@ namespace UnicodeTest {
 
 }
 ```
-### 4、String：国际化字符串工具 (未完成)
+
+### 4、String：Unicode 字符串类
+
+`String` 类提供对多种编码的 Unicode 字符串的封装，内部统一以 UTF-16 存储，支持字符访问、子串操作、大小写转换、查找和分割等功能，适用于文本处理、文件解析和网络通信等场景。
+
+#### 构造函数
+
+* `String()`：默认构造，创建空字符串
+* `explicit String(const char* s, Encoding enc = Encoding::UTF8)`：从 C 风格字符串构造，默认按 UTF-8 解析
+* `explicit String(const char8_t* s)`：从 UTF-8 字符串构造
+* `explicit String(const char16_t* s)`：从 UTF-16 字符串构造
+* `explicit String(const char32_t* s)`：从 UTF-32 字符串构造
+* `String(const String& other)`：拷贝构造
+* `String(String&& other) noexcept`：移动构造
+* `explicit String(const char8_t c)`：构造单字符 UTF-8 字符串
+* `explicit String(const char16_t c)`：构造单字符 UTF-16 字符串
+* `explicit String(const char32_t c)`：构造单字符 UTF-32 字符串
+* `explicit String(const std::string& s, Encoding enc = Encoding::UTF8)`：从 std::string 构造
+* `explicit String(const std::u8string& s)`：从 std::u8string 构造
+* `explicit String(const std::wstring& s)`：从 std::wstring 构造
+* `explicit String(const std::u16string& s)`：从 std::u16string 构造
+* `explicit String(const std::u32string& s)`：从 std::u32string 构造
+
+#### 赋值操作
+
+* `String& operator=(const String& other)`：拷贝赋值
+* `String& operator=(String&& other) noexcept`：移动赋值
+
+#### 字符与长度访问
+
+* `size_t Size() const`：返回字符数量（Unicode aware）
+* `size_t Length() const`：同 `Size()`
+* `bool Empty() const`：判断字符串是否为空
+* `void Clear()`：清空字符串
+* `char32_t At(size_t index) const`：安全访问指定索引字符
+* `char32_t Front() const`：获取第一个字符
+* `char32_t Back() const`：获取最后一个字符
+
+#### 拼接与子串操作
+
+* `String& Append(const String& str)`：追加字符串
+* `String& operator+=(const String& str)`：追加字符串
+* `String SubString(size_t index, size_t count) const`：获取指定范围子串
+* `String Left(size_t count) const`：截取左侧子串
+* `String Right(size_t count) const`：截取右侧子串
+
+#### 大小写转换
+
+* `String ToUpper() const`：返回大写字符串
+* `String ToLower() const`：返回小写字符串
+* `void ToUpperInPlace()`：原地转换为大写
+* `void ToLowerInPlace()`：原地转换为小写
+
+#### 查找与匹配
+
+* `size_t Find(const String& str, size_t start = 0) const`：查找子串
+* `size_t LastFind(const String& str, size_t start = 0) const`：反向查找子串
+* `bool StartsWith(const String& str) const`：判断是否以指定子串开头
+* `bool EndsWith(const String& str) const`：判断是否以指定子串结尾
+* `bool EqualsIgnoreCase(const String& other) const`：忽略大小写比较
+
+#### 运算符重载
+
+* 比较运算：`==` / `!=` / `<` / `<=` / `>` / `>=`
+  `<` 采用字典序比较
+* 拼接运算：`operator+=`
+* 迭代器支持范围 for 循环：`begin()` / `end()`
+
+#### 转换函数
+
+* `std::string ToStdString(Encoding enc = Encoding::UTF8) const`：转换为 std::string
+* `std::wstring ToWString() const`：转换为 std::wstring
+* `std::u16string ToU16String() const`：转换为 std::u16string
+* `std::u32string ToU32String() const`：转换为 std::u32string
+
+#### 分割操作
+
+* `std::vector<String> Split(const String& sep) const`：按指定分隔符拆分字符串
+
+#### 使用示例
+
+```cpp
+#pragma once
+#include <iostream>
+#include <LikesProgram/String.hpp>
+
+namespace StringTest {
+    void Test() {
+        // 构造测试
+        LikesProgram::String s1(u"Hello 世界");      // UTF-16
+        LikesProgram::String s2("hello world");      // UTF-8 默认
+        LikesProgram::String s3(U"🌟星");           // UTF-32 emoji + 中文
+        LikesProgram::String s4 = s1;                // 拷贝构造
+        LikesProgram::String s5 = std::move(s2);     // 移动构造
+
+        std::cout << "s1 size: " << s1.Size() << "\n"; // Unicode code points
+        std::cout << "s3 size: " << s3.Size() << "\n";
+
+        // 拼接
+        s1.Append(s3);
+        std::cout << "After append, s1 size: " << s1.Size() << "\n";
+
+        // 子串
+        LikesProgram::String sub = s1.SubString(0, 5);
+        std::cout << "SubString(0,5) size: " << sub.Size() << "\n";
+
+        // 大小写转换
+        LikesProgram::String upper = s1.ToUpper();
+        LikesProgram::String lower = s1.ToLower();
+        std::cout << "Upper: " << upper.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+        std::cout << "Lower: " << lower.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+
+        // 查找
+        size_t idx = s1.Find(LikesProgram::String(u"世界"));
+        std::cout << "Find '世界': " << idx << "\n";
+
+        size_t last_idx = s1.LastFind(LikesProgram::String(u"星"));
+        std::cout << "LastFind '星': " << last_idx << "\n";
+
+        // StartsWith / EndsWith
+        std::cout << "StartsWith 'Hello': " << s1.StartsWith(LikesProgram::String(u"Hello")) << "\n";
+        std::cout << "EndsWith '星': " << s1.EndsWith(LikesProgram::String(U"星")) << "\n";
+
+        // 忽略大小写比较
+        LikesProgram::String cmp1("Test");
+        LikesProgram::String cmp2("tEsT");
+        std::cout << "EqualsIgnoreCase: " << cmp1.EqualsIgnoreCase(cmp2) << "\n";
+
+        // 迭代器
+        std::cout << "Iterate code points: ";
+        for (auto cp : s1) {
+            std::cout << std::hex << "U+" << static_cast<uint32_t>(cp) << " ";
+        }
+        std::cout << "\n";
+
+        // 分割
+        LikesProgram::String s6("a,b,c,d");
+        auto parts = s6.Split(LikesProgram::String(u","));
+        std::cout << "Split: ";
+        for (auto& p : parts) {
+            std::cout << p.ToStdString() << " ";
+        }
+        std::cout << "\n";
+    }
+}
+```
+
 ### 5、Logger：灵活的日志系统 (未完成)
 ### 6、ThreadPool：线程池 (未完成)
 ### 7、CoreUtils：辅助工具类 (未完成)

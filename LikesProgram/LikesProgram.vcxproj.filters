@@ -77,6 +77,9 @@
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="include\LikesProgram\CoreUtils.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />

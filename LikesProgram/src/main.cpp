@@ -12,10 +12,10 @@ int main()
     std::cout << std::endl << std::endl << "===== VectorTest =====" << std::endl << std::endl;
     VectorTest::Test();
 
-    std::cout << std::endl << std::endl << "===== StringTest =====" << std::endl << std::endl;
-    //StringTest::Test();
-
     std::cout << std::endl << std::endl << "===== UnicodeTest =====" << std::endl << std::endl;
     UnicodeTest::Test();
+
+    std::cout << std::endl << std::endl << "===== StringTest =====" << std::endl << std::endl;
+    StringTest::Test();
     return 0;
 }
