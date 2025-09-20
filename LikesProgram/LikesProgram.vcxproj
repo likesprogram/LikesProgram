@@ -156,6 +156,7 @@
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
     <ClInclude Include="include\test\LoggerTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
+    <ClInclude Include="include\test\ThreadPoolTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />
     <ClInclude Include="include\test\UnicodeTest.hpp" />
     <ClInclude Include="include\test\VectorTest .hpp" />

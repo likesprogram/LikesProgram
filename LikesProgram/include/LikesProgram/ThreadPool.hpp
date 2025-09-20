@@ -74,11 +74,13 @@ namespace LikesProgram {
             size_t aliveThreads = 0;    // 存活工作线程数
             size_t largestPoolSize = 0; // 历史最大线程数
             size_t peakQueueSize = 0;   // 队列峰值
-            std::chrono::steady_clock::time_point lastSubmitTime{};
-            std::chrono::steady_clock::time_point lastFinishTime{};
-            std::chrono::nanoseconds longestTaskTime{ 0 };
-            std::chrono::nanoseconds arithmeticAverageTaskTime{ 0 };
-            std::chrono::nanoseconds averageTaskTime{ 0 }; // EMA
+            std::chrono::steady_clock::time_point lastSubmitTime{}; // 最后一次提交时间
+            std::chrono::steady_clock::time_point lastFinishTime{}; // 最后一次完成时间
+            std::chrono::nanoseconds longestTaskTime{ 0 }; // 最长任务耗时
+            std::chrono::nanoseconds arithmeticAverageTaskTime{ 0 }; // 算术平均任务耗时
+            std::chrono::nanoseconds averageTaskTime{ 0 }; // 指数移动平均任务耗时
+
+            String ToString() const;
         };
 
         explicit ThreadPool(Options opts = Options())
@@ -109,7 +111,7 @@ namespace LikesProgram {
             -> std::future<std::invoke_result_t<F, Args...>> {
             using Ret = std::invoke_result_t<F, Args...>;
 
-            // packaged_task that invokes fn with moved args (supports move-only args)
+            // 调用带有移动参数的fn的packaged_task（支持仅移动参数）
             auto task = std::make_shared<std::packaged_task<Ret()>>(
                 [fn = std::forward<F>(f), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable -> Ret {
                     return std::apply(fn, std::move(tup));
@@ -120,7 +122,7 @@ namespace LikesProgram {
             auto wrapper = [task]() {
                 // packaged_task 会把异常转发到 future
                 (*task)();
-                };
+            };
 
             if (!EnqueueTask(std::function<void()>(wrapper))) {
                 // 入队失败：返回一个已经带异常的 future
@@ -130,8 +132,32 @@ namespace LikesProgram {
             }
             return fut;
         }
+
+        // 提交一个任务，无返回值，支持参数
+        template<typename F, typename... Args>
+        bool Post(F&& f, Args&&... args) {
+            using Fn = std::decay_t<F>;
+
+            // 打包任务，捕获函数和参数，生成一个 void() 调用
+            auto task = std::make_shared<std::packaged_task<void()>>(
+                [fn = Fn(std::forward<F>(f)), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                    std::apply(fn, std::move(tup));
+                }
+            );
+
+            auto wrapper = [task]() {
+                // packaged_task 会把异常转发到 future
+                (*task)();
+            };
+
+            // 入队并返回是否成功
+            bool success = EnqueueTask(std::function<void()>(wrapper));
+            if (!success && opts_.exceptionHandler) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
+            return success;
+        }
+
         // 提交一个任务,无返回值无参数
-        bool Post(std::function<void()> fn);
+        bool PostNoArg(std::function<void()> fn);
 
         // ---- 查询与监控 ----
         size_t GetQueueSize() const;

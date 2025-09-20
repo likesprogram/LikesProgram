@@ -5,6 +5,7 @@
 #include "../include/test/UnicodeTest.hpp"
 #include "../include/LikesProgram/CoreUtils.hpp"
 #include "../include/test/LoggerTest.hpp"
+#include "../include/test/ThreadPoolTest.hpp"
 
 int main()
 {
@@ -25,6 +26,9 @@ int main()
 
         std::cout << std::endl << std::endl << "===== LoggerTest =====" << std::endl << std::endl;
         LoggerTest::Test();
+
+        std::cout << std::endl << std::endl << "===== ThreadPoolTest =====" << std::endl << std::endl;
+        ThreadPoolTest::Test();
     } while (false);
     return 0;
 }

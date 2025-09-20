@@ -975,4 +975,180 @@ namespace LoggerTest {
 }
 ```
 
-### 7、ThreadPool：线程池 (未完成)
+### 7、ThreadPool：线程池 
+
+`ThreadPool` 提供了一个可配置、动态伸缩的线程池，支持任务排队、异步提交、任务拒绝策略及运行时统计信息。它适合处理高并发任务，并提供线程安全的操作接口。
+
+#### 拒绝策略（RejectPolicy）
+
+当任务队列满时，可采用以下策略：
+
+* `Block` 阻塞等待队列有空位再入队
+* `Discard` 丢弃新任务
+* `DiscardOld` 丢弃最老任务（队头），然后入队新任务
+* `Throw` 抛出异常，通知调用者
+
+#### 关闭策略（ShutdownPolicy）
+
+线程池停止时可采用不同策略：
+
+* `Graceful` 不接收新任务，执行完队列及正在运行任务后退出
+* `Drain` 立即拒绝新任务，但执行队列中已有任务，尽快退出（不清空队列）
+* `CancelNow` 立即拒绝新任务并丢弃队列任务，尽快退出
+
+#### 配置选项（Options）
+
+可配置线程池行为，包括线程数量、队列容量、任务拒绝策略等：
+
+* `coreThreads` 最小线程数，默认与硬件并发数一致
+* `maxThreads` 最大线程数，默认与硬件并发数一致
+* `queueCapacity` 任务队列容量
+* `rejectPolicy` 任务入队拒绝策略
+* `keepAlive` 空闲线程存活时间
+* `allowDynamicResize` 是否允许动态扩容/回收线程
+* `threadNamePrefix` 线程名前缀
+* `exceptionHandler` 任务执行异常回调
+
+#### 运行时统计信息（Statistics）
+
+线程池提供详细的任务和线程运行统计：
+
+* `submitted` 成功入队任务数
+* `rejected` 被拒绝任务数
+* `completed` 执行完成任务数
+* `active` 正在执行任务数
+* `aliveThreads` 存活工作线程数
+* `largestPoolSize` 历史最大线程数
+* `peakQueueSize` 任务队列峰值
+* `lastSubmitTime` 最后提交任务时间
+* `lastFinishTime` 最后完成任务时间
+* `longestTaskTime` 最长任务耗时
+* `arithmeticAverageTaskTime` 算术平均任务耗时
+* `averageTaskTime` 指数移动平均任务耗时
+
+#### 生命周期控制
+
+* `ThreadPool(Options opts = Options())` 构造线程池实例，可传入自定义配置
+* `~ThreadPool()` 析构函数，停止线程池并清理资源
+* `void Start()` 启动线程池（可多次调用，仅第一次生效）
+* `void Shutdown(ShutdownPolicy mode = ShutdownPolicy::Graceful)` 统一停止线程池
+* `bool AwaitTermination(std::chrono::milliseconds timeout)` 等待线程池终止，timeout=0 表示非阻塞
+* `void JoinAll()` 阻塞等待所有线程退出
+
+#### 老接口兼容
+
+* `void Stop()` 等同于 `Shutdown(ShutdownPolicy::Graceful)`，用于平滑停止线程池，保留老代码调用方式。
+* `void ShutdownNow()` 等同于 `Shutdown(ShutdownPolicy::CancelNow)`，用于立即停止线程池并丢弃队列任务，保留老代码调用方式。
+
+#### 提交任务
+
+线程池支持多种任务提交方式：
+
+* `Submit(F&& f, Args&&... args)` 提交有返回值的任务，返回 `std::future`
+* `Post(F&& f, Args&&... args)` 提交无返回值任务
+* `PostNoArg(std::function<void()> fn)` 提交无返回值、无参数的任务
+
+任务提交遵循配置的 `RejectPolicy`，可在失败时通过 `exceptionHandler` 回调处理异常。
+
+#### 查询与监控
+
+* `size_t GetQueueSize() const` 当前任务队列大小
+* `size_t GetActiveCount() const` 正在执行任务的线程数
+* `size_t GetThreadCount() const` 活跃线程数
+* `bool IsRunning() const` 线程池是否运行
+* `Statistics Snapshot() const` 获取线程池快照统计信息
+* `size_t IetRejectedCount() const` 被拒绝任务数量
+* `size_t IetTotalTasksSubmitted() const` 总提交任务数
+* `size_t IetCompletedCount() const` 完成任务数
+* `size_t IetLargestPoolSize() const` 历史最大线程数
+* `size_t IetPeakQueueSize() const` 队列峰值
+
+#### 使用示例
+
+```cpp
+#pragma once
+#include <LikesProgram/ThreadPool.hpp>
+#include <LikesProgram/Logger.hpp>
+#include <LikesProgram/String.hpp>
+
+namespace ThreadPoolTest {
+	void Test() {        // 初始化日志
+        auto& logger = LikesProgram::Logger::Instance();
+#ifdef _WIN32
+        logger.SetEncoding(LikesProgram::String::Encoding::GBK);
+#endif
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
+        // 内置控制台输出 Sink
+        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+
+        LikesProgram::ThreadPool::Options optins = {
+        2,   // 最小线程数
+        4,   // 线程数上限
+        2048,// 队列长度限制
+        LikesProgram::ThreadPool::RejectPolicy::Block, // 任务拒绝策略
+        std::chrono::milliseconds(100), // 空闲线程回收时间
+        true, // 是否启用动态扩容、缩容
+        };
+
+        // 创建线程池
+        // LikesProgram::ThreadPool pool(optins); // 使用自定义参数创建线程池
+        LikesProgram::ThreadPool pool; // 使用默认参数创建线程池
+        pool.Start();
+
+        // 提交一些任务
+        for (int i = 0; i < 30; i++) {
+            // 提交无返回值无参数的任务
+            pool.PostNoArg([i]() {
+                LOG_DEBUG(u"PostNoArg：Hello from worker");
+            });
+
+            // 提交无返回值有参数的任务
+            pool.Post([](LikesProgram::String message) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                LikesProgram::String out;
+                out.Append(message);
+                out.Append(u"：Hello from worker");
+                LOG_DEBUG(out);
+            }, u"Post");
+
+            // 提交有返回值有参数的任务
+            auto poolOut = pool.Submit([i](LikesProgram::String message) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                LOG_DEBUG(message);
+                LikesProgram::String out;
+                out.Append(message);
+                out.Append(u"：[");
+                out.Append(LikesProgram::String(std::to_string(i)));
+                out.Append(u"] Out");
+                return out;
+            }, u"Submit");
+
+            // 等待任务完成, 并获取结果（这里会拖慢任务效率）
+            // LOG_WARN(poolOut.get());
+
+            if (i % 10 == 0) {
+                LOG_WARN(poolOut.get()); // 每隔10次输出一次 Submit 的运行结果
+
+                // 获取快照统计信息
+                LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
+                LOG_WARN(stats.ToString());
+            }
+        }
+
+        // 关闭线程池
+        pool.Shutdown();
+        if (pool.AwaitTermination(std::chrono::milliseconds(1000))) { // 等待线程池关闭
+            LOG_WARN(u"线程池已关闭");
+        } else {
+            LOG_ERROR(u"线程池关闭超时");
+        }
+
+        // 获取快照统计信息
+        LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
+        LOG_WARN(stats.ToString());
+
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
+        logger.Shutdown();
+	}
+}
+```

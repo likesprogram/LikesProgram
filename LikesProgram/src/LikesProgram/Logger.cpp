@@ -173,6 +173,10 @@ namespace LikesProgram {
     // Logger API
     Logger& Logger::Instance() {
         static Logger inst;
+        if (inst.pImpl == nullptr || inst.pImpl->stop) {
+            delete inst.pImpl;
+            inst.pImpl = new Impl();
+        }
         return inst;
     }
 

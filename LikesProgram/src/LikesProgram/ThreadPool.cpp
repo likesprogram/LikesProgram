@@ -6,6 +6,67 @@
 #include <iomanip>
 
 namespace LikesProgram {
+    String ThreadPool::Statistics::ToString() const {
+        LikesProgram::String statsStr;
+        statsStr.Append(u"成功入队的任务数：")
+            .Append(LikesProgram::String(std::to_string(submitted))).Append(u"\r\n");
+        statsStr.Append(u"被拒绝的任务数：")
+            .Append(LikesProgram::String(std::to_string(rejected))).Append(u"\r\n");
+        statsStr.Append(u"执行完成的任务数：")
+            .Append(LikesProgram::String(std::to_string(completed))).Append(u"\r\n");
+        statsStr.Append(u"正在执行的任务数：")
+            .Append(LikesProgram::String(std::to_string(active))).Append(u"\r\n");
+        statsStr.Append(u"存活工作线程数：")
+            .Append(LikesProgram::String(std::to_string(aliveThreads))).Append(u"\r\n");
+        statsStr.Append(u"历史最大线程数：")
+            .Append(LikesProgram::String(std::to_string(largestPoolSize))).Append(u"\r\n");
+        statsStr.Append(u"队列峰值：")
+            .Append(LikesProgram::String(std::to_string(peakQueueSize))).Append(u"\r\n");
+
+        if (lastSubmitTime.time_since_epoch().count() != 0) {
+            auto tt = std::chrono::system_clock::to_time_t(
+                std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                    lastSubmitTime - std::chrono::steady_clock::now()
+                    + std::chrono::system_clock::now()));
+            std::tm tm{};
+#ifdef _WIN32
+            localtime_s(&tm, &tt);
+#else
+            localtime_r(&tt, &tm);
+#endif
+            std::wostringstream oss;
+            oss << std::put_time(&tm, L"%F %T");
+            statsStr.Append(u"最后一次提交时间：")
+                .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
+        }
+
+        if (lastFinishTime.time_since_epoch().count() != 0) {
+            auto tt = std::chrono::system_clock::to_time_t(
+                std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                    lastFinishTime - std::chrono::steady_clock::now()
+                    + std::chrono::system_clock::now()));
+            std::tm tm{};
+#ifdef _WIN32
+            localtime_s(&tm, &tt);
+#else
+            localtime_r(&tt, &tm);
+#endif
+            std::wostringstream oss;
+            oss << std::put_time(&tm, L"%F %T");
+            statsStr.Append(u"最后一次完成时间：")
+                .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
+        }
+
+        statsStr.Append(u"最长任务耗时：")
+            .Append(LikesProgram::Timer::ToString(longestTaskTime)).Append(u"\r\n");
+        statsStr.Append(u"算术平均任务耗时：")
+            .Append(LikesProgram::Timer::ToString(arithmeticAverageTaskTime)).Append(u"\r\n");
+        statsStr.Append(u"指数移动平均任务耗时：")
+            .Append(LikesProgram::Timer::ToString(averageTaskTime)).Append(u"\r\n");
+
+        return statsStr;
+    }
+
     ThreadPool::~ThreadPool() {
         try {
             Shutdown(ShutdownPolicy::CancelNow);
@@ -71,9 +132,9 @@ namespace LikesProgram {
         return workerExitCv_.wait_until(lk, deadline, [&] { return aliveThreads_.load(std::memory_order_acquire) == 0; });
     }
 
-    bool ThreadPool::Post(std::function<void()> fn) {
+    bool ThreadPool::PostNoArg(std::function<void()> fn) {
         bool success = EnqueueTask(std::move(fn));
-        if (!success) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
+        if (!success && opts_.exceptionHandler) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
         return success;
     }
 
@@ -169,7 +230,7 @@ namespace LikesProgram {
     void ThreadPool::WorkerLoop() {
         // 线程命名（可选）
         if (!opts_.threadNamePrefix.Empty()) {
-            std::ostringstream oss;
+            std::wostringstream woss;
             // 获取当前线程的 ID 并直接转换为整数（通常是一个指针值）
             std::thread::id threadId = std::this_thread::get_id();
 
@@ -179,13 +240,13 @@ namespace LikesProgram {
             // 保证生成一个 5 位数 ID（通过对 idValue 进行模运算）
             size_t threadIdNum = idValue % 100000;  // 保证为 5 位数
 
-#if defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-            prefix = prefix.substr(0, 15 - 5);
-#endif
-            // 确保输出为 5 位数（不足前面补零）
-            oss << std::setw(5) << std::setfill('0') << threadIdNum;
+            opts_.threadNamePrefix = opts_.threadNamePrefix.SubString(0, 15 - 5);
 
-            CoreUtils::SetCurrentThreadName(opts_.threadNamePrefix.Append(String(oss.str())));
+            // 确保输出为 5 位数（不足前面补零）
+            woss << std::setw(5) << std::setfill(L'0') << threadIdNum;
+            String threadName;
+            threadName.Append(opts_.threadNamePrefix).Append(String(woss.str()));
+            CoreUtils::SetCurrentThreadName(threadName);
         }
 
         // 更新历史最大线程数（spawnWorker 已把 aliveThreads_++）
