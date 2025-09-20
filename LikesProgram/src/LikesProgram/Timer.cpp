@@ -1,6 +1,8 @@
 #include "../../include/LikesProgram/Timer.hpp"
 #include "../../include/LikesProgram/math/Math.hpp"
 
+#include <thread>
+#include <mutex>
 #if defined(_WIN32)
 #include <windows.h>
 #else
@@ -8,94 +10,104 @@
 #endif
 
 namespace LikesProgram {
-    Timer::Timer(bool autoStart){
+    Timer::Timer(bool autoStart, Timer* parent): m_parent(parent) {
         if (autoStart) Start();
     }
 
-    void Timer::Start(){
-        m_startNs = NowNs();
-        m_running = true;
+    void Timer::SetParent(Timer* parent) {
+        m_parent = parent;
     }
 
-    Timer::Duration Timer::Stop(double alpha)
-    {
-        if (!m_running) return Duration(0);
-        int64_t elapsedNs = NowNs() - m_startNs;
-        m_lastNs = elapsedNs;
+    void Timer::Start(){
+        m_startNs.store(NowNs(), std::memory_order_relaxed);
+        m_running.store(true, std::memory_order_relaxed);
+    }
 
-        // 线程局部累积
-        m_totalNs += elapsedNs;
-        m_count++;
+    Timer::Duration Timer::Stop(double alpha) {
+        std::shared_lock lk(m_mutex); // 共享锁
+        if (!m_running.load(std::memory_order_relaxed)) return Duration(0);
+        int64_t elapsedNs = NowNs() - m_startNs.load(std::memory_order_relaxed);
+        m_lastNs.store(elapsedNs, std::memory_order_relaxed);
 
-        // 全局累积
-        totalNs_.fetch_add(elapsedNs, std::memory_order_relaxed);
-        count_.fetch_add(1, std::memory_order_relaxed);
+        // 累积
+        m_totalNs.fetch_add(elapsedNs, std::memory_order_relaxed);
+        m_count.fetch_add(1, std::memory_order_relaxed);
+
 
         // 更新最长耗时
-        Math::UpdateMax(longestNs_, elapsedNs);
+        Math::UpdateMax(m_longestNs, elapsedNs);
 
         // EMA 更新
-        double prevAvg = averageNs_.load(std::memory_order_relaxed);
+        double prevAvg = m_averageNs.load(std::memory_order_relaxed);
         double nextAvg = (prevAvg == 0.0) ? static_cast<double>(elapsedNs) : Math::EMA(prevAvg, elapsedNs, alpha);
-        while (!averageNs_.compare_exchange_weak(prevAvg, nextAvg, std::memory_order_relaxed)) {
+        while (!m_averageNs.compare_exchange_weak(prevAvg, nextAvg, std::memory_order_relaxed)) {
             nextAvg = Math::EMA(prevAvg, elapsedNs, alpha);
         }
 
-        m_running = false;
+        if (m_parent) {
+            m_parent->m_totalNs.fetch_add(elapsedNs, std::memory_order_relaxed);
+            m_parent->m_count.fetch_add(1, std::memory_order_relaxed);
+
+            Math::UpdateMax(m_parent->m_longestNs, elapsedNs);
+
+            // EMA 更新
+            double prevAvg = m_parent->m_averageNs.load(std::memory_order_relaxed);
+            double nextAvg = (prevAvg == 0.0) ? static_cast<double>(elapsedNs) : Math::EMA(prevAvg, elapsedNs, alpha);
+            while (!m_parent->m_averageNs.compare_exchange_weak(prevAvg, nextAvg, std::memory_order_relaxed)) {
+                nextAvg = Math::EMA(prevAvg, elapsedNs, alpha);
+            }
+        }
+
+        m_running.store(false, std::memory_order_relaxed);
         return Duration(elapsedNs);
     }
 
     void Timer::ResetThread() {
-        m_startNs = 0;
-        m_lastNs = 0;
-        m_totalNs = 0;
-        m_count = 0;
+        std::unique_lock lk(m_mutex); // 独享锁
+        m_startNs.store(0, std::memory_order_relaxed);
+        m_lastNs.store(0, std::memory_order_relaxed);
     }
 
     void Timer::ResetGlobal() {
-        totalNs_.store(0, std::memory_order_relaxed);
-        count_.store(0, std::memory_order_relaxed);
-        longestNs_.store(0, std::memory_order_relaxed);
-        averageNs_.store(0, std::memory_order_relaxed);
+        std::unique_lock lk(m_mutex); // 独享锁
+        m_totalNs.store(0, std::memory_order_relaxed);
+        m_count.store(0, std::memory_order_relaxed);
+        m_longestNs.store(0, std::memory_order_relaxed);
+        m_averageNs.store(0, std::memory_order_relaxed);
     }
 
-    Timer::Duration Timer::GetLastElapsed() {
-        return Duration(m_lastNs);
+    void Timer::Reset() {
+        ResetThread();
+        ResetGlobal();
     }
 
-    Timer::Duration Timer::GetTotalElapsed() {
-        return Duration(m_totalNs);
+    Timer::Duration Timer::GetLastElapsed() const {
+        return Duration(m_lastNs.load(std::memory_order_relaxed));
     }
 
-    Timer::Duration Timer::GetTotalGlobalElapsed()
-    {
-        return Duration(totalNs_.load(std::memory_order_relaxed));
+    Timer::Duration Timer::GetTotalElapsed() const {
+        return Duration(m_totalNs.load(std::memory_order_relaxed));
     }
 
-    Timer::Duration Timer::GetLongestElapsed() {
-        return Duration(longestNs_.load(std::memory_order_relaxed));
+    Timer::Duration Timer::GetLongestElapsed() const {
+        return Duration(m_longestNs.load(std::memory_order_relaxed));
     }
 
-    Timer::Duration Timer::GetEMAAverageElapsed() {
-        return Duration(static_cast<long long>(averageNs_.load(std::memory_order_relaxed)));
+    Timer::Duration Timer::GetEMAAverageElapsed() const {
+        return Duration(static_cast<long long>(m_averageNs.load(std::memory_order_relaxed)));
     }
 
-    Timer::Duration Timer::GetArithmeticAverageElapsed() {
-        if (m_count <= 0) return Duration{ 0 };
-        return m_count == 0 ? Duration(0) : Duration(m_totalNs / m_count);
-    }
-
-    Timer::Duration Timer::GetArithmeticAverageGlobalElapsed() {
-        long long sum = count_.load(std::memory_order_relaxed);
+    Timer::Duration Timer::GetArithmeticAverageElapsed() const {
+        long long sum = m_count.load(std::memory_order_relaxed);
         if (sum <= 0) return Duration{ 0 };
-        return sum == 0 ? Duration(0) : Duration(totalNs_.load(std::memory_order_relaxed) / sum);
+        return sum == 0 ? Duration(0) : Duration(m_totalNs.load(std::memory_order_relaxed) / sum);
     }
 
-    bool Timer::IsRunning() {
-        return m_running;
+    bool Timer::IsRunning() const {
+        return m_running.load(std::memory_order_relaxed);
     }
 
-    std::string Timer::ToString(Duration duration) {
+    String Timer::ToString(Duration duration) {
         using namespace std::chrono;
         auto ns = duration_cast<nanoseconds>(duration).count();
         auto h = ns / 3'600'000'000'000LL; ns %= 3'600'000'000'000LL;
@@ -107,7 +119,7 @@ namespace LikesProgram {
         char buffer[128];
         snprintf(buffer, sizeof(buffer), "%02lluh %02llum %02llus %03llums %03lluus %lluns",
             h, m, s, ms, us, ns);
-        return std::string(buffer);
+        return String(buffer);
     }
 
     int64_t Timer::NowNs()

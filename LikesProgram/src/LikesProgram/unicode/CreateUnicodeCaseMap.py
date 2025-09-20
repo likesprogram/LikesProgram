@@ -112,7 +112,8 @@ def write_smp_cpp(filename, mapping_upper, mapping_lower):
     """生成 SMP C++ 文件，使用合并数组 + 二分查找"""
     with open(filename, "w", encoding="utf-8") as f:
         f.write(HEADER_COMMENT + "\n\n")
-        f.write('#include "' + HEADER_PATH + '"\n\n')
+        f.write('#include "' + HEADER_PATH + '"\n')
+        f.write('#include <cstddef>\n\n')
         f.write("namespace LikesProgram {\n")
         f.write("    namespace Unicode {\n")
         f.write("        namespace Case {\n")

@@ -135,7 +135,16 @@ namespace UnicodeTest {
         std::string gbk = LikesProgram::Unicode::Convert::Utf16ToGbk(chinese16);
         std::u16string backToUtf16 = LikesProgram::Unicode::Convert::GbkToUtf16(gbk);
         std::cout << "GBK 往返长度: " << backToUtf16.size() << "\n";
-        std::cout << "GBK: " << gbk << "\n";
+        std::cout << "Utf16: ";
+        for (char16_t c : backToUtf16) {
+            std::cout << std::hex << std::showbase << (uint16_t)c << ' ';
+        }
+        std::cout << '\n';
+        std::cout << "GBK: ";
+        for (unsigned char c : gbk) {
+            std::cout << std::hex << std::showbase << (int)c << ' ';
+        }
+        std::cout << std::dec << std::noshowbase << '\n';
     }
 
     void Test() {
@@ -144,5 +153,4 @@ namespace UnicodeTest {
         ValidateSMP();
         TestConvert();
     }
-
 }

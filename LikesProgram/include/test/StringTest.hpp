@@ -3,7 +3,27 @@
 #include "../LikesProgram/String.hpp"
 
 namespace StringTest {
+    // 输入输出测试
+    void OutAndIn() {
+        std::cout << "===== 输出输出示例 =====" << std::endl;
+#ifdef _WIN32
+        LikesProgram::String str1("", LikesProgram::String::Encoding::GBK); // Windows 控制台输入需要先设置编码为 GBK，Linux 控制台输入可使用默认 UTF-8
+#else
+        LikesProgram::String str1; // Linux 控制台输入可使用默认 UTF-8
+#endif
+        std::cout << "请输入字符串[cin]：";
+        std::cin >> str1;
+        std::cout << "[cout]：" << str1 << "\n";
+
+        LikesProgram::String str2;
+        std::cout << "请输入字符串[wcin]：";
+        std::wcin >> str2;
+        std::wcout << "[wcout]：" << str2 << "\n";
+    }
+
     void Test() {
+        OutAndIn();
+        std::cout << "===== 其他示例 =====" << std::endl;
         // 构造测试
         LikesProgram::String s1(u"Hello 世界");      // UTF-16
         LikesProgram::String s2("hello world");      // UTF-8 默认
@@ -25,8 +45,13 @@ namespace StringTest {
         // 大小写转换
         LikesProgram::String upper = s1.ToUpper();
         LikesProgram::String lower = s1.ToLower();
-        std::cout << "Upper: " << upper.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
-        std::cout << "Lower: " << lower.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+#ifdef _WIN32
+        std::cout << "upper: " << upper.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+        std::cout << "lower: " << lower.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+#else
+        std::cout << "upper: " << upper.ToStdString() << "\n";
+        std::cout << "lower: " << lower.ToStdString() << "\n";
+#endif
 
         // 查找
         size_t idx = s1.Find(LikesProgram::String(u"世界"));

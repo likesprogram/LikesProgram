@@ -2,10 +2,13 @@
 #include <stdexcept>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <iconv.h>
+#include <cerrno>
 #endif
 namespace LikesProgram {
-	namespace Unicode {
-		namespace Convert {
+    namespace Unicode {
+        namespace Convert {
             std::u16string Utf8ToUtf16(const std::u8string& utf8) {
                 std::u16string result;
                 size_t i = 0;
@@ -89,13 +92,30 @@ namespace LikesProgram {
                 MultiByteToWideChar(936, MB_PRECOMPOSED, gbk.data(), static_cast<int>(gbk.size()), &wstr[0], sizeNeeded);
                 return std::u16string(wstr.begin(), wstr.end());
 #else
-                std::mbstate_t state{};
-                const char* src = gbk.data();
-                size_t len = std::mbsrtowcs(nullptr, &src, 0, &state);
-                if (len == static_cast<size_t>(-1)) throw std::runtime_error("GbkToUtf16 failed");
-                std::wstring wide(len, 0);
-                std::mbsrtowcs(&wide[0], &src, len, &state);
-                return std::u16string(wide.begin(), wide.end());
+                iconv_t cd = iconv_open("UTF-16LE", "GBK");
+                if (cd == (iconv_t)-1)
+                    throw std::runtime_error("GbkToUtf16 failed: iconv_open");
+
+                const char* inBuf = gbk.data();
+                size_t inBytes = gbk.size();
+
+                size_t outBytes = gbk.size() * 4 + 8; // UTF-16 最多 4B/字
+                std::string out(outBytes, '\0');
+                char* outPtr = out.data();
+
+                size_t res = iconv(cd,
+                    const_cast<char**>(&inBuf), &inBytes,
+                    &outPtr, &outBytes);
+                if (res == (size_t)-1) {
+                    iconv_close(cd);
+                    throw std::runtime_error("GbkToUtf16 failed: iconv (" +
+                        std::to_string(errno) + ")");
+                }
+                iconv_close(cd);
+
+                size_t utf16Bytes = out.size() - outBytes;
+                return std::u16string(reinterpret_cast<const char16_t*>(out.data()),
+                    utf16Bytes / sizeof(char16_t));
 #endif
             }
 
@@ -181,15 +201,32 @@ namespace LikesProgram {
                 WideCharToMultiByte(936, 0, reinterpret_cast<const wchar_t*>(utf16.data()), static_cast<int>(utf16.size()), &gbk[0], sizeNeeded, nullptr, nullptr);
                 return gbk;
 #else
-                std::mbstate_t state{};
-                const wchar_t* src = reinterpret_cast<const wchar_t*>(utf16.data());
-                size_t len = std::wcsrtombs(nullptr, &src, 0, &state);
-                if (len == static_cast<size_t>(-1)) throw std::runtime_error("Utf16ToGbk failed");
-                std::string gbk(len, '\0');
-                std::wcsrtombs(&gbk[0], &src, len, &state);
-                return gbk;
+                iconv_t cd = iconv_open("GBK//TRANSLIT", "UTF-16LE");
+                if (cd == (iconv_t)-1)
+                    throw std::runtime_error("Utf16ToGbk failed: iconv_open");
+
+                const char* inBuf = reinterpret_cast<const char*>(utf16.data());
+                size_t inBytes = utf16.size() * sizeof(char16_t);
+
+                // 估算输出缓冲区：GBK 最大 2B/字符，再多留一点
+                size_t outBytes = utf16.size() * 3 + 8;
+                std::string out(outBytes, '\0');
+                char* outPtr = out.data();
+
+                size_t res = iconv(cd,
+                    const_cast<char**>(&inBuf), &inBytes,
+                    &outPtr, &outBytes);
+
+                if (res == (size_t)-1) {
+                    iconv_close(cd);
+                    throw std::runtime_error("Utf16ToGbk failed: iconv error (" +
+                        std::to_string(errno) + ")");
+                }
+                iconv_close(cd);
+                out.resize(out.size() - outBytes);   // 截取实际长度
+                return out;
 #endif
             }
-		}
-	}
+        }
+    }
 }

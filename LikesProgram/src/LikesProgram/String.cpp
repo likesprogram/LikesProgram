@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstring>
 #include <array>
+#include <iostream>
+#include <sstream>
+#include <locale>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -13,7 +16,7 @@
 
 namespace LikesProgram {
     String::String()
-        : m_size(0), m_data(std::make_unique<char16_t[]>(1)), encoding(Encoding::UTF8) {
+        : m_data(std::make_unique<char16_t[]>(1)), m_size(0), encoding(Encoding::UTF8) {
         m_data[0] = u'\0';
     }
 
@@ -109,7 +112,7 @@ namespace LikesProgram {
     }
 
     String::String(String&& other) noexcept
-        : m_size(other.m_size), m_data(std::move(other.m_data)), encoding(other.encoding) {
+        : m_data(std::move(other.m_data)), m_size(other.m_size), encoding(other.encoding) {
         other.m_size = 0;
     }
 
@@ -241,6 +244,55 @@ namespace LikesProgram {
     String& String::operator+=(const String& str) {
         return Append(str);
     }
+
+    std::ostream& operator<<(std::ostream& os, const String& str) {
+        switch (str.encoding) {
+        case String::Encoding::GBK: {
+            auto gbk = Unicode::Convert::Utf16ToGbk(std::u16string(str.m_data.get(), str.m_size));
+            os << gbk;
+            break;
+        }
+        case String::Encoding::UTF8: {
+            auto utf8 = Unicode::Convert::Utf16ToUtf8(std::u16string(str.m_data.get(), str.m_size));
+            os.write(reinterpret_cast<const char*>(utf8.data()), utf8.size() * sizeof(char8_t));
+            break;
+        }
+        case String::Encoding::UTF16: {
+            // 直接输出 UTF-16 编码的原始字节
+            os.write(reinterpret_cast<const char*>(str.m_data.get()), str.m_size * sizeof(char16_t));
+            break;
+        }
+        case String::Encoding::UTF32: {
+            auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(str.m_data.get(), str.m_size));
+            os.write(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
+            break;
+        }
+        default:
+            throw std::runtime_error("Unsupported encoding for output");
+        }
+        return os;
+    }
+
+    std::istream& operator>>(std::istream& is, String& str) {
+        std::string input;
+        std::getline(is, input);  // 读取一行输入
+        str = String(input, str.encoding);
+        return is;
+    }
+
+    std::wostream& operator<<(std::wostream& os, const String& str) {
+        std::wstring output = str.ToWString();
+        os << output;
+        return os;
+    }
+
+    std::wistream& operator>>(std::wistream& is, String& str) {
+        std::wstring input;
+        std::getline(is, input);  // 读取一行输入
+        str = String(input);
+        return is;
+    }
+
     String String::SubString(size_t index, size_t count) const {
         if (count == 0 || index >= Size()) return String(); // 越界或长度为0返回空串
 

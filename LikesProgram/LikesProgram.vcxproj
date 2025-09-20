@@ -131,7 +131,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\LikesProgram\CoreUtils.cpp" />
+    <ClCompile Include="src\LikesProgram\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
+    <ClCompile Include="src\LikesProgram\ThreadPool.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseBMP.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseSMP.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\Convert.cpp" />
@@ -143,12 +146,15 @@
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
+    <ClInclude Include="include\LikesProgram\Logger.hpp" />
+    <ClInclude Include="include\LikesProgram\ThreadPool.hpp" />
     <ClInclude Include="include\LikesProgram\Timer.hpp" />
     <ClInclude Include="include\LikesProgram\math\Math.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Case.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Convert.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
+    <ClInclude Include="include\test\LoggerTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />
     <ClInclude Include="include\test\UnicodeTest.hpp" />

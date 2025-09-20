@@ -15,19 +15,19 @@ namespace LikesProgram {
         // char 未指定编码，默认为 UTF-8
         explicit String(const char* s, Encoding enc = Encoding::UTF8);
         // UTF-8
-        explicit String(const char8_t* s);
+        String(const char8_t* s);
         // UTF-16
-        explicit String(const char16_t* s);
+        String(const char16_t* s);
         // UTF-32
-        explicit String(const char32_t* s);
+        String(const char32_t* s);
         // 拷贝构造
         String(const String& other);
         // 移动构造
         String(String&& other) noexcept;
         // 构造单个字符
-        explicit String(const char8_t c);
-        explicit String(const char16_t c);
-        explicit String(const char32_t c);
+        String(const char8_t c);
+        String(const char16_t c);
+        String(const char32_t c);
         // 析构函数
         ~String();
 
@@ -55,6 +55,12 @@ namespace LikesProgram {
         // 拼接字符串
         String& Append(const String& str);
         String& operator+=(const String& str);
+
+        // 输入输出重载
+        friend std::ostream& operator<<(std::ostream& os, const String& str);
+        friend std::istream& operator>>(std::istream& is, String& str);
+        friend std::wostream& operator<<(std::wostream& os, const String& str);
+        friend std::wistream& operator>>(std::wistream& is, String& str);
 
         // 获取子串
         String SubString(size_t index, size_t count) const;

@@ -8,6 +8,7 @@
 
 
 #include "../../../include/LikesProgram/unicode/Case.hpp"
+#include <cstddef>
 
 namespace LikesProgram {
     namespace Unicode {

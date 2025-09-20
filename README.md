@@ -287,36 +287,35 @@ namespace VectorTest {
 #### 1.3、Vector3：三维向量类 (未完成)
 #### 1.4、Vector4：4维向量类 (未完成)
 
-### 2、Timer：高精度计时器
+### 2、`Timer` — 高精度计时器
 
-`Timer` 提供单线程与多线程的高精度计时功能，方便性能分析、调试及任务耗时统计。
+`Timer` 用于测量代码片段的耗时，支持单线程与多线程环境，精度可达纳秒级。它既能作为轻量的局部计时器，也可以在父对象中聚合多线程的统计信息，方便性能分析、调试和任务耗时监控。
 
-#### 构造函数
+#### 构造与生命周期
 
-* `Timer(bool autoStart = false)`：构造计时器，可选择是否自动启动。
+* `Timer(bool autoStart = false, Timer* parent = nullptr)`
+  创建计时器，可选是否立即启动，并可指定父 `Timer` 用于汇总统计。
 
-#### 静态方法（线程局部）
+#### 基本操作
 
-* `Start()`：开始计时
-* `Stop(double alpha = 0.9)`：停止计时，并返回本次耗时。`alpha` 用于 EMA 平均计算
-* `ResetThread()`：重置当前线程的计时数据
-* `GetLastElapsed()`：获取最近一次 Stop() 的耗时
-* `GetTotalElapsed()`：获取线程内累计耗时
-* `GetEMAAverageElapsed()`：获取线程内指数移动平均耗时
-* `GetArithmeticAverageElapsed()`：获取线程内算术平均耗时
-* `IsRunning()`：当前线程是否在计时
+* `Start()` 开始计时。
+* `Stop(double alpha = 0.9)` 停止计时并返回本次耗时，同时更新累计时间、最长耗时和平均值（`alpha` 控制 EMA 平滑系数）。
+* `Reset()` 重置计时器状态。
+* `ResetThread()` 仅清除当前线程的数据。
+* `ResetGlobal()` 清除全局统计信息。
 
-#### 静态方法（全局 / 多线程共享）
+#### 查询接口
 
-* `ResetGlobal()`：重置全局计时数据
-* `GetTotalGlobalElapsed()`：获取全局累计耗时
-* `GetLongestElapsed()`：获取历史最长耗时
-* `GetArithmeticAverageGlobalElapsed()`：获取全局算术平均耗时
+* `GetLastElapsed() const` 上一次 `Stop()` 的耗时。
+* `GetTotalElapsed() const` 累计耗时。
+* `GetLongestElapsed() const` 记录到的最长耗时。
+* `GetEMAAverageElapsed() const` 指数移动平均耗时。
+* `GetArithmeticAverageElapsed() const` 算术平均耗时。
+* `IsRunning() const` 当前是否正在计时。
 
-#### 辅助方法
+#### 工具方法
 
-* `ToString(Duration duration)`：将时间间隔转换为可读字符串
-* `NowNs()`（私有）：获取高精度纳秒时间
+* `static String ToString(Duration d)` 将时间间隔格式化为易读字符串。
 
 #### 使用示例
 
@@ -327,28 +326,35 @@ namespace VectorTest {
 #include <LikesProgram/Timer.hpp>
 
 namespace TimerTest {
-	void WorkLoad(size_t id) {
-		LikesProgram::Timer::Start(); // 开始计时
+	struct ThreadData {
+        LikesProgram::Timer* timer = nullptr;
+		size_t index = 0;
+	};
+
+	void WorkLoad(ThreadData* data) {
+		LikesProgram::Timer threadTimer(true, data->timer); // 创建线程计时器
 
 		// 模拟耗时操作
-		std::this_thread::sleep_for(std::chrono::milliseconds(100 + id * 250));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100 + data->index * 20));
 
-		auto elapsed = LikesProgram::Timer::Stop(); // 停止并获取耗时
-        std::cout << "Thread 【" << id << "】：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+		auto elapsed = threadTimer.Stop(); // 停止并获取耗时
+        std::cout << "Thread 【" << data->index << "】：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
 	}
 
     void Test() {
+		LikesProgram::Timer timer; // 全局计时器
+
 		std::cout << "===== 单线程示例 =====" << std::endl;
 		{
-            LikesProgram::Timer timer(true); // 构造并启动
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+			timer.Start(); // 开始计时
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-			std::cout << "是否运行：" << LikesProgram::Timer::IsRunning() << std::endl;
-			auto elapsed = LikesProgram::Timer::Stop();
+			//std::cout << "是否运行：" << timer.IsRunning() << std::endl;
+			auto elapsed = timer.Stop();
             std::cout << "单线程：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
 
-			std::cout << "是否运行：" << LikesProgram::Timer::IsRunning() << std::endl;
-			std::cout << "最近一次耗时：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetLastElapsed()) << std::endl;
+			std::cout << "是否运行：" << timer.IsRunning() << std::endl;
+			std::cout << "最近一次耗时：" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
 		}
 
 		std::cout << std::endl << "===== 多线程示例 =====" << std::endl;
@@ -358,31 +364,28 @@ namespace TimerTest {
 
 			// 创建多个线程
 			for (size_t i = 0; i < threadCount; i++) {
-				threads.emplace_back(WorkLoad, i);
+				ThreadData* data = new ThreadData();
+				data->index = i;
+                data->timer = &timer;
+				threads.emplace_back(WorkLoad, data);
 			}
 
 			for (auto& thread : threads) thread.join();
-
 			std::cout << std::endl << "===== 测试结果 =====" << std::endl;
-            std::cout << "线程总时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetTotalElapsed()) << std::endl;
-			std::cout << "总时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetTotalGlobalElapsed()) << std::endl;
-            std::cout << "最长时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetLongestElapsed()) << std::endl;
-            std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetArithmeticAverageElapsed()) << std::endl;
-			std::cout << "全局算数平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetArithmeticAverageGlobalElapsed()) << std::endl;
+			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
 		}
 
 		std::cout << std::endl << "===== 重置示例 =====" << std::endl;
 		{
-			LikesProgram::Timer::ResetThread(); // 重置当前线程计时数据
-			LikesProgram::Timer::ResetGlobal(); // 重置全局计时数据
+			timer.Reset();
 
-			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetTotalElapsed()) << std::endl;
-			std::cout << "总时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetTotalGlobalElapsed()) << std::endl;
-            std::cout << "最长时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetLongestElapsed()) << std::endl;
-			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetArithmeticAverageElapsed()) << std::endl;
-			std::cout << "全局算数平均时间：" << LikesProgram::Timer::ToString(LikesProgram::Timer::GetArithmeticAverageGlobalElapsed()) << std::endl;
+			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
 		}
     }
 }
@@ -558,7 +561,16 @@ namespace UnicodeTest {
         std::string gbk = LikesProgram::Unicode::Convert::Utf16ToGbk(chinese16);
         std::u16string backToUtf16 = LikesProgram::Unicode::Convert::GbkToUtf16(gbk);
         std::cout << "GBK 往返长度: " << backToUtf16.size() << "\n";
-        std::cout << "GBK: " << gbk << "\n";
+        std::cout << "Utf16: ";
+        for (char16_t c : backToUtf16) {
+            std::cout << std::hex << std::showbase << (uint16_t)c << ' ';
+        }
+        std::cout << '\n';
+        std::cout << "GBK: ";
+        for (unsigned char c : gbk) {
+            std::cout << std::hex << std::showbase << (int)c << ' ';
+        }
+        std::cout << std::dec << std::noshowbase << '\n';
     }
 
     void Test() {
@@ -567,7 +579,6 @@ namespace UnicodeTest {
         ValidateSMP();
         TestConvert();
     }
-
 }
 ```
 
@@ -579,19 +590,26 @@ namespace UnicodeTest {
 
 * `String()`：默认构造，创建空字符串
 * `explicit String(const char* s, Encoding enc = Encoding::UTF8)`：从 C 风格字符串构造，默认按 UTF-8 解析
-* `explicit String(const char8_t* s)`：从 UTF-8 字符串构造
-* `explicit String(const char16_t* s)`：从 UTF-16 字符串构造
-* `explicit String(const char32_t* s)`：从 UTF-32 字符串构造
+* `String(const char8_t* s)`：从 UTF-8 字符串构造
+* `String(const char16_t* s)`：从 UTF-16 字符串构造
+* `String(const char32_t* s)`：从 UTF-32 字符串构造
 * `String(const String& other)`：拷贝构造
 * `String(String&& other) noexcept`：移动构造
-* `explicit String(const char8_t c)`：构造单字符 UTF-8 字符串
-* `explicit String(const char16_t c)`：构造单字符 UTF-16 字符串
-* `explicit String(const char32_t c)`：构造单字符 UTF-32 字符串
+* `String(const char8_t c)`：构造单字符 UTF-8 字符串
+* `String(const char16_t c)`：构造单字符 UTF-16 字符串
+* `String(const char32_t c)`：构造单字符 UTF-32 字符串
 * `explicit String(const std::string& s, Encoding enc = Encoding::UTF8)`：从 std::string 构造
 * `explicit String(const std::u8string& s)`：从 std::u8string 构造
 * `explicit String(const std::wstring& s)`：从 std::wstring 构造
 * `explicit String(const std::u16string& s)`：从 std::u16string 构造
 * `explicit String(const std::u32string& s)`：从 std::u32string 构造
+
+#### 输入与输出
+
+* `std::ostream& operator<<(std::ostream& os, const String& str)`：输出
+* `std::istream& operator>>(std::istream& is, String& str)`：输入
+* `std::wostream& operator<<(std::wostream& os, const String& str)`：输出
+* `std::wistream& operator>>(std::wistream& is, String& str)`：输入
 
 #### 赋值操作
 
@@ -657,7 +675,27 @@ namespace UnicodeTest {
 #include <LikesProgram/String.hpp>
 
 namespace StringTest {
+    // 输入输出测试
+    void OutAndIn() {
+        std::cout << "===== 输出输出示例 =====" << std::endl;
+#ifdef _WIN32
+        LikesProgram::String str1("", LikesProgram::String::Encoding::GBK); // Windows 控制台输入需要先设置编码为 GBK，Linux 控制台输入可使用默认 UTF-8
+#else
+        LikesProgram::String str1; // Linux 控制台输入可使用默认 UTF-8
+#endif
+        std::cout << "请输入字符串[cin]：";
+        std::cin >> str1;
+        std::cout << "[cout]：" << str1 << "\n";
+
+        LikesProgram::String str2;
+        std::cout << "请输入字符串[wcin]：";
+        std::wcin >> str2;
+        std::wcout << "[wcout]：" << str2 << "\n";
+    }
+
     void Test() {
+        OutAndIn();
+        std::cout << "===== 其他示例 =====" << std::endl;
         // 构造测试
         LikesProgram::String s1(u"Hello 世界");      // UTF-16
         LikesProgram::String s2("hello world");      // UTF-8 默认
@@ -679,8 +717,13 @@ namespace StringTest {
         // 大小写转换
         LikesProgram::String upper = s1.ToUpper();
         LikesProgram::String lower = s1.ToLower();
-        std::cout << "Upper: " << upper.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
-        std::cout << "Lower: " << lower.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+#ifdef _WIN32
+        std::cout << "upper: " << upper.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+        std::cout << "lower: " << lower.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+#else
+        std::cout << "upper: " << upper.ToStdString() << "\n";
+        std::cout << "lower: " << lower.ToStdString() << "\n";
+#endif
 
         // 查找
         size_t idx = s1.Find(LikesProgram::String(u"世界"));

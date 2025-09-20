@@ -12,7 +12,7 @@ namespace VectorTest {
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
-        LikesProgram::Timer::Start(); // 开始计时
+        //LikesProgram::Timer::Start(); // 开始计时
 
         LikesProgram::Math::Vector acc(0.0, 0.0); // 累积结果
         for (size_t i = 0; i < count; i++) {
@@ -32,7 +32,7 @@ namespace VectorTest {
 
         std::cout << "Stress Test 完成" << std::endl;
         std::cout << "最终累积结果: " << acc << std::endl;
-        std::cout << "耗时: " << LikesProgram::Timer::ToString(LikesProgram::Timer::Stop()) << std::endl;
+        //std::cout << "耗时: " << LikesProgram::Timer::ToString(LikesProgram::Timer::Stop()) << std::endl;
     }
 
     void BasicOps() {
