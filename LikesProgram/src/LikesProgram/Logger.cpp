@@ -109,12 +109,14 @@ namespace LikesProgram {
         }
         void Write(const Logger::LogMessage& message, Logger::LogLevel minLevel, String::Encoding encoding) override {
             if (!file.is_open()) return;
-            file << FormatLogMessage(message, minLevel) << std::endl;
+
+            LikesProgram::String formatted = FormatLogMessage(message, minLevel);
+
+            file << formatted.ToStdString(encoding) << std::endl;
         }
     private:
         std::ofstream file;
     };
-
 
     // Logger::Impl
     struct Logger::Impl {

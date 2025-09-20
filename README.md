@@ -760,6 +760,218 @@ namespace StringTest {
 }
 ```
 
-### 5、Logger：灵活的日志系统 (未完成)
-### 6、ThreadPool：线程池 (未完成)
-### 7、CoreUtils：辅助工具类 (未完成)
+### 5、CoreUtils：辅助工具类
+
+#### 5.1、线程工具
+* `SetCurrentThreadName(const LikesProgram::String& name)`
+  将当前线程命名。
+  用途：调试和日志区分线程。
+
+* `LikesProgram::String GetCurrentThreadName()`
+  获取当前线程的名称。
+  用途：调试和日志区分线程。
+
+#### 5.2、网络工具
+
+* `LikesProgram::String GetMACAddress()`
+  返回本机网络接口的 MAC 地址。
+  用途：唯一标识机器，网络注册或日志追踪。
+
+* `LikesProgram::String GetLocalIPAddress()`
+  返回本机 IPv4 地址。
+  用途：本机网络通信或日志记录。
+
+#### 5.3、UUID 工具
+
+* `LikesProgram::String GenerateUUID(LikesProgram::String prefix = u"")`
+  生成全局唯一标识符（UUID），可加可选前缀。
+  用途：唯一标识对象、会话或数据记录。
+
+#### 5.4、示例
+
+```cpp
+#include <iostream>
+#include <LikesProgram/CoreUtils.hpp>
+
+int main() {
+    // 设置线程名
+    LikesProgram::CoreUtils::SetCurrentThreadName(u"MainThread");
+    std::wcout << L"线程名: " << LikesProgram::CoreUtils::GetCurrentThreadName().ToWString() << std::endl;
+
+    // 获取 MAC 和 IP
+    std::wcout << L"MAC: " << LikesProgram::CoreUtils::GetMACAddress().ToWString() << std::endl;
+    std::wcout << L"IP: " << LikesProgram::CoreUtils::GetLocalIPAddress().ToWString() << std::endl;
+
+    // 生成 UUID
+    auto uuid = LikesProgram::CoreUtils::GenerateUUID(u"user_");
+    std::wcout << L"UUID: " << uuid.ToWString() << std::endl;
+}
+```
+
+### 6、Logger：灵活的日志系统
+
+`Logger` 提供了线程安全的日志记录功能，支持多种日志级别、可扩展的日志输出目标（Sink），并可在后台异步处理日志。它采用单例模式，保证全局唯一实例。
+
+#### 日志级别
+
+* `Trace` 最详细的日志，用于跟踪程序细粒度行为
+* `Debug` 开发阶段有用的信息
+* `Info` 程序运行时信息，表示正常状态
+* `Warn` 警告信息，可能存在潜在问题
+* `Error` 错误信息，某些功能可能失效
+* `Fatal` 致命错误，程序无法继续运行
+
+#### 核心结构
+
+* `Logger::LogMessage`
+  代表一条日志，包括以下信息：
+
+  * `level` 日志级别
+  * `msg` 日志内容
+  * `file` 源文件名
+  * `line` 代码行号
+  * `func` 函数名
+  * `tid` 线程 ID
+  * `threadName` 线程名称
+  * `timestamp` 日志时间
+
+* `Logger::ILogSink`
+  日志输出接口（抽象类），子类实现 `Write()` 方法完成日志写入。
+  提供辅助函数：
+
+  * `FormatLogMessage()` 格式化日志内容
+  * `LevelToString()` 将日志级别转字符串
+
+#### 获取与配置
+
+* `Logger& Logger::Instance()`
+  获取全局唯一实例（单例）。
+
+* `void SetLevel(LogLevel level)`
+  设置日志最低级别，低于该级别的日志将被过滤。
+
+* `void SetEncoding(String::Encoding encoding)`
+  设置日志输出编码（UTF-8/UTF-16 等）。
+
+* `void AddSink(std::shared_ptr<ILogSink> sink)`
+  添加一个日志输出目标，可添加多个 Sink。
+
+#### 记录日志
+
+* `void Log(LogLevel level, const String& msg, const char* file, int line, const char* func)`
+  记录一条日志。
+  推荐使用宏接口快速记录：
+
+  ```cpp
+  LOG_TRACE(msg);
+  LOG_DEBUG(msg);
+  LOG_INFO(msg);
+  LOG_WARN(msg);
+  LOG_ERROR(msg);
+  LOG_FATAL(msg);
+  ```
+
+#### 管理与生命周期
+
+* `void Shutdown()`
+  停止日志系统，结束后台线程并清理资源。
+
+#### 工厂函数
+
+* `std::shared_ptr<Logger::ILogSink> CreateConsoleSink()`
+  创建控制台输出 Sink。
+
+* `std::shared_ptr<Logger::ILogSink> CreateFileSink(const String& filename)`
+  创建文件输出 Sink，写入指定文件。
+
+#### 使用示例
+
+```cpp
+#include <LikesProgram/Logger.hpp>
+#include <LikesProgram/String.hpp>
+
+namespace LoggerTest {
+    // 自定义网络输出 Sink
+    class NetworkSink : public LikesProgram::Logger::ILogSink {
+    public:
+        NetworkSink(const std::string& serverAddress) : server(serverAddress) {}
+
+        void Write(const LikesProgram::Logger::LogMessage& message,
+            LikesProgram::Logger::LogLevel minLevel,
+            LikesProgram::String::Encoding encoding) override {
+            LikesProgram::String formatted = FormatLogMessage(message, minLevel);
+            SendToServer(formatted.ToStdString(encoding));
+        }
+
+    private:
+        std::string server;
+
+        void SendToServer(const std::string& payload) {
+            // 这里可以实现 HTTP/TCP 发送逻辑
+            // 示例中仅打印到控制台表示发送
+            std::cout << "[SEND TO SERVER " << server << "] " << payload << std::endl;
+        }
+    };
+
+    // 工厂函数
+    std::shared_ptr<LikesProgram::Logger::ILogSink> CreateNetworkSink(const std::string& serverAddress) {
+        return std::make_shared<NetworkSink>(serverAddress);
+    }
+
+	void Test() {
+        // 初始化日志
+        auto& logger = LikesProgram::Logger::Instance();
+#ifdef _WIN32
+        logger.SetEncoding(LikesProgram::String::Encoding::GBK);
+#endif
+#ifdef _DEBUG
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
+#else
+        logger.SetLevel(LogLevel::Info);
+#endif
+        // 内置控制台输出 Sink
+        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+        // 内置输出到文件 Sink
+        logger.AddSink(LikesProgram::CreateFileSink(u"app.log")); // 输出到文件
+        // 自定义网络输出 Sink
+        logger.AddSink(CreateNetworkSink("127.0.0.1:9000")); // 自定义输出 Sink
+#ifdef _DEBUG
+        LOG_TRACE(u"trace message 日志输出");   // 不会输出
+        LOG_DEBUG(u"debug message 日志输出");   // 会输出
+        LOG_INFO(u"info message 日志输出");     // 会输出
+        LOG_WARN(u"warn message 日志输出");     // 会输出
+        LOG_ERROR(u"error message 日志输出");   // 会输出
+        LOG_FATAL(u"fatal message 日志输出");   // 会输出
+#else
+        LOG_TRACE(u"trace message 日志输出");   // 不会输出
+        LOG_DEBUG(u"debug message 日志输出");   // 不会输出
+        LOG_INFO(u"info message 日志输出");     // 会输出
+        LOG_WARN(u"warn message 日志输出");     // 会输出
+        LOG_ERROR(u"error message 日志输出");   // 会输出
+        LOG_FATAL(u"fatal message 日志输出");   // 会输出
+#endif
+
+        // 设置线程名
+        LikesProgram::CoreUtils::SetCurrentThreadName(u"主线程");
+#ifdef _DEBUG
+        LOG_TRACE(u"trace message 日志输出");   // 不会输出
+        LOG_DEBUG(u"debug message 日志输出");   // 会输出
+        LOG_INFO(u"info message 日志输出");     // 会输出
+        LOG_WARN(u"warn message 日志输出");     // 会输出
+        LOG_ERROR(u"error message 日志输出");   // 会输出
+        LOG_FATAL(u"fatal message 日志输出");   // 会输出
+#else
+        LOG_TRACE(u"trace message 日志输出");   // 不会输出
+        LOG_DEBUG(u"debug message 日志输出");   // 不会输出
+        LOG_INFO(u"info message 日志输出");     // 会输出
+        LOG_WARN(u"warn message 日志输出");     // 会输出
+        LOG_ERROR(u"error message 日志输出");   // 会输出
+        LOG_FATAL(u"fatal message 日志输出");   // 会输出
+#endif
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
+        logger.Shutdown();
+	}
+}
+```
+
+### 7、ThreadPool：线程池 (未完成)
