@@ -1,4 +1,4 @@
-#include "../../include/LikesProgram/ThreadPool.hpp"
+ï»¿#include "../../include/LikesProgram/ThreadPool.hpp"
 #include "../../include/LikesProgram/Timer.hpp"
 #include "../../include/LikesProgram/CoreUtils.hpp"
 #include "../../include/LikesProgram/math/Math.hpp"
@@ -8,19 +8,19 @@
 namespace LikesProgram {
     String ThreadPool::Statistics::ToString() const {
         LikesProgram::String statsStr;
-        statsStr.Append(u"³É¹¦Èë¶ÓµÄÈÎÎñÊı£º")
+        statsStr.Append(u"æˆåŠŸå…¥é˜Ÿçš„ä»»åŠ¡æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(submitted))).Append(u"\r\n");
-        statsStr.Append(u"±»¾Ü¾øµÄÈÎÎñÊı£º")
+        statsStr.Append(u"è¢«æ‹’ç»çš„ä»»åŠ¡æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(rejected))).Append(u"\r\n");
-        statsStr.Append(u"Ö´ĞĞÍê³ÉµÄÈÎÎñÊı£º")
+        statsStr.Append(u"æ‰§è¡Œå®Œæˆçš„ä»»åŠ¡æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(completed))).Append(u"\r\n");
-        statsStr.Append(u"ÕıÔÚÖ´ĞĞµÄÈÎÎñÊı£º")
+        statsStr.Append(u"æ­£åœ¨æ‰§è¡Œçš„ä»»åŠ¡æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(active))).Append(u"\r\n");
-        statsStr.Append(u"´æ»î¹¤×÷Ïß³ÌÊı£º")
+        statsStr.Append(u"å­˜æ´»å·¥ä½œçº¿ç¨‹æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(aliveThreads))).Append(u"\r\n");
-        statsStr.Append(u"ÀúÊ·×î´óÏß³ÌÊı£º")
+        statsStr.Append(u"å†å²æœ€å¤§çº¿ç¨‹æ•°ï¼š")
             .Append(LikesProgram::String(std::to_string(largestPoolSize))).Append(u"\r\n");
-        statsStr.Append(u"¶ÓÁĞ·åÖµ£º")
+        statsStr.Append(u"é˜Ÿåˆ—å³°å€¼ï¼š")
             .Append(LikesProgram::String(std::to_string(peakQueueSize))).Append(u"\r\n");
 
         if (lastSubmitTime.time_since_epoch().count() != 0) {
@@ -36,7 +36,7 @@ namespace LikesProgram {
 #endif
             std::wostringstream oss;
             oss << std::put_time(&tm, L"%F %T");
-            statsStr.Append(u"×îºóÒ»´ÎÌá½»Ê±¼ä£º")
+            statsStr.Append(u"æœ€åä¸€æ¬¡æäº¤æ—¶é—´ï¼š")
                 .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
         }
 
@@ -53,15 +53,15 @@ namespace LikesProgram {
 #endif
             std::wostringstream oss;
             oss << std::put_time(&tm, L"%F %T");
-            statsStr.Append(u"×îºóÒ»´ÎÍê³ÉÊ±¼ä£º")
+            statsStr.Append(u"æœ€åä¸€æ¬¡å®Œæˆæ—¶é—´ï¼š")
                 .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
         }
 
-        statsStr.Append(u"×î³¤ÈÎÎñºÄÊ±£º")
+        statsStr.Append(u"æœ€é•¿ä»»åŠ¡è€—æ—¶ï¼š")
             .Append(LikesProgram::Timer::ToString(longestTaskTime)).Append(u"\r\n");
-        statsStr.Append(u"ËãÊõÆ½¾ùÈÎÎñºÄÊ±£º")
+        statsStr.Append(u"ç®—æœ¯å¹³å‡ä»»åŠ¡è€—æ—¶ï¼š")
             .Append(LikesProgram::Timer::ToString(arithmeticAverageTaskTime)).Append(u"\r\n");
-        statsStr.Append(u"Ö¸ÊıÒÆ¶¯Æ½¾ùÈÎÎñºÄÊ±£º")
+        statsStr.Append(u"æŒ‡æ•°ç§»åŠ¨å¹³å‡ä»»åŠ¡è€—æ—¶ï¼š")
             .Append(LikesProgram::Timer::ToString(averageTaskTime)).Append(u"\r\n");
 
         return statsStr;
@@ -71,26 +71,26 @@ namespace LikesProgram {
         try {
             Shutdown(ShutdownPolicy::CancelNow);
             NotifyAllWorkers();
-            JoinAll(); // ×èÈûÖ±µ½ËùÓĞÏß³Ì exit & join
+            JoinAll(); // é˜»å¡ç›´åˆ°æ‰€æœ‰çº¿ç¨‹ exit & join
         }
         catch (...) {
-            // Îö¹¹ÖĞ²»Å×
+            // ææ„ä¸­ä¸æŠ›
         }
     }
 
     void ThreadPool::Start() {
         bool expected = false;
         if (!running_.compare_exchange_strong(expected, true)) {
-            return; // ÒÑ¾­Æô¶¯
+            return; // å·²ç»å¯åŠ¨
         }
         acceptTasks_.store(true, std::memory_order_release);
 
-        // ÖÁÉÙÆğ coreThreads ¸ö
+        // è‡³å°‘èµ· coreThreads ä¸ª
         for (size_t i = 0; i < opts_.coreThreads; ++i) SpawnWorker();
     }
 
     void ThreadPool::Shutdown(ShutdownPolicy mode) {
-        // ÒÑ¾­Í£Ö¹
+        // å·²ç»åœæ­¢
         if (!running_.load(std::memory_order_acquire) &&
             !acceptTasks_.load(std::memory_order_acquire)) {
             return;
@@ -98,12 +98,12 @@ namespace LikesProgram {
 
         switch (mode) {
         case ShutdownPolicy::Graceful:
-            // ²»½ÓÊÜĞÂÈÎÎñ£»ÔÊĞí worker ¼ÌĞøÈ¡¶ÓÁĞÖ±µ½¶ÓÁĞÓëÕıÔÚÔËĞĞÈÎÎñÅÜÍê
+            // ä¸æ¥å—æ–°ä»»åŠ¡ï¼›å…è®¸ worker ç»§ç»­å–é˜Ÿåˆ—ç›´åˆ°é˜Ÿåˆ—ä¸æ­£åœ¨è¿è¡Œä»»åŠ¡è·‘å®Œ
             acceptTasks_.store(false, std::memory_order_release);
             running_.store(false, std::memory_order_release);
             break;
         case ShutdownPolicy::Drain:
-            // ÓïÒå£º¾Ü¾øĞÂÈÎÎñ£¬µ«ÔÊĞí¶ÓÁĞÖĞÒÑÓĞÈÎÎñ±»Ö´ĞĞ¡£²»ÒªÇå¿Õ¶ÓÁĞ¡£
+            // è¯­ä¹‰ï¼šæ‹’ç»æ–°ä»»åŠ¡ï¼Œä½†å…è®¸é˜Ÿåˆ—ä¸­å·²æœ‰ä»»åŠ¡è¢«æ‰§è¡Œã€‚ä¸è¦æ¸…ç©ºé˜Ÿåˆ—ã€‚
             acceptTasks_.store(false, std::memory_order_release);
             running_.store(false, std::memory_order_release);
             break;
@@ -120,7 +120,7 @@ namespace LikesProgram {
         }
 
         NotifyAllWorkers();
-        queueNotFullCv_.notify_all(); // ±£Ö¤µÈ´ıÈë¶ÓµÄÏß³ÌÒ²ÍË³ö
+        queueNotFullCv_.notify_all(); // ä¿è¯ç­‰å¾…å…¥é˜Ÿçš„çº¿ç¨‹ä¹Ÿé€€å‡º
     }
 
     bool ThreadPool::AwaitTermination(std::chrono::milliseconds timeout) {
@@ -207,17 +207,17 @@ namespace LikesProgram {
         taskQueue_.emplace_back(std::move(task));
         submittedCount_.fetch_add(1, std::memory_order_relaxed);
 
-        // ¼ÇÂ¼×î½üÒ»´ÎÌá½»Ê±¼ä£¨Í³Ò»Ê¹ÓÃÄÉÃë£©
+        // è®°å½•æœ€è¿‘ä¸€æ¬¡æäº¤æ—¶é—´ï¼ˆç»Ÿä¸€ä½¿ç”¨çº³ç§’ï¼‰
         auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         lastSubmitNs_.store(now_ns, std::memory_order_relaxed);
 
-        // ·åÖµ¶ÓÁĞ
+        // å³°å€¼é˜Ÿåˆ—
         const size_t qsz = taskQueue_.size();
         Math::UpdateMax(peakQueueSize_, qsz);
 
         queueNotEmptyCv_.notify_one();
 
-        // ¶¯Ì¬À©Èİ£º¶ÓÁĞ³¤¶È > »îÔ¾Ïß³ÌÊı ÇÒ»¹Ã»µ½ maxThreads
+        // åŠ¨æ€æ‰©å®¹ï¼šé˜Ÿåˆ—é•¿åº¦ > æ´»è·ƒçº¿ç¨‹æ•° ä¸”è¿˜æ²¡åˆ° maxThreads
         if (opts_.allowDynamicResize && running_.load(std::memory_order_acquire)) {
             size_t alive = aliveThreads_.load(std::memory_order_acquire);
             if (alive < opts_.maxThreads && qsz > alive) {
@@ -228,28 +228,28 @@ namespace LikesProgram {
     }
 
     void ThreadPool::WorkerLoop() {
-        // Ïß³ÌÃüÃû£¨¿ÉÑ¡£©
+        // çº¿ç¨‹å‘½åï¼ˆå¯é€‰ï¼‰
         if (!opts_.threadNamePrefix.Empty()) {
             std::wostringstream woss;
-            // »ñÈ¡µ±Ç°Ïß³ÌµÄ ID ²¢Ö±½Ó×ª»»ÎªÕûÊı£¨Í¨³£ÊÇÒ»¸öÖ¸ÕëÖµ£©
+            // è·å–å½“å‰çº¿ç¨‹çš„ ID å¹¶ç›´æ¥è½¬æ¢ä¸ºæ•´æ•°ï¼ˆé€šå¸¸æ˜¯ä¸€ä¸ªæŒ‡é’ˆå€¼ï¼‰
             std::thread::id threadId = std::this_thread::get_id();
 
-            // ½« std::thread::id ×ª»»ÎªÕûÊıÖµ£¨Ö¸ÕëÖµ£©£¬Ö±½Ó×÷ÎªÎ¨Ò»±êÊ¶·û
+            // å°† std::thread::id è½¬æ¢ä¸ºæ•´æ•°å€¼ï¼ˆæŒ‡é’ˆå€¼ï¼‰ï¼Œç›´æ¥ä½œä¸ºå”¯ä¸€æ ‡è¯†ç¬¦
             std::uintptr_t idValue = reinterpret_cast<std::uintptr_t>(&threadId);
 
-            // ±£Ö¤Éú³ÉÒ»¸ö 5 Î»Êı ID£¨Í¨¹ı¶Ô idValue ½øĞĞÄ£ÔËËã£©
-            size_t threadIdNum = idValue % 100000;  // ±£Ö¤Îª 5 Î»Êı
+            // ä¿è¯ç”Ÿæˆä¸€ä¸ª 5 ä½æ•° IDï¼ˆé€šè¿‡å¯¹ idValue è¿›è¡Œæ¨¡è¿ç®—ï¼‰
+            size_t threadIdNum = idValue % 100000;  // ä¿è¯ä¸º 5 ä½æ•°
 
             opts_.threadNamePrefix = opts_.threadNamePrefix.SubString(0, 15 - 5);
 
-            // È·±£Êä³öÎª 5 Î»Êı£¨²»×ãÇ°Ãæ²¹Áã£©
+            // ç¡®ä¿è¾“å‡ºä¸º 5 ä½æ•°ï¼ˆä¸è¶³å‰é¢è¡¥é›¶ï¼‰
             woss << std::setw(5) << std::setfill(L'0') << threadIdNum;
             String threadName;
             threadName.Append(opts_.threadNamePrefix).Append(String(woss.str()));
             CoreUtils::SetCurrentThreadName(threadName);
         }
 
-        // ¸üĞÂÀúÊ·×î´óÏß³ÌÊı£¨spawnWorker ÒÑ°Ñ aliveThreads_++£©
+        // æ›´æ–°å†å²æœ€å¤§çº¿ç¨‹æ•°ï¼ˆspawnWorker å·²æŠŠ aliveThreads_++ï¼‰
         {
             size_t cur = aliveThreads_.load(std::memory_order_acquire);
             Math::UpdateMax(largestPoolSize_, cur);
@@ -259,7 +259,7 @@ namespace LikesProgram {
             if (shutdownNowFlag_.load(std::memory_order_acquire)) return true;
             if (!running_.load(std::memory_order_acquire)) {
                 std::lock_guard<std::mutex> lk(queueMutex_);
-                return taskQueue_.empty(); // drain Íê¶ÓÁĞ¼´¿ÉÍË³ö
+                return taskQueue_.empty(); // drain å®Œé˜Ÿåˆ—å³å¯é€€å‡º
             }
             return false;
             };
@@ -271,19 +271,19 @@ namespace LikesProgram {
                 std::unique_lock<std::mutex> lock(queueMutex_);
 
                 if (!shutdownNowFlag_.load(std::memory_order_acquire)) {
-                    // ¿ÕÏĞµÈ´ı£¬´ø keepAlive£¬ÓÃÓÚËõÈİ
+                    // ç©ºé—²ç­‰å¾…ï¼Œå¸¦ keepAliveï¼Œç”¨äºç¼©å®¹
                     queueNotEmptyCv_.wait_for(lock, opts_.keepAlive, [&] {
                         return !taskQueue_.empty() || shutdownNowFlag_.load(std::memory_order_acquire) || !running_.load(std::memory_order_acquire);
                         });
                 }
 
-                // CancelNow Ö±½ÓÍË
+                // CancelNow ç›´æ¥é€€
                 if (shutdownNowFlag_.load(std::memory_order_acquire)) break;
 
-                // Graceful/Drain£º¶ÓÁĞ¿ÕÇÒ²»ÔÙÔËĞĞ -> ÍË³ö
+                // Graceful/Drainï¼šé˜Ÿåˆ—ç©ºä¸”ä¸å†è¿è¡Œ -> é€€å‡º
                 if (!running_.load(std::memory_order_acquire) && taskQueue_.empty()) break;
 
-                // ¶¯Ì¬ËõÈİ£º³¬Ê±¿ÕÏĞÇÒÏß³ÌÊı³¬¹ı core -> ÍË³ö
+                // åŠ¨æ€ç¼©å®¹ï¼šè¶…æ—¶ç©ºé—²ä¸”çº¿ç¨‹æ•°è¶…è¿‡ core -> é€€å‡º
                 if (taskQueue_.empty() && opts_.allowDynamicResize && aliveThreads_.load(std::memory_order_acquire) > opts_.coreThreads) {
                     break;
                 }
@@ -304,10 +304,10 @@ namespace LikesProgram {
                 catch (...) {
                     if (opts_.exceptionHandler) {
                         try { opts_.exceptionHandler(std::current_exception()); }
-                        catch (...) {} // »Øµ÷×Ô¼ºÒì³£Ò²ÍÌµô£¬±ÜÃâÉ±ËÀworker
+                        catch (...) {} // å›è°ƒè‡ªå·±å¼‚å¸¸ä¹Ÿåæ‰ï¼Œé¿å…æ€æ­»worker
                     }
                 }
-                auto elapsed = timer.Stop(); // ×Ô¶¯¸üĞÂÈ«¾Ö EMA ºÍ×î³¤ºÄÊ±
+                auto elapsed = timer.Stop(); // è‡ªåŠ¨æ›´æ–°å…¨å±€ EMA å’Œæœ€é•¿è€—æ—¶
                 completedCount_.fetch_add(1, std::memory_order_relaxed);
                 activeCount_.fetch_sub(1, std::memory_order_relaxed);
                 lastFinishNs_.store(
@@ -320,7 +320,7 @@ namespace LikesProgram {
             if (tryExit()) break;
         }
 
-        // Ïß³ÌÍË³ö
+        // çº¿ç¨‹é€€å‡º
         {
             std::lock_guard<std::mutex> lk(workerExitMutex_);
             long long prev = aliveThreads_.load(std::memory_order_acquire);
