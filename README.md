@@ -663,6 +663,7 @@ namespace UnicodeTest {
 * `String(String&& other) noexcept`：移动构造
 * `String(const char8_t c)`：构造单字符 UTF-8 字符串
 * `String(const char16_t c)`：构造单字符 UTF-16 字符串
+* `String(const size_t count, const char16_t c)`：构造指定数量的相同字符的字符串
 * `String(const char32_t c)`：构造单字符 UTF-32 字符串
 * `explicit String(const std::string& s, Encoding enc = Encoding::UTF8)`：从 std::string 构造
 * `explicit String(const std::u8string& s)`：从 std::u8string 构造
@@ -996,9 +997,9 @@ namespace LoggerTest {
         logger.SetLevel(LogLevel::Info);
 #endif
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
         // 内置输出到文件 Sink
-        logger.AddSink(LikesProgram::CreateFileSink(u"app.log")); // 输出到文件
+        logger.AddSink(LikesProgram::Logger::CreateFileSink(u"app.log")); // 输出到文件
         // 自定义网络输出 Sink
         logger.AddSink(CreateNetworkSink("127.0.0.1:9000")); // 自定义输出 Sink
 #ifdef _DEBUG
@@ -1144,7 +1145,7 @@ namespace ThreadPoolTest {
 #endif
         logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
 
         LikesProgram::ThreadPool::Options optins = {
         2,   // 最小线程数

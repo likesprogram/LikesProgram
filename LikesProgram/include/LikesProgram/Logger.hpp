@@ -76,13 +76,14 @@ namespace LikesProgram {
         void ProcessLoop();
 
         // 内部实现细节（PImpl 隐藏）
-        struct Impl;
-        Impl* pImpl; // 指针方式隐藏具体实现，减少编译依赖
+        struct LoggerImpl;
+        LoggerImpl* m_impl; // 指针方式隐藏具体实现，减少编译依赖
+        
+        // 内置工厂
+    public:
+        static std::shared_ptr<Logger::ILogSink> CreateConsoleSink();
+        static std::shared_ptr<Logger::ILogSink> CreateFileSink(const String& filename);
     };
-
-    // 工厂函数
-    std::shared_ptr<Logger::ILogSink> LIKESPROGRAM_API CreateConsoleSink();
-    std::shared_ptr<Logger::ILogSink> LIKESPROGRAM_API CreateFileSink(const String& filename);
 
     // 宏接口
 #define LOG_TRACE(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Trace, msg, __FILE__, __LINE__, __func__)
