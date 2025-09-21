@@ -56,6 +56,71 @@ LikesProgram 开源并允许自由使用和二次开发，但请注意：
 
 本库采用 **BSD 3-Clause License**，详见 LICENSE 文件。
 
+## 使用说明
+
+### 编译
+
+1. 确保已安装 [CMake](https://cmake.org/)（≥ 3.15），以及 C++20 语言支持
+
+2. 在项目根目录下新建一个 `build` 目录并进入：
+
+   ```bash
+   mkdir build
+   cd build
+   ```
+
+3. 运行 CMake 配置命令：
+
+   ```bash
+   cmake ..
+   ```
+
+   常用选项：
+
+   * `-DBUILD_SHARED_LIBS=[ON|OFF]`
+     是否生成动态库（ON）或静态库（OFF），默认：ON（动态库）。
+   * `-DENABLE_EXAMPLES=[ON|OFF]`
+     是否构建示例程序 `LikesProgramDemo`，默认：OFF。
+   * `-DENABLE_STRICT_WARNINGS=[ON|OFF]`
+     是否开启编译器严格警告，默认：ON。
+
+4. 如需修改安装路径，可编辑 `build/cmake_install.cmake` 文件，将 `CMAKE_INSTALL_PREFIX` 设置为目标安装目录。
+
+5. 编译并安装：
+
+   ```bash
+   cmake --build . --config Release --target INSTALL
+   ```
+
+6. 安装完成后，在 `CMAKE_INSTALL_PREFIX` 目录下会看到：
+
+   ```
+   include/   # 头文件
+   lib/       # 库文件 (LikesProgram.lib / LikesProgram.dll 或 .a / .so)
+   ```
+
+### 使用方法
+
+1. 在项目中包含头文件：
+
+   ```cpp
+   #include <LikesProgram/String.hpp>
+   #include <LikesProgram/Timer.hpp>
+   // ...
+   ```
+2. 链接库：
+
+   * Windows (MSVC)：
+
+     ```cmake
+     target_link_libraries(your_target PRIVATE LikesProgram)
+     ```
+   * Linux/macOS：
+
+     ```bash
+     g++ main.cpp -I/path/to/include -L/path/to/lib -lLikesProgram
+     ```
+
 ## 功能详解
 
 ### 1、Math：数学工具
