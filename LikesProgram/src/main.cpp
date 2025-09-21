@@ -6,6 +6,7 @@
 #include "../include/LikesProgram/CoreUtils.hpp"
 #include "../include/test/LoggerTest.hpp"
 #include "../include/test/ThreadPoolTest.hpp"
+#include "../include/test/ConfigurationTest.hpp"
 
 int main()
 {
@@ -29,6 +30,9 @@ int main()
 
         std::cout << std::endl << std::endl << "===== ThreadPoolTest =====" << std::endl << std::endl;
         ThreadPoolTest::Test();
+
+        std::cout << std::endl << std::endl << "===== ConfigurationTest =====" << std::endl << std::endl;
+        ConfigurationTest::Test();
     } while (false);
     return 0;
 }

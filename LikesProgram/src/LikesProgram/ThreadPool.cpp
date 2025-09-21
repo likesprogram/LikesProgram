@@ -9,7 +9,7 @@ namespace LikesProgram {
     struct ThreadPool::ThreadPoolImpl {
         Options opts_;
 
-        // 真正的队列/同步结构
+        // 队列/同步结构
         mutable std::mutex queueMutex_;
         std::condition_variable queueNotEmptyCv_; // 通知 worker
         std::condition_variable queueNotFullCv_;  // 通知 submit 等待

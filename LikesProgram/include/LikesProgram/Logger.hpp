@@ -81,7 +81,9 @@ namespace LikesProgram {
         
         // 内置工厂
     public:
+        // 创建一个控制台日志输出
         static std::shared_ptr<Logger::ILogSink> CreateConsoleSink();
+        // 创建一个文件日志输出
         static std::shared_ptr<Logger::ILogSink> CreateFileSink(const String& filename);
     };
 

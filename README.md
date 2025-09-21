@@ -36,7 +36,7 @@ LikesProgram
 │  ├─ 获取本机 IP 地址
 │  └─ 生成 UUID
 ├─ ThreadPool（线程池管理）
-└─ Config（配置管理）
+└─ Configuration（配置管理）
    ├─ 支持继承 Serializer 自定义序列化格式
    └─ 默认 JSON 支持
 ```
@@ -1219,4 +1219,183 @@ namespace ThreadPoolTest {
 }
 ```
 
-### 8、Config：配置管理
+### 8、Configuration：配置管理
+
+`Configuration` 类提供灵活的配置管理功能，支持键值对象（类似 JSON 对象）、数组、基础类型（int、int64\_t、double、bool、String）以及嵌套结构。它封装了线程安全访问、类型转换、迭代器遍历和序列化功能，适合用于应用配置、参数管理以及数据交换。
+
+#### 核心类型定义
+
+* `using ObjectMap = std::map<String, Configuration>`：对象键值对类型
+* `using Array = std::vector<Configuration>`：数组类型
+* `using Value = std::variant<std::monostate, int, int64_t, double, bool, String, Array, ObjectMap>`：值类型
+* `enum class CastPolicy { Strict, AutoConvert }`：类型转换策略
+
+  * `Strict` 严格转换，不允许隐式类型转换
+  * `AutoConvert` 自动转换，例如字符串 `"123"` 可转换为 int
+
+#### 构造与赋值
+
+* `Configuration()` 默认构造，创建空配置
+* `Configuration(int v)` / `int64_t` / `double` / `bool` / `String` / C 字符串 / 单字符
+* `Configuration(Array v)` 构造数组
+* `Configuration(ObjectMap v)` 构造对象
+* `Configuration(const Configuration& other)` 拷贝构造
+* `Configuration(Configuration&& other) noexcept` 移动构造
+* 拷贝赋值 / 移动赋值 / 各类型赋值运算符 `operator=`
+
+#### 类型判断
+
+* `IsNull()` 是否为空
+* `IsInt()` / `IsInt64()` / `IsDouble()` / `IsBool()` / `IsString()` / `IsArray()` / `IsObject()` / `IsNumber()` 判断类型
+* `TypeName()` 返回类型名称（字符串）
+
+#### 访问与修改
+
+* 对象访问：
+
+  * `operator[](const String& key)` 可读写
+  * `const operator[](const String& key) const` 只读
+* 数组访问：
+
+  * `operator[](size_t idx)` / `At(size_t idx)` 安全访问
+  * `Size()` 返回数组元素个数
+* 添加或修改元素：
+
+  * `Emplace(const String& key, Configuration val)` 向对象添加键值
+  * `Push_back(Configuration val)` 向数组添加元素
+
+#### 迭代器支持
+
+* 数组迭代器：`begin()` / `end()` / `begin() const` / `end() const`
+* 对象迭代器：`beginObject()` / `endObject()` / `beginObject() const` / `endObject() const`
+* 对象范围支持 range-for：
+
+  * `ObjectRange objects()`
+  * `ConstObjectRange objects() const`
+
+#### 类型转换
+
+* `AsInt(CastPolicy p = AutoConvert)` 转换为 int
+* `AsInt64(CastPolicy p = AutoConvert)` 转换为 int64\_t
+* `AsDouble(CastPolicy p = AutoConvert)` 转换为 double
+* `AsBool(CastPolicy p = AutoConvert)` 转换为 bool
+* `AsString(CastPolicy p = AutoConvert)` 转换为 String
+* `AsArray(CastPolicy p = Strict)` / `AsObject(CastPolicy p = Strict)` 获取数组或对象引用
+* `TryGet(T& out, CastPolicy p = AutoConvert)` 安全获取值，失败返回 false
+
+#### 比较运算
+
+* `operator==` / `operator!=` 比较配置值是否相等
+
+#### 序列化与反序列化
+
+* 内置 `Serializer` 接口，可自定义序列化策略
+
+  * `Serialize(const Configuration&, int indent)` 序列化为文本
+  * `Deserialize(const String&)` 解析文本为 Configuration
+* 默认提供 JSON 序列化器：`CreateJsonSerializer()`
+* 设置默认序列化器：
+
+  * `SetDefaultSerializer(std::shared_ptr<Serializer>)`
+* 单对象设置序列化器：
+
+  * `SetSerializer(std::shared_ptr<Serializer>)`
+* 输出：
+
+  * `Dump(int indent = 2)` 生成序列化文本
+  * `Load(const String& text)` 加载序列化文本
+  
+> **注意事项**：
+>
+> * 推荐使用 `SetDefaultSerializer` 设置统一序列化器，避免不同对象使用不同序列化器导致输出格式紊乱。
+> * JSON 序列化器默认支持缩进，可通过 `Dump(indent)` 调整。
+> * 反序列化时，序列化器类型必须一致，否则可能读取失败。
+
+#### 使用示例
+
+```cpp
+#include <LikesProgram/Configuration.hpp>
+#include <LikesProgram/String.hpp>
+#include <iostream>
+
+namespace ConfigurationTest {
+    void Test() {
+        LikesProgram::Configuration cfg;
+
+        // 对象赋值
+        cfg[u"user_name"] = u"Alice";
+        cfg[u"user_id"] = int64_t(987654321012345);
+        cfg.Emplace(u"is_active", true);
+
+        // 嵌套对象
+        LikesProgram::Configuration address;
+        address[u"street"] = u"456 Park Ave";
+        address[u"city"] = u"Shanghai";
+        address[u"zip"] = 200000;
+        cfg[u"address"] = address;
+
+        // 数组操作
+        LikesProgram::Configuration::Array hobbies;
+        hobbies.push_back(u"reading");
+        hobbies.push_back(u"gaming");
+        hobbies.push_back(u"traveling");
+        cfg.Emplace(u"hobbies", std::move(hobbies));
+
+        // 多层嵌套
+        LikesProgram::Configuration projects;
+        LikesProgram::Configuration projectList;
+
+        LikesProgram::Configuration proj1;
+        proj1[u"name"] = u"LikesProgram - C++ 通用库";
+        proj1[u"stars"] = 800;
+        projectList.Push_back(proj1);
+
+        LikesProgram::Configuration proj2;
+        proj2[u"name"] = u"MyCoolApp";
+        proj2[u"stars"] = 1500;
+        projectList.Push_back(proj2);
+
+        projects[u"list"] = projectList;
+        cfg[u"projects"] = projects;
+
+        // 类型转换
+        int zip = cfg[u"address"][u"zip"].AsInt();
+        int64_t userId = cfg[u"user_id"].AsInt64();
+        LikesProgram::String street = cfg[u"address"][u"street"].AsString();
+        bool active = cfg[u"is_active"].AsBool();
+        std::cout << "User ID: " << userId
+                  << ", Street: " << street
+                  << ", Zip: " << zip
+                  << ", Active: " << active << std::endl;
+
+        // 安全访问
+        int stars = 0;
+        if (cfg[u"projects"][u"list"][1][u"stars"].TryGet(stars)) {
+            std::cout << "Project 2 stars: " << stars << std::endl;
+        }
+
+        // 遍历对象
+        std::cout << "\nUser info:\n";
+        for (auto it = cfg.beginObject(); it != cfg.endObject(); ++it) {
+            std::cout << it->first << ": " << it->second.AsString() << std::endl;
+        }
+
+        // 遍历数组
+        std::cout << "\nHobbies:\n";
+        for (const auto& hobby : cfg[u"hobbies"]) {
+            std::cout << "- " << hobby.AsString() << std::endl;
+        }
+
+        // 序列化 / 反序列化
+        cfg.SetSerializer(LikesProgram::Configuration::CreateJsonSerializer());
+        LikesProgram::String jsonText = cfg.Dump(4);
+        std::cout << "\nSerialized JSON:\n" << jsonText << std::endl;
+
+        LikesProgram::Configuration loadedCfg;
+        loadedCfg.Load(jsonText);
+        std::cout << "Loaded project 1 name: "
+                  << loadedCfg[u"projects"][u"list"][0][u"name"].AsString()
+                  << std::endl;
+    }
+}
+```

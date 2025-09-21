@@ -48,6 +48,9 @@
     <ClCompile Include="src\LikesProgram\Logger.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\Configuration.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
@@ -101,14 +104,20 @@
     <ClInclude Include="include\test\ThreadPoolTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\config\JsonSerializer.hpp">
+    <ClInclude Include="include\LikesProgram\Configuration.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\config\Configuration.hpp">
+    <ClInclude Include="include\test\ConfigurationTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\ConfigurationTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="CMakeLists.txt" />
   </ItemGroup>
 </Project>

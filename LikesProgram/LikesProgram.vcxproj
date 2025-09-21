@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\LikesProgram\Configuration.cpp" />
     <ClCompile Include="src\LikesProgram\CoreUtils.cpp" />
     <ClCompile Include="src\LikesProgram\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
@@ -144,8 +145,7 @@
     <ClCompile Include="src\LikesProgram\String.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\LikesProgram\config\Configuration.hpp" />
-    <ClInclude Include="include\LikesProgram\config\JsonSerializer.hpp" />
+    <ClInclude Include="include\LikesProgram\Configuration.hpp" />
     <ClInclude Include="include\LikesProgram\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />
@@ -156,6 +156,8 @@
     <ClInclude Include="include\LikesProgram\unicode\Case.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Convert.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
+    <ClInclude Include="include\test\ConfigurationTest.hpp" />
+    <ClInclude Include="include\test\ConfigurationTest.hpp" />
     <ClInclude Include="include\test\LoggerTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\ThreadPoolTest.hpp" />
@@ -166,6 +168,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="CMakeLists.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

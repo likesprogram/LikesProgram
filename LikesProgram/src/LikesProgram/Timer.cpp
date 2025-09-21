@@ -22,7 +22,7 @@ namespace LikesProgram {
         mutable std::shared_mutex m_mutex;
     };
 
-    Timer::Timer(bool autoStart, Timer* parent): m_impl(new TimerImpl()), m_parent(parent) {
+    Timer::Timer(bool autoStart, Timer* parent): m_impl(new TimerImpl{}), m_parent(parent) {
         if (autoStart) Start();
     }
 
@@ -36,7 +36,7 @@ namespace LikesProgram {
     }
 
     Timer::Timer(const Timer& other) : m_parent(other.m_parent) {
-        m_impl = new TimerImpl;
+        m_impl = new TimerImpl{};
         if (other.m_impl) {
             m_impl->m_startNs.store(other.m_impl->m_startNs.load());
             m_impl->m_lastNs.store(other.m_impl->m_lastNs.load());
@@ -52,7 +52,7 @@ namespace LikesProgram {
     // 拷贝赋值
     Timer& Timer::operator=(const Timer& other) {
         if (this != &other) {
-            TimerImpl* newImpl = new TimerImpl;
+            TimerImpl* newImpl = new TimerImpl{};
             if (other.m_impl) {
                 newImpl->m_startNs.store(other.m_impl->m_startNs.load());
                 newImpl->m_lastNs.store(other.m_impl->m_lastNs.load());

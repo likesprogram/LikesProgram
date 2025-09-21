@@ -25,13 +25,13 @@ namespace LikesProgram {
         mutable bool cp_cache_valid = false;   // 是否缓存有效
     };
 
-    String::String(): m_impl(new StringImpl) {
+    String::String(): m_impl(new StringImpl{}) {
         m_impl->m_data = (std::make_unique<char16_t[]>(1));
         m_impl->m_size = 0;
         m_impl->encoding = Encoding::UTF8;
     }
 
-    String::String(const char* s, Encoding enc): m_impl(new StringImpl) {
+    String::String(const char* s, Encoding enc): m_impl(new StringImpl{}) {
         m_impl->encoding = enc;
         if (!s) s = "";
 
@@ -82,7 +82,7 @@ namespace LikesProgram {
         }
     }
 
-    String::String(const char8_t* s): m_impl(new StringImpl) {
+    String::String(const char8_t* s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF8;
         if (!s) s = u8"";
         auto utf16 = Unicode::Convert::Utf8ToUtf16(std::u8string(s));
@@ -92,7 +92,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char16_t* s): m_impl(new StringImpl) {
+    String::String(const char16_t* s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF16;
         if (!s) s = u"";
         size_t len = 0;
@@ -103,7 +103,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char32_t* s): m_impl(new StringImpl) {
+    String::String(const char32_t* s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF32;
         if (!s) s = U"";
         size_t len = 0;
@@ -115,7 +115,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const String& other): m_impl(new StringImpl) {
+    String::String(const String& other): m_impl(new StringImpl{}) {
         m_impl->m_size = other.m_impl->m_size;
         m_impl->encoding = other.m_impl->encoding;
         m_impl->cp_offsets = other.m_impl->cp_offsets;
@@ -134,7 +134,7 @@ namespace LikesProgram {
         other.m_impl = nullptr;
     }
 
-    String::String(const char8_t c): m_impl(new StringImpl) {
+    String::String(const char8_t c): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF8;
         char8_t buf[2] = { c, 0 };
         auto utf16 = Unicode::Convert::Utf8ToUtf16(std::u8string(buf));
@@ -144,7 +144,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char16_t c): m_impl(new StringImpl) {
+    String::String(const char16_t c): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF16;
         m_impl->m_size = 1;
         m_impl->m_data = std::make_unique<char16_t[]>(2);
@@ -152,7 +152,7 @@ namespace LikesProgram {
         m_impl->m_data[1] = u'\0';
     }
 
-    String::String(const size_t count, const char16_t c): m_impl(new StringImpl) {
+    String::String(const size_t count, const char16_t c): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF16;
 
         // 分配存储空间，+1 预留 '\0'
@@ -167,7 +167,7 @@ namespace LikesProgram {
         m_impl->m_data[count] = u'\0';
     }
 
-    String::String(const char32_t c): m_impl(new StringImpl) {
+    String::String(const char32_t c): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF32;
         auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, c));
         m_impl->m_size = utf16.size();
@@ -635,7 +635,7 @@ namespace LikesProgram {
         return Unicode::Convert::Utf16ToUtf32(std::u16string(m_impl->m_data.get(), m_impl->m_size));
     }
 
-    String::String(const std::string& s, Encoding enc): m_impl(new StringImpl) {
+    String::String(const std::string& s, Encoding enc): m_impl(new StringImpl{}) {
         m_impl->encoding = enc;
         switch (enc) {
         case Encoding::UTF8: {
@@ -662,7 +662,7 @@ namespace LikesProgram {
         }
     }
 
-    String::String(const std::u8string& s): m_impl(new StringImpl) {
+    String::String(const std::u8string& s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF8;
         auto utf16 = Unicode::Convert::Utf8ToUtf16(s);
         m_impl->m_size = utf16.size();
@@ -671,7 +671,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const std::wstring& s): m_impl(new StringImpl) {
+    String::String(const std::wstring& s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF16;
 #if WCHAR_MAX == 0xFFFF  // Windows
         m_impl->m_size = s.size();
@@ -689,7 +689,7 @@ namespace LikesProgram {
 #endif
     }
 
-    String::String(const std::u16string& s): m_impl(new StringImpl) {
+    String::String(const std::u16string& s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF16;
         m_impl->m_size = s.size();
         m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
@@ -697,7 +697,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const std::u32string& s): m_impl(new StringImpl) {
+    String::String(const std::u32string& s): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF32;
         auto utf16 = Unicode::Convert::Utf32ToUtf16(s);
         m_impl->m_size = utf16.size();
