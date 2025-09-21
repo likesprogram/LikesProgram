@@ -11,7 +11,7 @@ namespace ThreadPoolTest {
 #endif
         logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
 
         LikesProgram::ThreadPool::Options optins = {
         2,   // 最小线程数

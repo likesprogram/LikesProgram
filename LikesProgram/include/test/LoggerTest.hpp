@@ -42,9 +42,9 @@ namespace LoggerTest {
         logger.SetLevel(LikesProgram::Logger::LogLevel::Info);
 #endif
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
         // 内置输出到文件 Sink
-        logger.AddSink(LikesProgram::CreateFileSink(u"app.log")); // 输出到文件
+        logger.AddSink(LikesProgram::Logger::CreateFileSink(u"app.log")); // 输出到文件
         // 自定义网络输出 Sink
         logger.AddSink(CreateNetworkSink("127.0.0.1:9000")); // 自定义输出 Sink
 #ifdef _DEBUG

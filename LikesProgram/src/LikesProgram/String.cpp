@@ -152,6 +152,21 @@ namespace LikesProgram {
         m_impl->m_data[1] = u'\0';
     }
 
+    String::String(const size_t count, const char16_t c): m_impl(new StringImpl) {
+        m_impl->encoding = Encoding::UTF16;
+
+        // 分配存储空间，+1 预留 '\0'
+        m_impl->m_size = count;
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+
+        // 填充内容
+        for (size_t i = 0; i < count; ++i) {
+            m_impl->m_data[i] = c;
+        }
+
+        m_impl->m_data[count] = u'\0';
+    }
+
     String::String(const char32_t c): m_impl(new StringImpl) {
         m_impl->encoding = Encoding::UTF32;
         auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, c));

@@ -27,6 +27,7 @@ namespace LikesProgram {
         // 构造单个字符
         String(const char8_t c);
         String(const char16_t c);
+        String(const size_t count, const char16_t c);
         String(const char32_t c);
         // 析构函数
         ~String();
