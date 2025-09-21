@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include <chrono>
 #include "String.hpp"
@@ -6,7 +6,7 @@
 #include <shared_mutex>
 
 namespace LikesProgram {
-    // ¸ß¾«¶È¼ÆÊ±Æ÷
+    // é«˜ç²¾åº¦è®¡æ—¶å™¨
     class LIKESPROGRAM_API Timer {
     public:
         using Duration = std::chrono::nanoseconds;
@@ -14,39 +14,39 @@ namespace LikesProgram {
         void SetParent(Timer* parent);
         ~Timer() = default;
         
-        // ¿ªÊ¼¼ÆÊ±
+        // å¼€å§‹è®¡æ—¶
         void Start();
 
-        // Í£Ö¹¼ÆÊ±
+        // åœæ­¢è®¡æ—¶
         Duration Stop(double alpha = 0.9);
 
-        // ÖØÖÃ¼ÆÊ±Æ÷
+        // é‡ç½®è®¡æ—¶å™¨
         void ResetThread();
         void ResetGlobal();
         void Reset();
 
-        // ×î½üÒ»´Î Stop() µÄºÄÊ±
+        // æœ€è¿‘ä¸€æ¬¡ Stop() çš„è€—æ—¶
         Duration GetLastElapsed() const;
 
-        // È«¾Ö Stop() µÄÀÛ¼ÆºÄÊ±
+        // å…¨å±€ Stop() çš„ç´¯è®¡è€—æ—¶
         Duration GetTotalElapsed() const;
 
-        // ÀúÊ·×î³¤ºÄÊ±
+        // å†å²æœ€é•¿è€—æ—¶
         Duration GetLongestElapsed() const;
 
-        // EMA Æ½¾ùºÄÊ±
+        // EMA å¹³å‡è€—æ—¶
         Duration GetEMAAverageElapsed() const;
 
-        // ËãÊıÆ½¾ùºÄÊ±
+        // ç®—æ•°å¹³å‡è€—æ—¶
         Duration GetArithmeticAverageElapsed() const;
 
-        // µ±Ç°ÊÇ·ñÔÚ¼ÆÊ±
+        // å½“å‰æ˜¯å¦åœ¨è®¡æ—¶
         bool IsRunning() const;
 
-        // ½«Ê±¼ä¼ä¸ô×ª»»Îª×Ö·û´®
+        // å°†æ—¶é—´é—´éš”è½¬æ¢ä¸ºå­—ç¬¦ä¸²
         static String ToString(Duration duration);
     private:
-        // »ñÈ¡¸ß¾«¶ÈÄÉÃëÊ±¼ä
+        // è·å–é«˜ç²¾åº¦çº³ç§’æ—¶é—´
         static int64_t NowNs();
         Timer* m_parent = nullptr;
 

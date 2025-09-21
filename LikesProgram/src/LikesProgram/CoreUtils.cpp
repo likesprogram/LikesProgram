@@ -1,4 +1,4 @@
-#include "../../include/LikesProgram/CoreUtils.hpp"
+ï»¿#include "../../include/LikesProgram/CoreUtils.hpp"
 #if defined(_WIN32)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define NOMINMAX
@@ -32,13 +32,13 @@ namespace LikesProgram {
             if (h) {
                 auto p = reinterpret_cast<SetThreadDescription_t>(GetProcAddress(h, "SetThreadDescription"));
                 if (p) {
-                    // ×ª»»³É UTF-16
+                    // è½¬æ¢æˆ UTF-16
                     std::wstring wname = name.ToWString();
                     p(GetCurrentThread(), wname.c_str());
                 }
             }
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-            // pthread_setname_np ÏŞÖÆ16×Ö½Ú£¨º¬\0£©£¬½Ø¶Ï
+            // pthread_setname_np é™åˆ¶16å­—èŠ‚ï¼ˆå«\0ï¼‰ï¼Œæˆªæ–­
             std::string trimmed = name.SubString(0, 15).ToStdString();
 #if defined(__APPLE__)
             (void)pthread_setname_np(trimmed.c_str());
@@ -98,7 +98,7 @@ namespace LikesProgram {
                 if (GetAdaptersInfo(AdapterInfo, &dwBufLen) == NO_ERROR) {
                     PIP_ADAPTER_INFO pAdapterInfo = AdapterInfo;
                     for (; pAdapterInfo; pAdapterInfo = pAdapterInfo->Next) {
-                        if (pAdapterInfo->Type == MIB_IF_TYPE_ETHERNET) { // ÎïÀíÍø¿¨
+                        if (pAdapterInfo->Type == MIB_IF_TYPE_ETHERNET) { // ç‰©ç†ç½‘å¡
                             char mac[18] = { 0 };
                             std::snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
                                 pAdapterInfo->Address[0], pAdapterInfo->Address[1],
@@ -114,11 +114,11 @@ namespace LikesProgram {
                 if (getifaddrs(&ifaddr) == 0) {
                     for (ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
                         if (!ifa->ifa_addr) continue;
-                        if (ifa->ifa_addr->sa_family == AF_PACKET) { // Êı¾İÁ´Â·²ã
+                        if (ifa->ifa_addr->sa_family == AF_PACKET) { // æ•°æ®é“¾è·¯å±‚
                             std::string name = ifa->ifa_name;
                             if (name == "lo" || name.find("docker") != std::string::npos ||
                                 name.find("veth") != std::string::npos)
-                                continue; // Ìø¹ı»·»ØºÍĞéÄâ½Ó¿Ú
+                                continue; // è·³è¿‡ç¯å›å’Œè™šæ‹Ÿæ¥å£
 
                             int fd = socket(AF_INET, SOCK_DGRAM, 0);
                             if (fd < 0) continue;
@@ -194,7 +194,7 @@ namespace LikesProgram {
                         std::string name = ifa->ifa_name;
                         if (name == "lo" || name.find("docker") != std::string::npos ||
                             name.find("veth") != std::string::npos)
-                            continue; // Ìø¹ı»·»ØºÍĞéÄâ½Ó¿Ú
+                            continue; // è·³è¿‡ç¯å›å’Œè™šæ‹Ÿæ¥å£
 
                         void* addrPtr = &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
                         if (inet_ntop(AF_INET, addrPtr, ip, INET_ADDRSTRLEN)) {
@@ -211,42 +211,42 @@ namespace LikesProgram {
         }
 
         LikesProgram::String GenerateUUID(LikesProgram::String prefix) {
-            // Ëæ»úÊıÉú³ÉÆ÷
+            // éšæœºæ•°ç”Ÿæˆå™¨
             static thread_local std::mt19937_64 rng{ std::random_device{}() };
             std::uniform_int_distribution<uint64_t> dist;
 
-            // Ïß³Ì±¾µØ×ÔÔöĞòÁĞºÅ
+            // çº¿ç¨‹æœ¬åœ°è‡ªå¢åºåˆ—å·
             static thread_local uint16_t seq = 0;
 
-            // ÄÉÃë¼¶Ê±¼ä´Á
+            // çº³ç§’çº§æ—¶é—´æˆ³
             uint64_t ts = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
 
-            // Ëæ»úÊı²¿·Ö
+            // éšæœºæ•°éƒ¨åˆ†
             uint64_t randPart = dist(rng);
 
-            // Ïß³Ì ID ²¿·Ö
+            // çº¿ç¨‹ ID éƒ¨åˆ†
             std::hash<std::thread::id> threadHasher;
             uint64_t threadHash = threadHasher(std::this_thread::get_id());
 
-            // ĞòºÅ£¨Ã¿Ïß³Ì¶ÀÁ¢×ÔÔö£¬±ÜÃâÍ¬ÄÉÃëÖØ¸´£©
+            // åºå·ï¼ˆæ¯çº¿ç¨‹ç‹¬ç«‹è‡ªå¢ï¼Œé¿å…åŒçº³ç§’é‡å¤ï¼‰
             uint16_t mySeq = seq++;
 
-            // »úÆ÷ MAC
-            LikesProgram::String mac = GetMACAddress(); // ÏµÍ³µ÷ÓÃ»ñÈ¡ MAC
+            // æœºå™¨ MAC
+            LikesProgram::String mac = GetMACAddress(); // ç³»ç»Ÿè°ƒç”¨è·å– MAC
             std::hash<std::string> hasher;
             uint16_t macHash = static_cast<uint16_t>(hasher(mac.ToStdString()) & 0xFFFF);
-            // »úÆ÷ IP
+            // æœºå™¨ IP
             LikesProgram::String ip = GetLocalIPAddress();
             uint16_t ipHash = static_cast<uint16_t>(hasher(ip.ToStdString()) & 0xFFFF);
-            // Éú³É»úÆ÷ ID ²¿·Ö
+            // ç”Ÿæˆæœºå™¨ ID éƒ¨åˆ†
             uint16_t machineId = (macHash & 0x0FFF) | ((ipHash & 0x000F) << 12);
 
             char buf[61]; // 16+16+16+4+4+4 hex = 60 + '\0'
             std::snprintf(buf, sizeof(buf), "%016" PRIx64 "%016" PRIx64 "%016" PRIx64 "%04x%04x",
                 ts, threadHash, randPart, mySeq, machineId);
 
-            // Æ´½ÓÇ°×º
+            // æ‹¼æ¥å‰ç¼€
             return prefix.Empty() ? LikesProgram::String(buf) : prefix.Append(LikesProgram::String(buf));
         }
     }

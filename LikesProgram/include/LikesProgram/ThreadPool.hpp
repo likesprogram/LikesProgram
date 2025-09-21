@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include "String.hpp"
 #include <atomic>
@@ -29,30 +29,30 @@
 namespace LikesProgram {
     class LIKESPROGRAM_API ThreadPool { 
     public:
-        // ÈÎÎñ¾Ü¾ø²ßÂÔ
+        // ä»»åŠ¡æ‹’ç»ç­–ç•¥
         enum class RejectPolicy {
-            Block,       // ×èÈûµÈ´ı¶ÓÁĞÓĞ¿ÕÎ»
-            Discard,     // ¶ªÆúĞÂÈÎÎñ
-            DiscardOld,  // ¶ªÆú×îÀÏÈÎÎñ£¨¶ÓÍ·£©£¬È»ºóÈë¶ÓĞÂÈÎÎñ
-            Throw        // Å×³öÒì³£
+            Block,       // é˜»å¡ç­‰å¾…é˜Ÿåˆ—æœ‰ç©ºä½
+            Discard,     // ä¸¢å¼ƒæ–°ä»»åŠ¡
+            DiscardOld,  // ä¸¢å¼ƒæœ€è€ä»»åŠ¡ï¼ˆé˜Ÿå¤´ï¼‰ï¼Œç„¶åå…¥é˜Ÿæ–°ä»»åŠ¡
+            Throw        // æŠ›å‡ºå¼‚å¸¸
         };
-        // ¹Ø±Õ²ßÂÔ
+        // å…³é—­ç­–ç•¥
         enum class ShutdownPolicy {
-            Graceful,   // ²»½ÓÊÕĞÂÈÎÎñ£»Ö´ĞĞÍê¶ÓÁĞºÍÔÚÅÜµÄÈÎÎñÔÙÍË³ö
-            Drain,      // Á¢¿Ì¾Ü¾øĞÂÈÎÎñ£»Ö´ĞĞ¶ÓÁĞÀïÒÑÓĞÈÎÎñ£»¾¡¿ìÍË³ö£¨²»Çå¶ÓÁĞ£©
-            CancelNow   // Á¢¿Ì¾Ü¾øĞÂÈÎÎñ£»¶ªÆú¶ÓÁĞ£»¾¡¿ìÍË³ö
+            Graceful,   // ä¸æ¥æ”¶æ–°ä»»åŠ¡ï¼›æ‰§è¡Œå®Œé˜Ÿåˆ—å’Œåœ¨è·‘çš„ä»»åŠ¡å†é€€å‡º
+            Drain,      // ç«‹åˆ»æ‹’ç»æ–°ä»»åŠ¡ï¼›æ‰§è¡Œé˜Ÿåˆ—é‡Œå·²æœ‰ä»»åŠ¡ï¼›å°½å¿«é€€å‡ºï¼ˆä¸æ¸…é˜Ÿåˆ—ï¼‰
+            CancelNow   // ç«‹åˆ»æ‹’ç»æ–°ä»»åŠ¡ï¼›ä¸¢å¼ƒé˜Ÿåˆ—ï¼›å°½å¿«é€€å‡º
         };
-        // ÅäÖÃÑ¡Ïî
+        // é…ç½®é€‰é¡¹
         struct Options {
-            size_t coreThreads = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1; // ×îÉÙÏß³Ì
-            size_t maxThreads = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1;  // ×î´óÏß³Ì
-            size_t queueCapacity = 1024; // ¶ÓÁĞÈİÁ¿
-            RejectPolicy rejectPolicy = RejectPolicy::Block; // ¾Ü¾ø²ßÂÔ
-            std::chrono::milliseconds keepAlive = std::chrono::milliseconds(30000); // ¿ÕÏĞÏß³Ì»ØÊÕÊ±¼ä
-            bool allowDynamicResize = true; // ÊÇ·ñÆôÓÃ¶¯Ì¬À©Èİ/»ØÊÕ
-            String threadNamePrefix = u"tp-worker-"; // Ïß³ÌÃûÇ°×º
-            std::function<void(std::exception_ptr)> exceptionHandler = [](std::exception_ptr) {}; // Òì³£»Øµ÷
-            // ¹¹Ôìº¯Êı
+            size_t coreThreads = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1; // æœ€å°‘çº¿ç¨‹
+            size_t maxThreads = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1;  // æœ€å¤§çº¿ç¨‹
+            size_t queueCapacity = 1024; // é˜Ÿåˆ—å®¹é‡
+            RejectPolicy rejectPolicy = RejectPolicy::Block; // æ‹’ç»ç­–ç•¥
+            std::chrono::milliseconds keepAlive = std::chrono::milliseconds(30000); // ç©ºé—²çº¿ç¨‹å›æ”¶æ—¶é—´
+            bool allowDynamicResize = true; // æ˜¯å¦å¯ç”¨åŠ¨æ€æ‰©å®¹/å›æ”¶
+            String threadNamePrefix = u"tp-worker-"; // çº¿ç¨‹åå‰ç¼€
+            std::function<void(std::exception_ptr)> exceptionHandler = [](std::exception_ptr) {}; // å¼‚å¸¸å›è°ƒ
+            // æ„é€ å‡½æ•°
             Options(size_t coreThreads = 0, size_t maxThreads = 0, size_t queueCapacity = 1024,
                 RejectPolicy rejectPolicy = RejectPolicy::Block,
                 std::chrono::milliseconds keepAlive = std::chrono::milliseconds(30000),
@@ -65,20 +65,20 @@ namespace LikesProgram {
             }
         };
 
-        // ÔËĞĞÊ±Í³¼ÆĞÅÏ¢
+        // è¿è¡Œæ—¶ç»Ÿè®¡ä¿¡æ¯
         struct Statistics {
-            size_t submitted = 0;       // ³É¹¦Èë¶ÓµÄÈÎÎñÊı
-            size_t rejected = 0;        // ±»¾Ü¾øµÄÈÎÎñÊı
-            size_t completed = 0;       // Ö´ĞĞÍê³ÉµÄÈÎÎñÊı
-            size_t active = 0;          // ÕıÔÚÖ´ĞĞµÄÈÎÎñÊı
-            size_t aliveThreads = 0;    // ´æ»î¹¤×÷Ïß³ÌÊı
-            size_t largestPoolSize = 0; // ÀúÊ·×î´óÏß³ÌÊı
-            size_t peakQueueSize = 0;   // ¶ÓÁĞ·åÖµ
-            std::chrono::steady_clock::time_point lastSubmitTime{}; // ×îºóÒ»´ÎÌá½»Ê±¼ä
-            std::chrono::steady_clock::time_point lastFinishTime{}; // ×îºóÒ»´ÎÍê³ÉÊ±¼ä
-            std::chrono::nanoseconds longestTaskTime{ 0 }; // ×î³¤ÈÎÎñºÄÊ±
-            std::chrono::nanoseconds arithmeticAverageTaskTime{ 0 }; // ËãÊõÆ½¾ùÈÎÎñºÄÊ±
-            std::chrono::nanoseconds averageTaskTime{ 0 }; // Ö¸ÊıÒÆ¶¯Æ½¾ùÈÎÎñºÄÊ±
+            size_t submitted = 0;       // æˆåŠŸå…¥é˜Ÿçš„ä»»åŠ¡æ•°
+            size_t rejected = 0;        // è¢«æ‹’ç»çš„ä»»åŠ¡æ•°
+            size_t completed = 0;       // æ‰§è¡Œå®Œæˆçš„ä»»åŠ¡æ•°
+            size_t active = 0;          // æ­£åœ¨æ‰§è¡Œçš„ä»»åŠ¡æ•°
+            size_t aliveThreads = 0;    // å­˜æ´»å·¥ä½œçº¿ç¨‹æ•°
+            size_t largestPoolSize = 0; // å†å²æœ€å¤§çº¿ç¨‹æ•°
+            size_t peakQueueSize = 0;   // é˜Ÿåˆ—å³°å€¼
+            std::chrono::steady_clock::time_point lastSubmitTime{}; // æœ€åä¸€æ¬¡æäº¤æ—¶é—´
+            std::chrono::steady_clock::time_point lastFinishTime{}; // æœ€åä¸€æ¬¡å®Œæˆæ—¶é—´
+            std::chrono::nanoseconds longestTaskTime{ 0 }; // æœ€é•¿ä»»åŠ¡è€—æ—¶
+            std::chrono::nanoseconds arithmeticAverageTaskTime{ 0 }; // ç®—æœ¯å¹³å‡ä»»åŠ¡è€—æ—¶
+            std::chrono::nanoseconds averageTaskTime{ 0 }; // æŒ‡æ•°ç§»åŠ¨å¹³å‡ä»»åŠ¡è€—æ—¶
 
             String ToString() const;
         };
@@ -90,28 +90,28 @@ namespace LikesProgram {
 
         ~ThreadPool();
 
-        // ---- ÉúÃüÖÜÆÚ¿ØÖÆ ----
-        // Æô¶¯Ïß³Ì³Ø£¨¿É¶à´Îµ÷ÓÃµ«½öµÚÒ»´ÎÉúĞ§£©
+        // ---- ç”Ÿå‘½å‘¨æœŸæ§åˆ¶ ----
+        // å¯åŠ¨çº¿ç¨‹æ± ï¼ˆå¯å¤šæ¬¡è°ƒç”¨ä½†ä»…ç¬¬ä¸€æ¬¡ç”Ÿæ•ˆï¼‰
         void Start();
 
-        // Í³Ò»µÄÍ£Ö¹Èë¿Ú£»¼æÈİÔ­ stop()/shutdownNow()
+        // ç»Ÿä¸€çš„åœæ­¢å…¥å£ï¼›å…¼å®¹åŸ stop()/shutdownNow()
         void Shutdown(ShutdownPolicy mode = ShutdownPolicy::Graceful);
 
-        // ¼æÈİÀÏ½Ó¿Ú
+        // å…¼å®¹è€æ¥å£
         void Stop() { Shutdown(ShutdownPolicy::Graceful); }
         void ShutdownNow() { Shutdown(ShutdownPolicy::CancelNow); }
 
-        // µÈ´ıËùÓĞworkerÍË³ö£»timeout=0 ±íÊ¾·Ç×èÈû¼ì²é
+        // ç­‰å¾…æ‰€æœ‰workeré€€å‡ºï¼›timeout=0 è¡¨ç¤ºéé˜»å¡æ£€æŸ¥
         bool AwaitTermination(std::chrono::milliseconds timeout);
 
-        // ---- Ìá½»ÈÎÎñ ----
-        // Ìá½»Ò»¸öÈÎÎñ,ÓĞ²ÎÊıºÍ·µ»ØÖµ
+        // ---- æäº¤ä»»åŠ¡ ----
+        // æäº¤ä¸€ä¸ªä»»åŠ¡,æœ‰å‚æ•°å’Œè¿”å›å€¼
         template<typename F, typename... Args>
         auto Submit(F&& f, Args&&... args)
             -> std::future<std::invoke_result_t<F, Args...>> {
             using Ret = std::invoke_result_t<F, Args...>;
 
-            // µ÷ÓÃ´øÓĞÒÆ¶¯²ÎÊıµÄfnµÄpackaged_task£¨Ö§³Ö½öÒÆ¶¯²ÎÊı£©
+            // è°ƒç”¨å¸¦æœ‰ç§»åŠ¨å‚æ•°çš„fnçš„packaged_taskï¼ˆæ”¯æŒä»…ç§»åŠ¨å‚æ•°ï¼‰
             auto task = std::make_shared<std::packaged_task<Ret()>>(
                 [fn = std::forward<F>(f), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable -> Ret {
                     return std::apply(fn, std::move(tup));
@@ -120,12 +120,12 @@ namespace LikesProgram {
             std::future<Ret> fut = task->get_future();
 
             auto wrapper = [task]() {
-                // packaged_task »á°ÑÒì³£×ª·¢µ½ future
+                // packaged_task ä¼šæŠŠå¼‚å¸¸è½¬å‘åˆ° future
                 (*task)();
             };
 
             if (!EnqueueTask(std::function<void()>(wrapper))) {
-                // Èë¶ÓÊ§°Ü£º·µ»ØÒ»¸öÒÑ¾­´øÒì³£µÄ future
+                // å…¥é˜Ÿå¤±è´¥ï¼šè¿”å›ä¸€ä¸ªå·²ç»å¸¦å¼‚å¸¸çš„ future
                 std::promise<Ret> p;
                 p.set_exception(std::make_exception_ptr(std::runtime_error("ThreadPool: Task rejected")));
                 return p.get_future();
@@ -133,12 +133,12 @@ namespace LikesProgram {
             return fut;
         }
 
-        // Ìá½»Ò»¸öÈÎÎñ£¬ÎŞ·µ»ØÖµ£¬Ö§³Ö²ÎÊı
+        // æäº¤ä¸€ä¸ªä»»åŠ¡ï¼Œæ— è¿”å›å€¼ï¼Œæ”¯æŒå‚æ•°
         template<typename F, typename... Args>
         bool Post(F&& f, Args&&... args) {
             using Fn = std::decay_t<F>;
 
-            // ´ò°üÈÎÎñ£¬²¶»ñº¯ÊıºÍ²ÎÊı£¬Éú³ÉÒ»¸ö void() µ÷ÓÃ
+            // æ‰“åŒ…ä»»åŠ¡ï¼Œæ•è·å‡½æ•°å’Œå‚æ•°ï¼Œç”Ÿæˆä¸€ä¸ª void() è°ƒç”¨
             auto task = std::make_shared<std::packaged_task<void()>>(
                 [fn = Fn(std::forward<F>(f)), tup = std::make_tuple(std::forward<Args>(args)...)]() mutable {
                     std::apply(fn, std::move(tup));
@@ -146,87 +146,87 @@ namespace LikesProgram {
             );
 
             auto wrapper = [task]() {
-                // packaged_task »á°ÑÒì³£×ª·¢µ½ future
+                // packaged_task ä¼šæŠŠå¼‚å¸¸è½¬å‘åˆ° future
                 (*task)();
             };
 
-            // Èë¶Ó²¢·µ»ØÊÇ·ñ³É¹¦
+            // å…¥é˜Ÿå¹¶è¿”å›æ˜¯å¦æˆåŠŸ
             bool success = EnqueueTask(std::function<void()>(wrapper));
             if (!success && opts_.exceptionHandler) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
             return success;
         }
 
-        // Ìá½»Ò»¸öÈÎÎñ,ÎŞ·µ»ØÖµÎŞ²ÎÊı
+        // æäº¤ä¸€ä¸ªä»»åŠ¡,æ— è¿”å›å€¼æ— å‚æ•°
         bool PostNoArg(std::function<void()> fn);
 
-        // ---- ²éÑ¯Óë¼à¿Ø ----
+        // ---- æŸ¥è¯¢ä¸ç›‘æ§ ----
         size_t GetQueueSize() const;
-        size_t GetActiveCount() const { return activeCount_.load(std::memory_order_acquire); } // ÕıÔÚÖ´ĞĞÈÎÎñµÄÏß³ÌÊı
-        size_t GetThreadCount() const { return aliveThreads_.load(std::memory_order_acquire); } // ·µ»Ø¡°»î×Å¡±µÄÏß³ÌÊı
+        size_t GetActiveCount() const { return activeCount_.load(std::memory_order_acquire); } // æ­£åœ¨æ‰§è¡Œä»»åŠ¡çš„çº¿ç¨‹æ•°
+        size_t GetThreadCount() const { return aliveThreads_.load(std::memory_order_acquire); } // è¿”å›â€œæ´»ç€â€çš„çº¿ç¨‹æ•°
         bool   IsRunning()     const { return running_.load(std::memory_order_acquire); }
 
-        size_t IetRejectedCount() const { return rejectedCount_.load(std::memory_order_acquire); } // ±»¾Ü¾øµÄÈÎÎñÊıÁ¿
+        size_t IetRejectedCount() const { return rejectedCount_.load(std::memory_order_acquire); } // è¢«æ‹’ç»çš„ä»»åŠ¡æ•°é‡
         size_t IetTotalTasksSubmitted() const { return submittedCount_.load(std::memory_order_acquire); }
         size_t IetCompletedCount() const { return completedCount_.load(std::memory_order_acquire); }
         size_t IetLargestPoolSize() const { return largestPoolSize_.load(std::memory_order_acquire); }
         size_t IetPeakQueueSize() const { return peakQueueSize_.load(std::memory_order_acquire); }
 
-        // »ñÈ¡¿ìÕÕÍ³¼ÆĞÅÏ¢
+        // è·å–å¿«ç…§ç»Ÿè®¡ä¿¡æ¯
         Statistics Snapshot() const;
 
-        // µÈ´ıËùÓĞÏß³ÌÍË³ö£¨×èÈû£©
+        // ç­‰å¾…æ‰€æœ‰çº¿ç¨‹é€€å‡ºï¼ˆé˜»å¡ï¼‰
         void JoinAll();
 
     private:
-        // ²»¿É¿½±´/ÒÆ¶¯
+        // ä¸å¯æ‹·è´/ç§»åŠ¨
         ThreadPool(const ThreadPool&) = delete;
         ThreadPool& operator=(const ThreadPool&) = delete;
 
-        // ÈÎÎñÈë¶Ó¼°¶¯Ì¬À©Èİ
+        // ä»»åŠ¡å…¥é˜ŸåŠåŠ¨æ€æ‰©å®¹
         bool EnqueueTask(std::function<void()>&& task);
 
-        // ¹¤×÷Ïß³ÌÑ­»·Ìå
+        // å·¥ä½œçº¿ç¨‹å¾ªç¯ä½“
         void WorkerLoop();
 
-        // ´´½¨ĞÂÏß³Ì
+        // åˆ›å»ºæ–°çº¿ç¨‹
         void SpawnWorker();
 
-        // »½ĞÑËùÓĞ¹¤×÷Ïß³Ì
+        // å”¤é†’æ‰€æœ‰å·¥ä½œçº¿ç¨‹
         void NotifyAllWorkers();
 
         Options opts_;
 
-        // ÕæÕıµÄ¶ÓÁĞ/Í¬²½½á¹¹
+        // çœŸæ­£çš„é˜Ÿåˆ—/åŒæ­¥ç»“æ„
         mutable std::mutex queueMutex_;
-        std::condition_variable queueNotEmptyCv_; // Í¨Öª worker
-        std::condition_variable queueNotFullCv_;  // Í¨Öª submit µÈ´ı
-        std::deque<std::function<void()>> taskQueue_; // ÈÎÎñ¶ÓÁĞ
-        size_t queueCapacity_; // ¶ÓÁĞÈİÁ¿
+        std::condition_variable queueNotEmptyCv_; // é€šçŸ¥ worker
+        std::condition_variable queueNotFullCv_;  // é€šçŸ¥ submit ç­‰å¾…
+        std::deque<std::function<void()>> taskQueue_; // ä»»åŠ¡é˜Ÿåˆ—
+        size_t queueCapacity_; // é˜Ÿåˆ—å®¹é‡
 
-        // ¹¤×÷Ïß³ÌÈİÆ÷£¨±£³Öµ½×îÖÕjoin£»»îÔ¾ÊıÓÃ aliveThreads_ Í³¼Æ£©
+        // å·¥ä½œçº¿ç¨‹å®¹å™¨ï¼ˆä¿æŒåˆ°æœ€ç»ˆjoinï¼›æ´»è·ƒæ•°ç”¨ aliveThreads_ ç»Ÿè®¡ï¼‰
         std::vector<std::thread> workers_;
         mutable std::mutex workersMutex_;
 
-        // ÔËĞĞ±êÖ¾
-        std::atomic<bool> running_{ false };       // ³ØÊÇ·ñ´¦ÓÚÔËĞĞ×´Ì¬£¨ÔÊĞíworkerÈ¡ÈÎÎñ£©
-        std::atomic<bool> acceptTasks_{ false };   // ÊÇ·ñ½ÓÊÜĞÂÈÎÎñ£¨Èë¶Ó£©
-        std::atomic<bool> shutdownNowFlag_{ false }; // ÓÃÓÚ»½ĞÑ¿ÕÏĞ worker ÍË³ö£¨shutdown£©
+        // è¿è¡Œæ ‡å¿—
+        std::atomic<bool> running_{ false };       // æ± æ˜¯å¦å¤„äºè¿è¡ŒçŠ¶æ€ï¼ˆå…è®¸workerå–ä»»åŠ¡ï¼‰
+        std::atomic<bool> acceptTasks_{ false };   // æ˜¯å¦æ¥å—æ–°ä»»åŠ¡ï¼ˆå…¥é˜Ÿï¼‰
+        std::atomic<bool> shutdownNowFlag_{ false }; // ç”¨äºå”¤é†’ç©ºé—² worker é€€å‡ºï¼ˆshutdownï¼‰
 
-        // Í³¼Æ
-        std::atomic<size_t> submittedCount_{ 0 };  // ³É¹¦Èë¶ÓµÄÈÎÎñÊı
-        std::atomic<size_t> rejectedCount_{ 0 };   // ±»¾Ü¾øµÄÈÎÎñÊı
-        std::atomic<size_t> completedCount_{ 0 };  // Íê³ÉÈÎÎñÊı
-        std::atomic<size_t> activeCount_{ 0 };     // ÕıÔÚÖ´ĞĞµÄÈÎÎñÊı
-        std::atomic<size_t> aliveThreads_{ 0 };    // ´æ»îÏß³ÌÊı
-        std::atomic<size_t> largestPoolSize_{ 0 }; // ÀúÊ·×î´óÏß³ÌÊı
-        std::atomic<size_t> peakQueueSize_{ 0 };   // ¶ÓÁĞ·åÖµ
+        // ç»Ÿè®¡
+        std::atomic<size_t> submittedCount_{ 0 };  // æˆåŠŸå…¥é˜Ÿçš„ä»»åŠ¡æ•°
+        std::atomic<size_t> rejectedCount_{ 0 };   // è¢«æ‹’ç»çš„ä»»åŠ¡æ•°
+        std::atomic<size_t> completedCount_{ 0 };  // å®Œæˆä»»åŠ¡æ•°
+        std::atomic<size_t> activeCount_{ 0 };     // æ­£åœ¨æ‰§è¡Œçš„ä»»åŠ¡æ•°
+        std::atomic<size_t> aliveThreads_{ 0 };    // å­˜æ´»çº¿ç¨‹æ•°
+        std::atomic<size_t> largestPoolSize_{ 0 }; // å†å²æœ€å¤§çº¿ç¨‹æ•°
+        std::atomic<size_t> peakQueueSize_{ 0 };   // é˜Ÿåˆ—å³°å€¼
         Timer timer_;
 
-        // Ê±¼äµã£¨ÄÉÃë£©
-        std::atomic<long long> lastSubmitNs_{ 0 };   // steady_clock::now().time_since_epoch() µÄÄÉÃëÊı
+        // æ—¶é—´ç‚¹ï¼ˆçº³ç§’ï¼‰
+        std::atomic<long long> lastSubmitNs_{ 0 };   // steady_clock::now().time_since_epoch() çš„çº³ç§’æ•°
         std::atomic<long long> lastFinishNs_{ 0 };
 
-        // Ïß³ÌÍË³öµÈ´ı
+        // çº¿ç¨‹é€€å‡ºç­‰å¾…
         mutable std::mutex workerExitMutex_;
         std::condition_variable workerExitCv_;
     };

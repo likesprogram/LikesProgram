@@ -1,20 +1,20 @@
-#pragma once
+ï»¿#pragma once
 #include "../LikesProgramLibExport.hpp"
 #include <cstdint>
 
 namespace LikesProgram {
 	namespace Unicode {
 		namespace Case {
-            // BMPÖĞ×Ö·û×ª»»Îª´óĞ´
+            // BMPä¸­å­—ç¬¦è½¬æ¢ä¸ºå¤§å†™
             LIKESPROGRAM_API uint16_t BMPToUpper(uint16_t c);
 
-            // BMPÖĞ×Ö·û×ª»»ÎªĞ¡Ğ´
+            // BMPä¸­å­—ç¬¦è½¬æ¢ä¸ºå°å†™
             LIKESPROGRAM_API uint16_t BMPToLower(uint16_t c);
 
-            // SMPÖĞ×Ö·û×ª»»Îª´óĞ´
+            // SMPä¸­å­—ç¬¦è½¬æ¢ä¸ºå¤§å†™
             LIKESPROGRAM_API uint32_t SMPToUpper(uint32_t c);
 
-            // SMPÖĞ×Ö·û×ª»»ÎªĞ¡Ğ´
+            // SMPä¸­å­—ç¬¦è½¬æ¢ä¸ºå°å†™
             LIKESPROGRAM_API uint32_t SMPToLower(uint32_t c);
 		}
 	}

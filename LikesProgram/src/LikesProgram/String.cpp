@@ -1,4 +1,4 @@
-#include "../../include/LikesProgram/String.hpp"
+ï»¿#include "../../include/LikesProgram/String.hpp"
 #include "../../include/LikesProgram/unicode/Unicode.hpp"
 #include <stdexcept>
 #include <cwchar>
@@ -92,7 +92,7 @@ namespace LikesProgram {
     String::String(const char32_t* s): encoding(Encoding::UTF32) {
         if (!s) s = U"";
         size_t len = 0;
-        while (s[len] != 0) ++len; // ¼ÆËã³¤¶È
+        while (s[len] != 0) ++len; // è®¡ç®—é•¿åº¦
         auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(s, s + len));
         m_size = utf16.size();
         m_data = std::make_unique<char16_t[]>(m_size + 1);
@@ -140,7 +140,7 @@ namespace LikesProgram {
         m_data[m_size] = u'\0';
     }
 
-    // Îö¹¹º¯Êı
+    // ææ„å‡½æ•°
     String::~String() = default;
 
     String& String::operator=(const String& other) {
@@ -175,12 +175,12 @@ namespace LikesProgram {
         size_t i = 0;
         while (i < m_size) {
             char16_t c = m_data[i];
-            if (c >= 0xD800 && c <= 0xDBFF) { // ¸ßÎ» surrogate
+            if (c >= 0xD800 && c <= 0xDBFF) { // é«˜ä½ surrogate
                 if (i + 1 < m_size && m_data[i + 1] >= 0xDC00 && m_data[i + 1] <= 0xDFFF) {
-                    i += 2; // Ìø¹ıÍêÕû surrogate pair
+                    i += 2; // è·³è¿‡å®Œæ•´ surrogate pair
                 }
                 else {
-                    // ¹ÂÁ¢¸ßÎ» surrogate£¬µ±×÷µ¥×Ö·û´¦Àí
+                    // å­¤ç«‹é«˜ä½ surrogateï¼Œå½“ä½œå•å­—ç¬¦å¤„ç†
                     ++i;
                 }
             }
@@ -258,7 +258,7 @@ namespace LikesProgram {
             break;
         }
         case String::Encoding::UTF16: {
-            // Ö±½ÓÊä³ö UTF-16 ±àÂëµÄÔ­Ê¼×Ö½Ú
+            // ç›´æ¥è¾“å‡º UTF-16 ç¼–ç çš„åŸå§‹å­—èŠ‚
             os.write(reinterpret_cast<const char*>(str.m_data.get()), str.m_size * sizeof(char16_t));
             break;
         }
@@ -275,7 +275,7 @@ namespace LikesProgram {
 
     std::istream& operator>>(std::istream& is, String& str) {
         std::string input;
-        std::getline(is, input);  // ¶ÁÈ¡Ò»ĞĞÊäÈë
+        std::getline(is, input);  // è¯»å–ä¸€è¡Œè¾“å…¥
         str = String(input, str.encoding);
         return is;
     }
@@ -288,13 +288,13 @@ namespace LikesProgram {
 
     std::wistream& operator>>(std::wistream& is, String& str) {
         std::wstring input;
-        std::getline(is, input);  // ¶ÁÈ¡Ò»ĞĞÊäÈë
+        std::getline(is, input);  // è¯»å–ä¸€è¡Œè¾“å…¥
         str = String(input);
         return is;
     }
 
     String String::SubString(size_t index, size_t count) const {
-        if (count == 0 || index >= Size()) return String(); // Ô½½ç»ò³¤¶ÈÎª0·µ»Ø¿Õ´®
+        if (count == 0 || index >= Size()) return String(); // è¶Šç•Œæˆ–é•¿åº¦ä¸º0è¿”å›ç©ºä¸²
 
         size_t start = CodePointOffset(index);
         size_t end = (index + count >= Size()) ? m_size : CodePointOffset(index + count);
@@ -327,7 +327,7 @@ namespace LikesProgram {
     String String::ToUpper() const {
         if (Empty()) return String();
 
-        auto buf = std::make_unique<char16_t[]>(m_size * 2 + 1); // ×î¶àÀ©´óÁ½±¶
+        auto buf = std::make_unique<char16_t[]>(m_size * 2 + 1); // æœ€å¤šæ‰©å¤§ä¸¤å€
         size_t i = 0, j = 0;
 
         while (i < m_size) {
@@ -340,7 +340,7 @@ namespace LikesProgram {
                 uint32_t cp = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
                 uint32_t upper_cp = Unicode::Case::SMPToUpper(cp);
 
-                // ×ª»Ø UTF-16
+                // è½¬å› UTF-16
                 if (upper_cp <= 0xFFFF) {
                     buf[j++] = static_cast<char16_t>(upper_cp);
                 }
@@ -369,10 +369,10 @@ namespace LikesProgram {
     String String::ToLower() const {
         if (Empty()) return String();
 
-        // ·ÖÅäÁ½±¶¿Õ¼ä£¬±£Ö¤ SMP À©Õ¹²»»áÔ½½ç
+        // åˆ†é…ä¸¤å€ç©ºé—´ï¼Œä¿è¯ SMP æ‰©å±•ä¸ä¼šè¶Šç•Œ
         auto buf = std::make_unique<char16_t[]>(m_size * 2 + 1);
-        size_t i = 0; // Ô­×Ö·û´®Ë÷Òı
-        size_t j = 0; // ĞÂ×Ö·û´®Ë÷Òı
+        size_t i = 0; // åŸå­—ç¬¦ä¸²ç´¢å¼•
+        size_t j = 0; // æ–°å­—ç¬¦ä¸²ç´¢å¼•
 
         while (i < m_size) {
             char16_t c = m_data[i];
@@ -412,7 +412,7 @@ namespace LikesProgram {
     }
 
 
-    // Ô­µØ×ª»»
+    // åŸåœ°è½¬æ¢
     void String::ToUpperInPlace() { *this = ToUpper(); }
     void String::ToLowerInPlace() { *this = ToLower(); }
 
@@ -422,12 +422,12 @@ namespace LikesProgram {
         if (M == 0) return start <= N ? start : npos;
         if (start >= N) return npos;
 
-        // 1. ¹¹½¨ UTF-32 Êı×é
+        // 1. æ„å»º UTF-32 æ•°ç»„
         std::vector<char32_t> text(N), pat(M);
         for (size_t i = 0; i < N; ++i) text[i] = At(i);
         for (size_t i = 0; i < M; ++i) pat[i] = str.At(i);
 
-        // 2. ¹¹½¨²¿·ÖÆ¥Åä±í
+        // 2. æ„å»ºéƒ¨åˆ†åŒ¹é…è¡¨
         std::vector<size_t> fail(M, 0);
         for (size_t i = 1, j = 0; i < M; ++i) {
             while (j > 0 && pat[i] != pat[j]) j = fail[j - 1];
@@ -435,12 +435,12 @@ namespace LikesProgram {
             fail[i] = j;
         }
 
-        // 3. KMP Æ¥Åä
+        // 3. KMP åŒ¹é…
         size_t j = 0;
         for (size_t i = start; i < N; ++i) {
             while (j > 0 && text[i] != pat[j]) j = fail[j - 1];
             if (text[i] == pat[j]) ++j;
-            if (j == M) return i - M + 1;  // ÕÒµ½Æ¥Åä
+            if (j == M) return i - M + 1;  // æ‰¾åˆ°åŒ¹é…
         }
 
         return npos;
@@ -453,11 +453,11 @@ namespace LikesProgram {
         if (M > N) return npos;
         if (start >= N) start = N - 1;
 
-        // ¹¹½¨Ä£Ê½Êı×é
+        // æ„å»ºæ¨¡å¼æ•°ç»„
         std::vector<char32_t> pat(M);
         for (size_t i = 0; i < M; ++i) pat[i] = str.At(i);
 
-        // ¹¹½¨²¿·ÖÆ¥Åä±í
+        // æ„å»ºéƒ¨åˆ†åŒ¹é…è¡¨
         std::vector<size_t> fail(M, 0);
         for (size_t i = 1, j = 0; i < M; ++i) {
             while (j > 0 && pat[i] != pat[j]) j = fail[j - 1];
@@ -465,19 +465,19 @@ namespace LikesProgram {
             fail[i] = j;
         }
 
-        // µ¹ĞòÆ¥Åä
+        // å€’åºåŒ¹é…
         size_t j = 0;
-        for (size_t i = Size() - start; i-- > 0;) { // ×¢Òâ size_t ÏÂÒçĞ´·¨
+        for (size_t i = Size() - start; i-- > 0;) { // æ³¨æ„ size_t ä¸‹æº¢å†™æ³•
             while (j > 0 && At(i) != pat[M - 1 - j]) j = fail[j - 1];
             if (At(i) == pat[M - 1 - j]) ++j;
-            if (j == M) return i; // Æ¥Åä³É¹¦£¬·µ»ØÕıÏòË÷Òı
+            if (j == M) return i; // åŒ¹é…æˆåŠŸï¼Œè¿”å›æ­£å‘ç´¢å¼•
         }
 
         return npos;
     }
 
     bool String::StartsWith(const String& str) const {
-        size_t this_size = Size(); // code point ÊıÁ¿
+        size_t this_size = Size(); // code point æ•°é‡
         size_t str_size = str.Size();
         if (str_size == 0) return true;
         if (str_size > this_size) return false;
@@ -489,7 +489,7 @@ namespace LikesProgram {
     }
 
     bool String::EndsWith(const String& str) const {
-        size_t this_size = Size(); // code point ÊıÁ¿
+        size_t this_size = Size(); // code point æ•°é‡
         size_t str_size = str.Size();
         if (str_size == 0) return true;
         if (str_size > this_size) return false;
@@ -509,7 +509,7 @@ namespace LikesProgram {
             char32_t c1 = At(i);
             char32_t c2 = other.At(i);
 
-            // ×ª´óĞ´±È½Ï
+            // è½¬å¤§å†™æ¯”è¾ƒ
             if (c1 <= 0xFFFF) c1 = Unicode::Case::BMPToUpper(static_cast<char16_t>(c1));
             else c1 = Unicode::Case::SMPToUpper(c1);
 
@@ -559,11 +559,11 @@ namespace LikesProgram {
             return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
         }
         case Encoding::UTF16: {
-            // ½« UTF-16 Ô­Ê¼Êı¾İ°´×Ö½Ú·ÅÈë std::string
+            // å°† UTF-16 åŸå§‹æ•°æ®æŒ‰å­—èŠ‚æ”¾å…¥ std::string
             return std::string(reinterpret_cast<const char*>(m_data.get()), m_size * sizeof(char16_t));
         }
         case Encoding::UTF32: {
-            // ÏÈ×ª»»Îª UTF-32£¬ÔÙ°´×Ö½Ú·ÅÈë std::string
+            // å…ˆè½¬æ¢ä¸º UTF-32ï¼Œå†æŒ‰å­—èŠ‚æ”¾å…¥ std::string
             auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(m_data.get(), m_size));
             return std::string(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
         }
@@ -575,9 +575,9 @@ namespace LikesProgram {
     std::wstring String::ToWString() const {
         std::wstring ws;
 
-#if WCHAR_MAX == 0xFFFF  // Windows wchar_t=16Î»
+#if WCHAR_MAX == 0xFFFF  // Windows wchar_t=16ä½
         ws.assign(m_data.get(), m_data.get() + m_size);
-#else  // Linux wchar_t=32Î»
+#else  // Linux wchar_t=32ä½
         for (size_t i = 0; i < m_size; ) {
             char16_t c = m_data[i];
             uint32_t cp;
@@ -678,11 +678,11 @@ namespace LikesProgram {
             return result;
         }
 
-        size_t start = 0;       // µ±Ç°¶ÎÂäµÄÆğÊ¼Æ«ÒÆ£¨UTF-16 µ¥Ôª£©
-        size_t i = 0;           // ±éÀúÆ«ÒÆ
+        size_t start = 0;       // å½“å‰æ®µè½çš„èµ·å§‹åç§»ï¼ˆUTF-16 å•å…ƒï¼‰
+        size_t i = 0;           // éå†åç§»
 
         while (i < m_size) {
-            // ³¢ÊÔÆ¥Åä·Ö¸ô·û
+            // å°è¯•åŒ¹é…åˆ†éš”ç¬¦
             bool matched = true;
             if (i + sep.m_size <= m_size) {
                 for (size_t j = 0; j < sep.m_size; ++j) {
@@ -711,7 +711,7 @@ namespace LikesProgram {
                 start = i;
             }
             else {
-                // Ìø¹ıÒ»¸öÍêÕû code point
+                // è·³è¿‡ä¸€ä¸ªå®Œæ•´ code point
                 char16_t c = m_data[i];
                 if (c >= 0xD800 && c <= 0xDBFF && i + 1 < m_size && m_data[i + 1] >= 0xDC00 && m_data[i + 1] <= 0xDFFF) {
                     i += 2; // surrogate pair
@@ -722,7 +722,7 @@ namespace LikesProgram {
             }
         }
 
-        // Ìí¼Ó×îºóÒ»¶Î
+        // æ·»åŠ æœ€åä¸€æ®µ
         if (start <= m_size) {
             size_t sub_len = m_size - start;
             auto sub_data = std::make_unique<char16_t[]>(sub_len + 1);
@@ -739,7 +739,7 @@ namespace LikesProgram {
     }
 
     size_t String::CodePointOffset(size_t index) const {
-        size_t i = 0;  // UTF-16 Æ«ÒÆ
+        size_t i = 0;  // UTF-16 åç§»
         size_t cp = 0; // Unicode code point
         while (i < m_size && cp < index) {
             char16_t c = m_data[i];

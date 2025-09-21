@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -11,37 +11,37 @@ namespace TimerTest {
 	};
 
 	void WorkLoad(ThreadData* data) {
-		LikesProgram::Timer threadTimer(true, data->timer); // ´´½¨Ïß³Ì¼ÆÊ±Æ÷
+		LikesProgram::Timer threadTimer(true, data->timer); // åˆ›å»ºçº¿ç¨‹è®¡æ—¶å™¨
 
-		// Ä£ÄâºÄÊ±²Ù×÷
+		// æ¨¡æ‹Ÿè€—æ—¶æ“ä½œ
 		std::this_thread::sleep_for(std::chrono::milliseconds(100 + data->index * 20));
 
-		auto elapsed = threadTimer.Stop(); // Í£Ö¹²¢»ñÈ¡ºÄÊ±
-        std::cout << "Thread ¡¾" << data->index << "¡¿£º" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+		auto elapsed = threadTimer.Stop(); // åœæ­¢å¹¶èŽ·å–è€—æ—¶
+        std::cout << "Thread ã€" << data->index << "ã€‘ï¼š" << LikesProgram::Timer::ToString(elapsed) << std::endl;
 	}
 
     void Test() {
-		LikesProgram::Timer timer; // È«¾Ö¼ÆÊ±Æ÷
+		LikesProgram::Timer timer; // å…¨å±€è®¡æ—¶å™¨
 
-		std::cout << "===== µ¥Ïß³ÌÊ¾Àý =====" << std::endl;
+		std::cout << "===== å•çº¿ç¨‹ç¤ºä¾‹ =====" << std::endl;
 		{
-			timer.Start(); // ¿ªÊ¼¼ÆÊ±
+			timer.Start(); // å¼€å§‹è®¡æ—¶
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-			//std::cout << "ÊÇ·ñÔËÐÐ£º" << timer.IsRunning() << std::endl;
+			//std::cout << "æ˜¯å¦è¿è¡Œï¼š" << timer.IsRunning() << std::endl;
 			auto elapsed = timer.Stop();
-            std::cout << "µ¥Ïß³Ì£º" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+            std::cout << "å•çº¿ç¨‹ï¼š" << LikesProgram::Timer::ToString(elapsed) << std::endl;
 
-			std::cout << "ÊÇ·ñÔËÐÐ£º" << timer.IsRunning() << std::endl;
-			std::cout << "×î½üÒ»´ÎºÄÊ±£º" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
+			std::cout << "æ˜¯å¦è¿è¡Œï¼š" << timer.IsRunning() << std::endl;
+			std::cout << "æœ€è¿‘ä¸€æ¬¡è€—æ—¶ï¼š" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
 		}
 
-		std::cout << std::endl << "===== ¶àÏß³ÌÊ¾Àý =====" << std::endl;
+		std::cout << std::endl << "===== å¤šçº¿ç¨‹ç¤ºä¾‹ =====" << std::endl;
 		{
 			const int threadCount = 4;
             std::vector<std::thread> threads;
 
-			// ´´½¨¶à¸öÏß³Ì
+			// åˆ›å»ºå¤šä¸ªçº¿ç¨‹
 			for (size_t i = 0; i < threadCount; i++) {
 				ThreadData* data = new ThreadData();
 				data->index = i;
@@ -50,21 +50,21 @@ namespace TimerTest {
 			}
 
 			for (auto& thread : threads) thread.join();
-			std::cout << std::endl << "===== ²âÊÔ½á¹û =====" << std::endl;
-			std::cout << "Ïß³Ì×ÜÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "×î³¤Ê±¼ä£º" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMAÆ½¾ùÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "Ïß³ÌËãÊýÆ½¾ùÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+			std::cout << std::endl << "===== æµ‹è¯•ç»“æžœ =====" << std::endl;
+			std::cout << "çº¿ç¨‹æ€»æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+			std::cout << "æœ€é•¿æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+			std::cout << "EMAå¹³å‡æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+			std::cout << "çº¿ç¨‹ç®—æ•°å¹³å‡æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
 		}
 
-		std::cout << std::endl << "===== ÖØÖÃÊ¾Àý =====" << std::endl;
+		std::cout << std::endl << "===== é‡ç½®ç¤ºä¾‹ =====" << std::endl;
 		{
 			timer.Reset();
 
-			std::cout << "Ïß³Ì×ÜÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "×î³¤Ê±¼ä£º" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMAÆ½¾ùÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "Ïß³ÌËãÊýÆ½¾ùÊ±¼ä£º" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+			std::cout << "çº¿ç¨‹æ€»æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+			std::cout << "æœ€é•¿æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+			std::cout << "EMAå¹³å‡æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+			std::cout << "çº¿ç¨‹ç®—æ•°å¹³å‡æ—¶é—´ï¼š" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
 		}
     }
 }

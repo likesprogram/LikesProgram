@@ -1,5 +1,5 @@
-
-// �ۺ�ͷ�ļ�
+﻿
+// 聚合头文件
 
 #pragma once
 #include "Case.hpp"

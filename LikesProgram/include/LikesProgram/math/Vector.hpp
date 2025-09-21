@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../LikesProgramLibExport.hpp"
 #include <ostream>
 
@@ -10,15 +10,15 @@ namespace LikesProgram {
             constexpr Vector(double x, double y) : m_x(x), m_y(y) {}
 			explicit constexpr Vector(double s) : m_x(s), m_y(s) {}
 
-			// ÔËËã·ûÖØÔØ
+			// è¿ç®—ç¬¦é‡è½½
 			Vector operator+(double s) const;
 			Vector operator-(double s) const;
 			Vector operator+(const Vector& o) const;
 			Vector operator-(const Vector& o) const;
 			Vector operator*(double s) const;
 			Vector operator/(double s) const;
-			Vector operator*(const Vector& v) const;   // ·ÖÁ¿³Ë
-			Vector operator/(const Vector& v) const;   // ·ÖÁ¿³ı
+			Vector operator*(const Vector& v) const;   // åˆ†é‡ä¹˜
+			Vector operator/(const Vector& v) const;   // åˆ†é‡é™¤
 
 			Vector& operator+=(double s);
 			Vector& operator-=(double s);
@@ -26,21 +26,21 @@ namespace LikesProgram {
 			Vector& operator-=(const Vector& v);
 			Vector& operator*=(double s);
 			Vector& operator/=(double s);
-			Vector& operator*=(const Vector& v);       // ·ÖÁ¿³Ë¸´ºÏ¸³Öµ
-			Vector& operator/=(const Vector& v);       // ·ÖÁ¿³ı¸´ºÏ¸³Öµ
+			Vector& operator*=(const Vector& v);       // åˆ†é‡ä¹˜å¤åˆèµ‹å€¼
+			Vector& operator/=(const Vector& v);       // åˆ†é‡é™¤å¤åˆèµ‹å€¼
 
-			Vector operator-() const;   // È¡¸º
-			Vector operator+() const;   // È¡Õı
+			Vector operator-() const;   // å–è´Ÿ
+			Vector operator+() const;   // å–æ­£
 
-			// ×ÔÔö×Ô¼õ
-			Vector& operator++();       // Ç°ÖÃ ++
-			Vector operator++(int);     // ºóÖÃ ++
-			Vector& operator--();       // Ç°ÖÃ --
-			Vector operator--(int);     // ºóÖÃ --
+			// è‡ªå¢è‡ªå‡
+			Vector& operator++();       // å‰ç½® ++
+			Vector operator++(int);     // åç½® ++
+			Vector& operator--();       // å‰ç½® --
+			Vector operator--(int);     // åç½® --
 
 			bool operator==(const Vector& v) const;
 			bool operator!=(const Vector& v) const;
-			bool operator<(const Vector& v) const;  // ×ÖµäĞò±È½Ï
+			bool operator<(const Vector& v) const;  // å­—å…¸åºæ¯”è¾ƒ
 			bool operator>(const Vector& v) const { return v < *this; }
 			bool operator<=(const Vector& v) const { return !(v < *this); }
 			bool operator>=(const Vector& v) const { return !(*this < v); }
@@ -51,49 +51,49 @@ namespace LikesProgram {
 			friend Vector operator*(double s, const Vector& v);
 			friend std::ostream& operator<<(std::ostream& os, const Vector& v);
 
-			// ÏòÁ¿³¤¶È£¨Ä££©
+			// å‘é‡é•¿åº¦ï¼ˆæ¨¡ï¼‰
 			double Length() const;
 
-            // µ¥Î»ÏòÁ¿
+            // å•ä½å‘é‡
 			Vector Normalized() const;
 
-			// ÏòÁ¿»ı£¨µã»ı£©
+			// å‘é‡ç§¯ï¼ˆç‚¹ç§¯ï¼‰
 			double Dot(const Vector& v) const;
 
-			// ÏòÁ¿¾àÀë
+			// å‘é‡è·ç¦»
 			double Distance(const Vector& v) const;
 
-			// ÄæÊ±ÕëĞı×ª angle »¡¶È
+			// é€†æ—¶é’ˆæ—‹è½¬ angle å¼§åº¦
 			Vector Rotated(double angle) const;
 
-			// ÅĞ¶ÏÊÇ·ñÎªÁãÏòÁ¿
+			// åˆ¤æ–­æ˜¯å¦ä¸ºé›¶å‘é‡
             bool IsZero() const;
 
-			// ´¹Ö±ÏòÁ¿
+			// å‚ç›´å‘é‡
             Vector Perpendicular() const;
 
-			// ÏŞÖÆ³¤¶È
+			// é™åˆ¶é•¿åº¦
             Vector Clamped(double maxLength) const;
 
-			// 2D ²æ»ı£¨·µ»Ø±êÁ¿£©
+			// 2D å‰ç§¯ï¼ˆè¿”å›æ ‡é‡ï¼‰
 			double Cross(const Vector& v) const;
 
-			// ·µ»Ø¼«½Ç atan2(y,x)
+			// è¿”å›æè§’ atan2(y,x)
 			double Angle() const;
 
-			// ·µ»Ø¼Ğ½Ç [0,pi]
+			// è¿”å›å¤¹è§’ [0,pi]
 			double AngleBetween(const Vector& v) const;
 
-			// Ïà¶ÔÓÚµ¥Î»·¨ÏßµÄ·´Éä
+			// ç›¸å¯¹äºå•ä½æ³•çº¿çš„åå°„
 			Vector Reflected(const Vector& normal) const;
 
-			// Í¶Ó°µ½Ä³¸öÏòÁ¿ÉÏ
+			// æŠ•å½±åˆ°æŸä¸ªå‘é‡ä¸Š
 			Vector Project(const Vector& on) const;
 
-			// ¾ÜÏòÁ¿£¨È¥µôÍ¶Ó°²¿·Ö£©
+			// æ‹’å‘é‡ï¼ˆå»æ‰æŠ•å½±éƒ¨åˆ†ï¼‰
 			Vector Reject(const Vector& on) const;
 
-			// ²åÖµ
+			// æ’å€¼
 			static Vector Lerp(const Vector& a, const Vector& b, double t);
 		private:
 			double m_x, m_y;

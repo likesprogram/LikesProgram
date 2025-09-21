@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+ï»¿#define _CRT_SECURE_NO_WARNINGS
 #include "../../include/LikesProgram/Logger.hpp"
 #include "../../include/LikesProgram/CoreUtils.hpp"
 #include <iostream>
@@ -21,28 +21,28 @@
 #include <shared_mutex>
 
 namespace LikesProgram {
-    // ÊµÏÖ ILogSink
+    // å®žçŽ° ILogSink
     String Logger::ILogSink::FormatLogMessage(const LogMessage& message, LogLevel minLevel) {
         auto t_c = std::chrono::system_clock::to_time_t(message.timestamp);
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             message.timestamp.time_since_epoch()) % 1000;
 
         std::wostringstream woss;
-        // Ê±¼ä
+        // æ—¶é—´
         woss << L"[" << std::put_time(std::localtime(&t_c), L"%F %T")
             << L"." << std::setw(3) << std::setfill(L'0') << ms.count() << L"] ";
 
-        // Ïß³ÌÐÅÏ¢
+        // çº¿ç¨‹ä¿¡æ¯
         woss << L"[T:";
         if (!message.threadName.Empty()) woss << message.threadName.ToWString();
         else woss << message.tid;
         woss << L"] ";
 
-        // ÈÕÖ¾¼¶±ð
+        // æ—¥å¿—çº§åˆ«
         woss << L"[" << LevelToString(message.level).ToWString() << L"] ";
-        // ÊÇ·ñÊä³öÎÄ¼þÐÅÏ¢
+        // æ˜¯å¦è¾“å‡ºæ–‡ä»¶ä¿¡æ¯
         if (minLevel <= LogLevel::Debug) woss << L"(" << message.file << L":" << message.line << L") ";
-        // ÈÕÖ¾ÏûÏ¢
+        // æ—¥å¿—æ¶ˆæ¯
         woss << message.msg.ToWString();
 
         return String(woss.str());
@@ -150,7 +150,7 @@ namespace LikesProgram {
                     queue.pop();
                     lock.unlock();
 
-                    // ¶à¸ö sink ²¢·¢¶Á
+                    // å¤šä¸ª sink å¹¶å‘è¯»
                     {
                         std::shared_lock<std::shared_mutex> sinkLock(sinkMtx);
                         for (auto& sink : sinks) {

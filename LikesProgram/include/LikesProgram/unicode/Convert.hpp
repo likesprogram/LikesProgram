@@ -1,26 +1,26 @@
-#pragma once
+ï»¿#pragma once
 #include "../LikesProgramLibExport.hpp"
 #include <string>
 
 namespace LikesProgram {
     namespace Unicode {
         namespace Convert {
-            // ½« UTF-8 ×ª»»Îª UTF-16
+            // å°† UTF-8 è½¬æ¢ä¸º UTF-16
             LIKESPROGRAM_API std::u16string Utf8ToUtf16(const std::u8string& utf8);
 
-            // ½« UTF-32 ×ª»»Îª UTF-16
+            // å°† UTF-32 è½¬æ¢ä¸º UTF-16
             LIKESPROGRAM_API std::u16string Utf32ToUtf16(const std::u32string& utf32);
 
-            // ½« GBK ×ª»»Îª UTF-16
+            // å°† GBK è½¬æ¢ä¸º UTF-16
             LIKESPROGRAM_API std::u16string GbkToUtf16(const std::string& gbk);
 
-            // ½« UTF-16 ×ª»»Îª UTF-8
+            // å°† UTF-16 è½¬æ¢ä¸º UTF-8
             LIKESPROGRAM_API std::u8string Utf16ToUtf8(const std::u16string& utf16);
 
-            // ½« UTF-16 ×ª»»Îª UTF-32
+            // å°† UTF-16 è½¬æ¢ä¸º UTF-32
             LIKESPROGRAM_API std::u32string Utf16ToUtf32(const std::u16string& utf16);
 
-            // ½« UTF-16 ×ª»»Îª GBK
+            // å°† UTF-16 è½¬æ¢ä¸º GBK
             LIKESPROGRAM_API std::string Utf16ToGbk(const std::u16string& utf16);
         }
     }

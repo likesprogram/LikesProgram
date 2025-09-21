@@ -1,85 +1,85 @@
-#pragma once
+ï»¿#pragma once
 #include "../LikesProgram/ThreadPool.hpp"
 #include "../LikesProgram/Logger.hpp"
 #include "../LikesProgram/String.hpp"
 
 namespace ThreadPoolTest {
-	void Test() {        // ³õÊ¼»¯ÈÕÖ¾
+	void Test() {        // åˆå§‹åŒ–æ—¥å¿—
         auto& logger = LikesProgram::Logger::Instance();
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
         logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
-        // ÄÚÖÃ¿ØÖÆÌ¨Êä³ö Sink
-        logger.AddSink(LikesProgram::CreateConsoleSink()); // Êä³öµ½¿ØÖÆÌ¨
+        // å†…ç½®æ§åˆ¶å°è¾“å‡º Sink
+        logger.AddSink(LikesProgram::CreateConsoleSink()); // è¾“å‡ºåˆ°æ§åˆ¶å°
 
         LikesProgram::ThreadPool::Options optins = {
-        2,   // ×îĞ¡Ïß³ÌÊı
-        4,   // Ïß³ÌÊıÉÏÏŞ
-        2048,// ¶ÓÁĞ³¤¶ÈÏŞÖÆ
-        LikesProgram::ThreadPool::RejectPolicy::Block, // ÈÎÎñ¾Ü¾ø²ßÂÔ
-        std::chrono::milliseconds(100), // ¿ÕÏĞÏß³Ì»ØÊÕÊ±¼ä
-        true, // ÊÇ·ñÆôÓÃ¶¯Ì¬À©Èİ¡¢ËõÈİ
+        2,   // æœ€å°çº¿ç¨‹æ•°
+        4,   // çº¿ç¨‹æ•°ä¸Šé™
+        2048,// é˜Ÿåˆ—é•¿åº¦é™åˆ¶
+        LikesProgram::ThreadPool::RejectPolicy::Block, // ä»»åŠ¡æ‹’ç»ç­–ç•¥
+        std::chrono::milliseconds(100), // ç©ºé—²çº¿ç¨‹å›æ”¶æ—¶é—´
+        true, // æ˜¯å¦å¯ç”¨åŠ¨æ€æ‰©å®¹ã€ç¼©å®¹
         };
 
-        // ´´½¨Ïß³Ì³Ø
-        // LikesProgram::ThreadPool pool(optins); // Ê¹ÓÃ×Ô¶¨Òå²ÎÊı´´½¨Ïß³Ì³Ø
-        LikesProgram::ThreadPool pool; // Ê¹ÓÃÄ¬ÈÏ²ÎÊı´´½¨Ïß³Ì³Ø
+        // åˆ›å»ºçº¿ç¨‹æ± 
+        // LikesProgram::ThreadPool pool(optins); // ä½¿ç”¨è‡ªå®šä¹‰å‚æ•°åˆ›å»ºçº¿ç¨‹æ± 
+        LikesProgram::ThreadPool pool; // ä½¿ç”¨é»˜è®¤å‚æ•°åˆ›å»ºçº¿ç¨‹æ± 
         pool.Start();
 
-        // Ìá½»Ò»Ğ©ÈÎÎñ
+        // æäº¤ä¸€äº›ä»»åŠ¡
         for (int i = 0; i < 30; i++) {
-            // Ìá½»ÎŞ·µ»ØÖµÎŞ²ÎÊıµÄÈÎÎñ
+            // æäº¤æ— è¿”å›å€¼æ— å‚æ•°çš„ä»»åŠ¡
             pool.PostNoArg([i]() {
-                LOG_DEBUG(u"PostNoArg£ºHello from worker");
+                LOG_DEBUG(u"PostNoArgï¼šHello from worker");
             });
 
-            // Ìá½»ÎŞ·µ»ØÖµÓĞ²ÎÊıµÄÈÎÎñ
+            // æäº¤æ— è¿”å›å€¼æœ‰å‚æ•°çš„ä»»åŠ¡
             pool.Post([](LikesProgram::String message) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 LikesProgram::String out;
                 out.Append(message);
-                out.Append(u"£ºHello from worker");
+                out.Append(u"ï¼šHello from worker");
                 LOG_DEBUG(out);
             }, u"Post");
 
-            // Ìá½»ÓĞ·µ»ØÖµÓĞ²ÎÊıµÄÈÎÎñ
+            // æäº¤æœ‰è¿”å›å€¼æœ‰å‚æ•°çš„ä»»åŠ¡
             auto poolOut = pool.Submit([i](LikesProgram::String message) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 LOG_DEBUG(message);
                 LikesProgram::String out;
                 out.Append(message);
-                out.Append(u"£º[");
+                out.Append(u"ï¼š[");
                 out.Append(LikesProgram::String(std::to_string(i)));
                 out.Append(u"] Out");
                 return out;
             }, u"Submit");
 
-            // µÈ´ıÈÎÎñÍê³É, ²¢»ñÈ¡½á¹û£¨ÕâÀï»áÍÏÂıÈÎÎñĞ§ÂÊ£©
+            // ç­‰å¾…ä»»åŠ¡å®Œæˆ, å¹¶è·å–ç»“æœï¼ˆè¿™é‡Œä¼šæ‹–æ…¢ä»»åŠ¡æ•ˆç‡ï¼‰
             // LOG_WARN(poolOut.get());
 
             if (i % 10 == 0) {
-                LOG_WARN(poolOut.get()); // Ã¿¸ô10´ÎÊä³öÒ»´Î Submit µÄÔËĞĞ½á¹û
+                LOG_WARN(poolOut.get()); // æ¯éš”10æ¬¡è¾“å‡ºä¸€æ¬¡ Submit çš„è¿è¡Œç»“æœ
 
-                // »ñÈ¡¿ìÕÕÍ³¼ÆĞÅÏ¢
+                // è·å–å¿«ç…§ç»Ÿè®¡ä¿¡æ¯
                 LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
                 LOG_WARN(stats.ToString());
             }
         }
 
-        // ¹Ø±ÕÏß³Ì³Ø
+        // å…³é—­çº¿ç¨‹æ± 
         pool.Shutdown();
-        if (pool.AwaitTermination(std::chrono::milliseconds(1000))) { // µÈ´ıÏß³Ì³Ø¹Ø±Õ
-            LOG_WARN(u"Ïß³Ì³ØÒÑ¹Ø±Õ");
+        if (pool.AwaitTermination(std::chrono::milliseconds(1000))) { // ç­‰å¾…çº¿ç¨‹æ± å…³é—­
+            LOG_WARN(u"çº¿ç¨‹æ± å·²å…³é—­");
         } else {
-            LOG_ERROR(u"Ïß³Ì³Ø¹Ø±Õ³¬Ê±");
+            LOG_ERROR(u"çº¿ç¨‹æ± å…³é—­è¶…æ—¶");
         }
 
-        // »ñÈ¡¿ìÕÕÍ³¼ÆĞÅÏ¢
+        // è·å–å¿«ç…§ç»Ÿè®¡ä¿¡æ¯
         LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
         LOG_WARN(stats.ToString());
 
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // ¸øºóÌ¨Ïß³ÌÒ»µãÊ±¼äÊä³ö
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // ç»™åå°çº¿ç¨‹ä¸€ç‚¹æ—¶é—´è¾“å‡º
         logger.Shutdown();
 	}
 }

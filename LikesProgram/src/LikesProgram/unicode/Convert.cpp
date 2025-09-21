@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/unicode/Convert.hpp"
+ï»¿#include "../../../include/LikesProgram/unicode/Convert.hpp"
 #include <stdexcept>
 #ifdef _WIN32
 #include <windows.h>
@@ -99,7 +99,7 @@ namespace LikesProgram {
                 const char* inBuf = gbk.data();
                 size_t inBytes = gbk.size();
 
-                size_t outBytes = gbk.size() * 4 + 8; // UTF-16 ×î¶à 4B/×Ö
+                size_t outBytes = gbk.size() * 4 + 8; // UTF-16 æœ€å¤š 4B/å­—
                 std::string out(outBytes, '\0');
                 char* outPtr = out.data();
 
@@ -125,7 +125,7 @@ namespace LikesProgram {
                 while (i < utf16.size()) {
                     uint32_t codepoint = utf16[i];
 
-                    // ÅĞ¶ÏÊÇ·ñÎª¸ß´úÀíÏî
+                    // åˆ¤æ–­æ˜¯å¦ä¸ºé«˜ä»£ç†é¡¹
                     if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
                         if (i + 1 >= utf16.size())
                             throw std::runtime_error("Invalid UTF-16 string: dangling high surrogate");
@@ -173,7 +173,7 @@ namespace LikesProgram {
                 while (i < utf16.size()) {
                     char32_t codepoint = utf16[i];
 
-                    if (codepoint >= 0xD800 && codepoint <= 0xDBFF) { // ¸ß´úÀíÏî
+                    if (codepoint >= 0xD800 && codepoint <= 0xDBFF) { // é«˜ä»£ç†é¡¹
                         if (i + 1 >= utf16.size())
                             throw std::runtime_error("Invalid UTF-16 string: dangling high surrogate");
                         char32_t low = utf16[i + 1];
@@ -208,7 +208,7 @@ namespace LikesProgram {
                 const char* inBuf = reinterpret_cast<const char*>(utf16.data());
                 size_t inBytes = utf16.size() * sizeof(char16_t);
 
-                // ¹ÀËãÊä³ö»º³åÇø£ºGBK ×î´ó 2B/×Ö·û£¬ÔÙ¶àÁôÒ»µã
+                // ä¼°ç®—è¾“å‡ºç¼“å†²åŒºï¼šGBK æœ€å¤§ 2B/å­—ç¬¦ï¼Œå†å¤šç•™ä¸€ç‚¹
                 size_t outBytes = utf16.size() * 3 + 8;
                 std::string out(outBytes, '\0');
                 char* outPtr = out.data();
@@ -223,7 +223,7 @@ namespace LikesProgram {
                         std::to_string(errno) + ")");
                 }
                 iconv_close(cd);
-                out.resize(out.size() - outBytes);   // ½ØÈ¡Êµ¼Ê³¤¶È
+                out.resize(out.size() - outBytes);   // æˆªå–å®é™…é•¿åº¦
                 return out;
 #endif
             }

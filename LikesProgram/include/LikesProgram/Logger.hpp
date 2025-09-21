@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include <string>
 #include <memory>
@@ -9,12 +9,12 @@ namespace LikesProgram {
     class LIKESPROGRAM_API Logger {
     public:
         enum class LogLevel {
-            Trace = 0,  // ×îÏêÏ¸µÄÈÕÖ¾, ÓÃÀ´¸ú×Ù³ÌĞòµÄÏ¸Á£¶ÈĞĞÎª
-            Debug,      // ÏêÏ¸ÈÕÖ¾, ÓÃÀ´¼ÇÂ¼¿ª·¢¹ı³ÌÖĞÓĞÓÃµÄĞÅÏ¢
-            Info,       // ÔËĞĞÊ±ĞÅÏ¢, ´ú±í³ÌĞòµÄÕı³£ÔËĞĞ×´Ì¬
-            Warn,       // ¾¯¸æĞÅÏ¢, ´ú±í³ÌĞò¿ÉÄÜ·¢ÉúµÄ´íÎó
-            Error,      // ´íÎóĞÅÏ¢, ³ÌĞò³öÏÖÁËÎÊÌâ£¬Ä³Ğ©¹¦ÄÜ¿ÉÄÜÊ§Ğ§
-            Fatal       // ÖÂÃü´íÎóĞÅÏ¢, ´ú±í³ÌĞòÎŞ·¨¼ÌĞøÔËĞĞ
+            Trace = 0,  // æœ€è¯¦ç»†çš„æ—¥å¿—, ç”¨æ¥è·Ÿè¸ªç¨‹åºçš„ç»†ç²’åº¦è¡Œä¸º
+            Debug,      // è¯¦ç»†æ—¥å¿—, ç”¨æ¥è®°å½•å¼€å‘è¿‡ç¨‹ä¸­æœ‰ç”¨çš„ä¿¡æ¯
+            Info,       // è¿è¡Œæ—¶ä¿¡æ¯, ä»£è¡¨ç¨‹åºçš„æ­£å¸¸è¿è¡ŒçŠ¶æ€
+            Warn,       // è­¦å‘Šä¿¡æ¯, ä»£è¡¨ç¨‹åºå¯èƒ½å‘ç”Ÿçš„é”™è¯¯
+            Error,      // é”™è¯¯ä¿¡æ¯, ç¨‹åºå‡ºç°äº†é—®é¢˜ï¼ŒæŸäº›åŠŸèƒ½å¯èƒ½å¤±æ•ˆ
+            Fatal       // è‡´å‘½é”™è¯¯ä¿¡æ¯, ä»£è¡¨ç¨‹åºæ— æ³•ç»§ç»­è¿è¡Œ
         };
 
         struct LogMessage {
@@ -28,63 +28,63 @@ namespace LikesProgram {
             std::chrono::system_clock::time_point timestamp;
         };
 
-        // ILogSink ³éÏó½Ó¿Ú
+        // ILogSink æŠ½è±¡æ¥å£
         class ILogSink {
         public:
             virtual ~ILogSink() = default;
 
-            // Ğ´ÈÕÖ¾½Ó¿Ú£¨ÓÉ¾ßÌå×ÓÀàÊµÏÖ£©
+            // å†™æ—¥å¿—æ¥å£ï¼ˆç”±å…·ä½“å­ç±»å®ç°ï¼‰
             virtual void Write(const LogMessage& message, LogLevel minLevel, String::Encoding encoding) = 0;
-            // ¶Ô×ÓÀà¿ª·Å
+            // å¯¹å­ç±»å¼€æ”¾
         protected:
-            // ¸¨Öúº¯Êı£º¸ñÊ½»¯ÈÕÖ¾ÄÚÈİ£¨¸ø×ÓÀàµ÷ÓÃ£©
+            // è¾…åŠ©å‡½æ•°ï¼šæ ¼å¼åŒ–æ—¥å¿—å†…å®¹ï¼ˆç»™å­ç±»è°ƒç”¨ï¼‰
             String FormatLogMessage(const LogMessage& message, LogLevel minLevel);
-            // ¸¨Öúº¯Êı£ºÈÕÖ¾¼¶±ğ×ª×Ö·û´®£¨¸ø×ÓÀàµ÷ÓÃ£©
+            // è¾…åŠ©å‡½æ•°ï¼šæ—¥å¿—çº§åˆ«è½¬å­—ç¬¦ä¸²ï¼ˆç»™å­ç±»è°ƒç”¨ï¼‰
             const String LevelToString(LogLevel lvl);
         };
 
-        // »ñÈ¡È«¾ÖÎ¨Ò»ÊµÀı
+        // è·å–å…¨å±€å”¯ä¸€å®ä¾‹
         static Logger& Instance();
 
-        // ÉèÖÃÈ«¾ÖÈÕÖ¾¼¶±ğ
-        // µÍÓÚ¸Ã¼¶±ğµÄÈÕÖ¾½«±»¹ıÂËµô
+        // è®¾ç½®å…¨å±€æ—¥å¿—çº§åˆ«
+        // ä½äºè¯¥çº§åˆ«çš„æ—¥å¿—å°†è¢«è¿‡æ»¤æ‰
         void SetLevel(LogLevel level);
 
-        // ÉèÖÃÈÕÖ¾Êä³ö±àÂë
+        // è®¾ç½®æ—¥å¿—è¾“å‡ºç¼–ç 
         void SetEncoding(String::Encoding encoding);
 
-        // Ìí¼ÓÒ»¸öÈÕÖ¾Êä³öÄ¿±ê£¨Sink£©
+        // æ·»åŠ ä¸€ä¸ªæ—¥å¿—è¾“å‡ºç›®æ ‡ï¼ˆSinkï¼‰
         void AddSink(std::shared_ptr<ILogSink> sink);
 
-        // ¼ÇÂ¼Ò»ÌõÈÕÖ¾£¨¹©ºê FW_LOG_xxx Ê¹ÓÃ£©
+        // è®°å½•ä¸€æ¡æ—¥å¿—ï¼ˆä¾›å® FW_LOG_xxx ä½¿ç”¨ï¼‰
         void Log(LogLevel level, const String& msg,
             const char* file, int line, const char* func);
 
-        // Í£Ö¹ÈÕÖ¾ÏµÍ³£¨½áÊøºóÌ¨Ïß³Ì£¬ÇåÀí×ÊÔ´£©
+        // åœæ­¢æ—¥å¿—ç³»ç»Ÿï¼ˆç»“æŸåå°çº¿ç¨‹ï¼Œæ¸…ç†èµ„æºï¼‰
         void Shutdown();
 
     private:
-        // ¹¹Ôì / Îö¹¹£¨Ë½ÓĞ»¯£¬±£Ö¤µ¥Àı£©
+        // æ„é€  / ææ„ï¼ˆç§æœ‰åŒ–ï¼Œä¿è¯å•ä¾‹ï¼‰
         Logger();
         ~Logger();
 
-        // ½ûÖ¹¿½±´ºÍ¸³Öµ
+        // ç¦æ­¢æ‹·è´å’Œèµ‹å€¼
         Logger(const Logger&) = delete;
         Logger& operator=(const Logger&) = delete;
 
-        // ÈÕÖ¾´¦ÀíÑ­»·£¨ºóÌ¨Ïß³ÌÖ´ĞĞ£©
+        // æ—¥å¿—å¤„ç†å¾ªç¯ï¼ˆåå°çº¿ç¨‹æ‰§è¡Œï¼‰
         void ProcessLoop();
 
-        // ÄÚ²¿ÊµÏÖÏ¸½Ú£¨PImpl Òş²Ø£©
+        // å†…éƒ¨å®ç°ç»†èŠ‚ï¼ˆPImpl éšè—ï¼‰
         struct Impl;
-        Impl* pImpl; // Ö¸Õë·½Ê½Òş²Ø¾ßÌåÊµÏÖ£¬¼õÉÙ±àÒëÒÀÀµ
+        Impl* pImpl; // æŒ‡é’ˆæ–¹å¼éšè—å…·ä½“å®ç°ï¼Œå‡å°‘ç¼–è¯‘ä¾èµ–
     };
 
-    // ¹¤³§º¯Êı
+    // å·¥å‚å‡½æ•°
     std::shared_ptr<Logger::ILogSink> LIKESPROGRAM_API CreateConsoleSink();
     std::shared_ptr<Logger::ILogSink> LIKESPROGRAM_API CreateFileSink(const String& filename);
 
-    // ºê½Ó¿Ú
+    // å®æ¥å£
 #define LOG_TRACE(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Trace, msg, __FILE__, __LINE__, __func__)
 #define LOG_DEBUG(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Debug, msg, __FILE__, __LINE__, __func__)
 #define LOG_INFO(msg)  LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Info,  msg, __FILE__, __LINE__, __func__)

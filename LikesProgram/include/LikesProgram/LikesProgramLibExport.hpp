@@ -1,11 +1,11 @@
-#pragma once
+ï»¿#pragma once
 
-#if defined(_WIN32) && defined(LIKESPROGRAM_EXPORT) // Windows µ¼Èëµ¼³ö
+#if defined(_WIN32) && defined(LIKESPROGRAM_EXPORT) // Windows å¯¼å…¥å¯¼å‡º
 # ifdef LIKESPROGRAM_LIB_EXPORTS
-#  define LIKESPROGRAM_API __declspec(dllexport) // µ¼³ö
+#  define LIKESPROGRAM_API __declspec(dllexport) // å¯¼å‡º
 # else
-#  define LIKESPROGRAM_API __declspec(dllimport) // µ¼Èë
+#  define LIKESPROGRAM_API __declspec(dllimport) // å¯¼å…¥
 # endif
 #else
-# define LIKESPROGRAM_API // ÆäËûÆ½Ì¨ ¿Õºê
+# define LIKESPROGRAM_API // å…¶ä»–å¹³å° ç©ºå®
 #endif

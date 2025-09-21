@@ -144,6 +144,8 @@
     <ClCompile Include="src\LikesProgram\String.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\LikesProgram\config\Configuration.hpp" />
+    <ClInclude Include="include\LikesProgram\config\JsonSerializer.hpp" />
     <ClInclude Include="include\LikesProgram\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />

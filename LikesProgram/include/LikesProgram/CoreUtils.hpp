@@ -1,22 +1,22 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include "String.hpp"
 
 namespace LikesProgram {
 	namespace CoreUtils {
-        // ÉèÖÃµ±Ç°Ïß³ÌÃû
+        // è®¾ç½®å½“å‰çº¿ç¨‹å
 		LIKESPROGRAM_API void SetCurrentThreadName(const LikesProgram::String& name);
 
-        // »ñÈ¡µ±Ç°Ïß³ÌÃû
+        // è·å–å½“å‰çº¿ç¨‹å
 		LIKESPROGRAM_API LikesProgram::String GetCurrentThreadName();
 
-		// »ñÈ¡±¾»ú MAC µØÖ·
+		// è·å–æœ¬æœº MAC åœ°å€
 		LIKESPROGRAM_API LikesProgram::String GetMACAddress();
 
-		// »ñÈ¡±¾»ú IP µØÖ·
+		// è·å–æœ¬æœº IP åœ°å€
 		LIKESPROGRAM_API LikesProgram::String GetLocalIPAddress();
 
-		// Éú³É UUID
+		// ç”Ÿæˆ UUID
 		LIKESPROGRAM_API LikesProgram::String GenerateUUID(LikesProgram::String prefix = u"");
 	}
 }

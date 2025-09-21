@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include <vector>
 #include <string>
@@ -7,12 +7,12 @@
 namespace LikesProgram {
     class LIKESPROGRAM_API String {
     public:
-        // Ö§³ÖµÄ±àÂëÀàĞÍ£¬½öÓÃÓÚ±êÊ¶×Ö·û´®À´Ô´£¬ÄÚ²¿´æ´¢×ÜÊÇ UTF-16¡£
+        // æ”¯æŒçš„ç¼–ç ç±»å‹ï¼Œä»…ç”¨äºæ ‡è¯†å­—ç¬¦ä¸²æ¥æºï¼Œå†…éƒ¨å­˜å‚¨æ€»æ˜¯ UTF-16ã€‚
         enum class Encoding { GBK, UTF8, UTF16, UTF32 };
         static constexpr size_t npos = static_cast<size_t>(-1);
 
         String();
-        // char Î´Ö¸¶¨±àÂë£¬Ä¬ÈÏÎª UTF-8
+        // char æœªæŒ‡å®šç¼–ç ï¼Œé»˜è®¤ä¸º UTF-8
         explicit String(const char* s, Encoding enc = Encoding::UTF8);
         // UTF-8
         String(const char8_t* s);
@@ -20,74 +20,74 @@ namespace LikesProgram {
         String(const char16_t* s);
         // UTF-32
         String(const char32_t* s);
-        // ¿½±´¹¹Ôì
+        // æ‹·è´æ„é€ 
         String(const String& other);
-        // ÒÆ¶¯¹¹Ôì
+        // ç§»åŠ¨æ„é€ 
         String(String&& other) noexcept;
-        // ¹¹Ôìµ¥¸ö×Ö·û
+        // æ„é€ å•ä¸ªå­—ç¬¦
         String(const char8_t c);
         String(const char16_t c);
         String(const char32_t c);
-        // Îö¹¹º¯Êı
+        // ææ„å‡½æ•°
         ~String();
 
-        // ¸³Öµ²Ù×÷
+        // èµ‹å€¼æ“ä½œ
         String& operator=(const String& other);
-        // ¸³Öµ²Ù×÷
+        // èµ‹å€¼æ“ä½œ
         String& operator=(String&& other) noexcept;
 
-        // ·µ»Ø×Ö·ûÊı£¨Unicode aware£©
+        // è¿”å›å­—ç¬¦æ•°ï¼ˆUnicode awareï¼‰
         size_t Size() const;
-        // ·µ»Ø×Ö·ûÊı£¨Unicode aware£©
+        // è¿”å›å­—ç¬¦æ•°ï¼ˆUnicode awareï¼‰
         size_t Length() const;
-        // ÊÇ·ñÎª¿Õ
+        // æ˜¯å¦ä¸ºç©º
         bool Empty() const;
-        // Çå¿Õ×Ö·û´®
+        // æ¸…ç©ºå­—ç¬¦ä¸²
         void Clear();
 
-        // °²È«·ÃÎÊ×Ö·û£¨Unicode aware£©
+        // å®‰å…¨è®¿é—®å­—ç¬¦ï¼ˆUnicode awareï¼‰
         char32_t At(size_t index) const;
-        // ×Ö·û´®µÚÒ»¸ö×Ö·û£¨Unicode aware£©
+        // å­—ç¬¦ä¸²ç¬¬ä¸€ä¸ªå­—ç¬¦ï¼ˆUnicode awareï¼‰
         char32_t Front() const;
-        // ×Ö·û´®×îºóÒ»¸ö×Ö·û£¨Unicode aware£©
+        // å­—ç¬¦ä¸²æœ€åä¸€ä¸ªå­—ç¬¦ï¼ˆUnicode awareï¼‰
         char32_t Back() const;
 
-        // Æ´½Ó×Ö·û´®
+        // æ‹¼æ¥å­—ç¬¦ä¸²
         String& Append(const String& str);
         String& operator+=(const String& str);
 
-        // ÊäÈëÊä³öÖØÔØ
+        // è¾“å…¥è¾“å‡ºé‡è½½
         friend std::ostream& operator<<(std::ostream& os, const String& str);
         friend std::istream& operator>>(std::istream& is, String& str);
         friend std::wostream& operator<<(std::wostream& os, const String& str);
         friend std::wistream& operator>>(std::wistream& is, String& str);
 
-        // »ñÈ¡×Ó´®
+        // è·å–å­ä¸²
         String SubString(size_t index, size_t count) const;
-        // ×ó²à½ØÈ¡
+        // å·¦ä¾§æˆªå–
         String Left(size_t count) const;
-        // ÓÒ²à½ØÈ¡
+        // å³ä¾§æˆªå–
         String Right(size_t count) const;
 
-        // ×ª»»Îª´óĞ´
+        // è½¬æ¢ä¸ºå¤§å†™
         String ToUpper() const;
-        // ×ª»»ÎªĞ¡Ğ´
+        // è½¬æ¢ä¸ºå°å†™
         String ToLower() const;
-        // ×ª»»Îª´óĞ´£¨Ö±½Ó×ª»»£©
+        // è½¬æ¢ä¸ºå¤§å†™ï¼ˆç›´æ¥è½¬æ¢ï¼‰
         void ToUpperInPlace();
-        // ×ª»»ÎªĞ¡Ğ´£¨Ö±½Ó×ª»»£©
+        // è½¬æ¢ä¸ºå°å†™ï¼ˆç›´æ¥è½¬æ¢ï¼‰
         void ToLowerInPlace();
 
-        // ²éÕÒ×Ó´®
+        // æŸ¥æ‰¾å­ä¸²
         size_t Find(const String& str, size_t start = 0) const;
-        // ·´Ïò²éÕÒ×Ó´®
+        // åå‘æŸ¥æ‰¾å­ä¸²
         size_t LastFind(const String& str, size_t start = 0) const;
-        // ÅĞ¶ÏÊÇ·ñÒÔÖ¸¶¨×Ó´®¿ªÍ·
+        // åˆ¤æ–­æ˜¯å¦ä»¥æŒ‡å®šå­ä¸²å¼€å¤´
         bool StartsWith(const String& str) const;
-        // ÅĞ¶ÏÊÇ·ñÒÔÖ¸¶¨×Ó´®½áÎ²
+        // åˆ¤æ–­æ˜¯å¦ä»¥æŒ‡å®šå­ä¸²ç»“å°¾
         bool EndsWith(const String& str) const;
 
-        // ºöÂÔ´óĞ¡Ğ´ÅĞ¶ÏÊÇ·ñÏàµÈ
+        // å¿½ç•¥å¤§å°å†™åˆ¤æ–­æ˜¯å¦ç›¸ç­‰
         bool EqualsIgnoreCase(const String& other) const;
         bool operator==(const String& other) const;
         bool operator!=(const String& other) const;
@@ -96,33 +96,33 @@ namespace LikesProgram {
         bool operator>(const String& other) const;
         bool operator>=(const String& other) const;
 
-        // ×ª»»Îªstring
+        // è½¬æ¢ä¸ºstring
         std::string ToStdString(Encoding enc = Encoding::UTF8) const;
-        // ×ª»»Îªwstring
+        // è½¬æ¢ä¸ºwstring
         std::wstring ToWString() const;
-        // ×ª»»Îªu16string
+        // è½¬æ¢ä¸ºu16string
         std::u16string ToU16String() const;
-        // ×ª»»Îªu32string
+        // è½¬æ¢ä¸ºu32string
         std::u32string ToU32String() const;
-        // string ×ª»»ÎªString
+        // string è½¬æ¢ä¸ºString
         explicit String(const std::string& s, Encoding enc = Encoding::UTF8);
-        // u8string ×ª»»ÎªString
+        // u8string è½¬æ¢ä¸ºString
         explicit String(const std::u8string& s);
-        // wstring ×ª»»ÎªString
+        // wstring è½¬æ¢ä¸ºString
         explicit String(const std::wstring& s);
-        // u16string ×ª»»ÎªString
+        // u16string è½¬æ¢ä¸ºString
         explicit String(const std::u16string& s);
-        // u32string ×ª»»ÎªString
+        // u32string è½¬æ¢ä¸ºString
         explicit String(const std::u32string& s);
 
-        // ·Ö¸î³É×Ö·û´®Êı×é
+        // åˆ†å‰²æˆå­—ç¬¦ä¸²æ•°ç»„
         std::vector<String> Split(const String& sep) const;
 
-        // µü´úÆ÷
+        // è¿­ä»£å™¨
         class CodePointIterator {
         private:
             const String* str;
-            size_t idx;  // code point Ë÷Òı
+            size_t idx;  // code point ç´¢å¼•
         public:
             CodePointIterator(const String* s, size_t i) : str(s), idx(i) {}
             char32_t operator*() const { return str->At(idx); }
@@ -134,11 +134,11 @@ namespace LikesProgram {
         CodePointIterator end() const { return CodePointIterator(this, Size()); }
 
     private:
-        std::unique_ptr<char16_t[]> m_data;  // UTF-16 Êı¾İ
-        size_t m_size;                        // UTF-16 µ¥Ôª³¤¶È
-        Encoding encoding;                     // Ô­Ê¼±àÂë
-        mutable std::vector<size_t> cp_offsets; // Ã¿¸ö Unicode code point ÔÚ UTF-16 ÖĞµÄÆ«ÒÆ
-        mutable bool cp_cache_valid = false;   // ÊÇ·ñ»º´æÓĞĞ§
+        std::unique_ptr<char16_t[]> m_data;  // UTF-16 æ•°æ®
+        size_t m_size;                        // UTF-16 å•å…ƒé•¿åº¦
+        Encoding encoding;                     // åŸå§‹ç¼–ç 
+        mutable std::vector<size_t> cp_offsets; // æ¯ä¸ª Unicode code point åœ¨ UTF-16 ä¸­çš„åç§»
+        mutable bool cp_cache_valid = false;   // æ˜¯å¦ç¼“å­˜æœ‰æ•ˆ
 
         size_t CodePointOffset(size_t index) const;
 

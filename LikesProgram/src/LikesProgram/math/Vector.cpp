@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/math/Vector.hpp"
+ï»¿#include "../../../include/LikesProgram/math/Vector.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -80,7 +80,7 @@ namespace LikesProgram {
             return *this;
         }
 
-        // ×ÔÔö×Ô¼õ
+        // è‡ªå¢è‡ªå‡
         Vector& Vector::operator++() {
             ++m_x; ++m_y;
             return *this;
@@ -181,7 +181,7 @@ namespace LikesProgram {
             double len2 = Length() * v.Length();
             if (len2 < Math::EPSILON) return 0.0;
             double cosTheta = dot / len2;
-            cosTheta = std::max(-1.0, std::min(1.0, cosTheta)); // ±ÜÃâ¸¡µãÔ½½ç
+            cosTheta = std::max(-1.0, std::min(1.0, cosTheta)); // é¿å…æµ®ç‚¹è¶Šç•Œ
             return std::acos(cosTheta);
         }
 

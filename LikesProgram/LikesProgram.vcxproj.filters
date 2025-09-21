@@ -101,6 +101,12 @@
     <ClInclude Include="include\test\ThreadPoolTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="include\LikesProgram\config\JsonSerializer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\config\Configuration.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />

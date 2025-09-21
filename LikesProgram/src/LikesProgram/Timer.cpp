@@ -1,4 +1,4 @@
-#include "../../include/LikesProgram/Timer.hpp"
+ï»¿#include "../../include/LikesProgram/Timer.hpp"
 #include "../../include/LikesProgram/math/Math.hpp"
 
 #include <thread>
@@ -24,20 +24,20 @@ namespace LikesProgram {
     }
 
     Timer::Duration Timer::Stop(double alpha) {
-        std::shared_lock lk(m_mutex); // ¹²ÏíËø
+        std::shared_lock lk(m_mutex); // å…±äº«é”
         if (!m_running.load(std::memory_order_relaxed)) return Duration(0);
         int64_t elapsedNs = NowNs() - m_startNs.load(std::memory_order_relaxed);
         m_lastNs.store(elapsedNs, std::memory_order_relaxed);
 
-        // ÀÛ»ı
+        // ç´¯ç§¯
         m_totalNs.fetch_add(elapsedNs, std::memory_order_relaxed);
         m_count.fetch_add(1, std::memory_order_relaxed);
 
 
-        // ¸üĞÂ×î³¤ºÄÊ±
+        // æ›´æ–°æœ€é•¿è€—æ—¶
         Math::UpdateMax(m_longestNs, elapsedNs);
 
-        // EMA ¸üĞÂ
+        // EMA æ›´æ–°
         double prevAvg = m_averageNs.load(std::memory_order_relaxed);
         double nextAvg = (prevAvg == 0.0) ? static_cast<double>(elapsedNs) : Math::EMA(prevAvg, elapsedNs, alpha);
         while (!m_averageNs.compare_exchange_weak(prevAvg, nextAvg, std::memory_order_relaxed)) {
@@ -50,7 +50,7 @@ namespace LikesProgram {
 
             Math::UpdateMax(m_parent->m_longestNs, elapsedNs);
 
-            // EMA ¸üĞÂ
+            // EMA æ›´æ–°
             double prevAvg = m_parent->m_averageNs.load(std::memory_order_relaxed);
             double nextAvg = (prevAvg == 0.0) ? static_cast<double>(elapsedNs) : Math::EMA(prevAvg, elapsedNs, alpha);
             while (!m_parent->m_averageNs.compare_exchange_weak(prevAvg, nextAvg, std::memory_order_relaxed)) {
@@ -63,13 +63,13 @@ namespace LikesProgram {
     }
 
     void Timer::ResetThread() {
-        std::unique_lock lk(m_mutex); // ¶ÀÏíËø
+        std::unique_lock lk(m_mutex); // ç‹¬äº«é”
         m_startNs.store(0, std::memory_order_relaxed);
         m_lastNs.store(0, std::memory_order_relaxed);
     }
 
     void Timer::ResetGlobal() {
-        std::unique_lock lk(m_mutex); // ¶ÀÏíËø
+        std::unique_lock lk(m_mutex); // ç‹¬äº«é”
         m_totalNs.store(0, std::memory_order_relaxed);
         m_count.store(0, std::memory_order_relaxed);
         m_longestNs.store(0, std::memory_order_relaxed);

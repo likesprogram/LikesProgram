@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <iostream>
 #include "../LikesProgram/math/Vector.hpp"
 #include "../LikesProgram/math/Math.hpp"
@@ -7,36 +7,36 @@
 
 namespace VectorTest {
     void StressTest(size_t count = 100000) {
-        std::cout << std::endl << "===== Ëæ»ú Stress Test (" << count << " ´Î) =====" << std::endl;
+        std::cout << std::endl << "===== éšæœº Stress Test (" << count << " æ¬¡) =====" << std::endl;
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
-        //LikesProgram::Timer::Start(); // ¿ªÊ¼¼ÆÊ±
+        //LikesProgram::Timer::Start(); // å¼€å§‹è®¡æ—¶
 
-        LikesProgram::Math::Vector acc(0.0, 0.0); // ÀÛ»ý½á¹û
+        LikesProgram::Math::Vector acc(0.0, 0.0); // ç´¯ç§¯ç»“æžœ
         for (size_t i = 0; i < count; i++) {
             LikesProgram::Math::Vector a(dist(rng), dist(rng));
             LikesProgram::Math::Vector b(dist(rng), dist(rng));
 
-            // ×öÒ»Ð©ÔËËã
+            // åšä¸€äº›è¿ç®—
             acc += a + b;
             acc -= a - b;
             acc *= 0.5;
-            acc += a * b;     // ·ÖÁ¿³Ë
-            acc -= a / (b + LikesProgram::Math::Vector(1.0, 1.0)); // ±ÜÃâ³ý 0
+            acc += a * b;     // åˆ†é‡ä¹˜
+            acc -= a / (b + LikesProgram::Math::Vector(1.0, 1.0)); // é¿å…é™¤ 0
             acc += a.Normalized().Clamped(10.0);
             acc += LikesProgram::Math::Vector::Lerp(a, b, 0.5);
         }
 
 
-        std::cout << "Stress Test Íê³É" << std::endl;
-        std::cout << "×îÖÕÀÛ»ý½á¹û: " << acc << std::endl;
-        //std::cout << "ºÄÊ±: " << LikesProgram::Timer::ToString(LikesProgram::Timer::Stop()) << std::endl;
+        std::cout << "Stress Test å®Œæˆ" << std::endl;
+        std::cout << "æœ€ç»ˆç´¯ç§¯ç»“æžœ: " << acc << std::endl;
+        //std::cout << "è€—æ—¶: " << LikesProgram::Timer::ToString(LikesProgram::Timer::Stop()) << std::endl;
     }
 
     void BasicOps() {
-        std::cout << "===== »ù±¾ÔËËã·û²âÊÔ =====" << std::endl;
+        std::cout << "===== åŸºæœ¬è¿ç®—ç¬¦æµ‹è¯• =====" << std::endl;
         LikesProgram::Math::Vector a(3.0, 4.0);
         LikesProgram::Math::Vector b(1.0, 2.0);
 
@@ -46,14 +46,14 @@ namespace VectorTest {
         std::cout << "a * 2 = " << (a * 2.0) << std::endl;
         std::cout << "2 * a = " << (2.0 * a) << std::endl;
         std::cout << "a / 2 = " << (a / 2.0) << std::endl;
-        std::cout << "a * b (·ÖÁ¿³Ë) = " << (a * b) << std::endl;
-        std::cout << "a / b (·ÖÁ¿³ý) = " << (a / b) << std::endl;
+        std::cout << "a * b (åˆ†é‡ä¹˜) = " << (a * b) << std::endl;
+        std::cout << "a / b (åˆ†é‡é™¤) = " << (a / b) << std::endl;
         std::cout << "-a = " << (-a) << std::endl;
         std::cout << "+a = " << (+a) << std::endl;
     }
 
     void CompoundOps() {
-        std::cout << std::endl << "===== ¸´ºÏ¸³Öµ²âÊÔ =====" << std::endl;
+        std::cout << std::endl << "===== å¤åˆèµ‹å€¼æµ‹è¯• =====" << std::endl;
         LikesProgram::Math::Vector v(2.0, 3.0);
         std::cout << "v = " << v << std::endl;
         v += LikesProgram::Math::Vector(1.0, 1.0);
@@ -67,7 +67,7 @@ namespace VectorTest {
     }
 
     void MathOps() {
-        std::cout << std::endl << "===== ÊýÑ§ÔËËã²âÊÔ =====" << std::endl;
+        std::cout << std::endl << "===== æ•°å­¦è¿ç®—æµ‹è¯• =====" << std::endl;
         LikesProgram::Math::Vector a(3.0, 4.0);
         LikesProgram::Math::Vector b(1.0, 0.0);
 
@@ -76,7 +76,7 @@ namespace VectorTest {
         std::cout << "a.Normalized() = " << a.Normalized() << std::endl;
         std::cout << "a.Dot(b) = " << a.Dot(b) << std::endl;
         std::cout << "a.Distance(b) = " << a.Distance(b) << std::endl;
-        std::cout << "a.Rotated(90¡ã) = " << a.Rotated(LikesProgram::Math::PI / 2) << std::endl;
+        std::cout << "a.Rotated(90Â°) = " << a.Rotated(LikesProgram::Math::PI / 2) << std::endl;
         std::cout << "a.Perpendicular() = " << a.Perpendicular() << std::endl;
         std::cout << "a.Clamped(2.0) = " << a.Clamped(2.0) << std::endl;
         std::cout << "a.Cross(b) = " << a.Cross(b) << std::endl;
@@ -88,7 +88,7 @@ namespace VectorTest {
     }
 
     void LerpTest() {
-        std::cout << std::endl << "===== ²åÖµ²âÊÔ =====" << std::endl;
+        std::cout << std::endl << "===== æ’å€¼æµ‹è¯• =====" << std::endl;
         LikesProgram::Math::Vector a(0.0, 0.0);
         LikesProgram::Math::Vector b(10.0, 10.0);
 

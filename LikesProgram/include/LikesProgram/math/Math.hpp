@@ -1,15 +1,15 @@
-#pragma once
+ï»¿#pragma once
 #include <atomic>
 #include <limits>
 
 namespace LikesProgram {
 	namespace Math {
-		// ³£Á¿
+		// å¸¸é‡
 		constexpr double PI = 3.1415926535897932384626433832795;
-		constexpr double EPSILON = 1e-9; // ¸¡µã±È½Ï¾«¶È
-		constexpr double INF = std::numeric_limits<double>::infinity(); // ÎŞÇî´ó
+		constexpr double EPSILON = 1e-9; // æµ®ç‚¹æ¯”è¾ƒç²¾åº¦
+		constexpr double INF = std::numeric_limits<double>::infinity(); // æ— ç©·å¤§
 
-		// ×î´óÖµ¸üĞÂ
+		// æœ€å¤§å€¼æ›´æ–°
 		template <typename T1, typename T2>
 		inline void UpdateMax(std::atomic<T1>& target, T2 value) {
 			static_assert(std::is_integral_v<T1> || std::is_floating_point_v<T1> ||
@@ -19,7 +19,7 @@ namespace LikesProgram {
 			while (value > old && !target.compare_exchange_weak(old, value, std::memory_order_release, std::memory_order_relaxed)) {}
 		}
 
-		// EMA (Ö¸ÊıÒÆ¶¯Æ½¾ùÊı)
+		// EMA (æŒ‡æ•°ç§»åŠ¨å¹³å‡æ•°)
 		template <typename T1, typename T2>
 		inline double EMA(T1 previous, T2 value, double alpha = 0.9) {
 			static_assert(std::is_integral_v<T1> || std::is_floating_point_v<T1> ||
@@ -28,7 +28,7 @@ namespace LikesProgram {
             return static_cast<T1>(previous * alpha + static_cast<T1>(value) * (1.0 - alpha));
 		}
 
-		// Ê±¼ä×ª»»£¬ÄÉÃë/ºÁÃë/Ãë
+		// æ—¶é—´è½¬æ¢ï¼Œçº³ç§’/æ¯«ç§’/ç§’
 		inline long long NsToMs(long long ns) {
 			return ns / 1'000'000;
 		}
