@@ -1,161 +1,177 @@
 # ======================================================
 #
 # CMakeLists.txt
-# 
+#
 # 可选参数：
-#   编译为动态库：-DBUILD_SHARED_LIBS=ON
-#   构建示例：-DENABLE_EXAMPLES=ON
-#   启用严格警告：-DENABLE_STRICT_WARNINGS=ON
+#   -DBUILD_SHARED_LIBS=ON      # 编译为动态库
+#   -DENABLE_EXAMPLES=ON        # 构建示例
+#   -DENABLE_STRICT_WARNINGS=ON # 启用严格警告
+#
 # ======================================================
 
-# 指定 CMake 最低版本要求
 cmake_minimum_required(VERSION 3.15)
 
-# 定义项目
 project(LikesProgram
-    VERSION 1.0.0         # 项目版本号
-    LANGUAGES CXX         # 使用的语言
+    VERSION 1.0.0
+    LANGUAGES CXX
 )
 
 # =========================
-#  配置选项
+# 配置选项
 # =========================
-# 是否编译为共享库（ON = 动态库，OFF = 静态库）
 option(BUILD_SHARED_LIBS "Build LikesProgram as shared library" OFF)
-# 是否构建示例/演示程序
-option(ENABLE_EXAMPLES  "Build example/demo programs"           ON)
-# 是否启用严格编译警告
-option(ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
+option(ENABLE_EXAMPLES   "Build example/demo programs"           ON)
+option(ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" OFF)
 
 # =========================
-#  设置 C++ 标准
+# 设置 C++ 标准
 # =========================
-set(CMAKE_CXX_STANDARD 20)          # 要求 C++20
-set(CMAKE_CXX_STANDARD_REQUIRED ON) # 必须满足该标准
-set(CMAKE_CXX_EXTENSIONS OFF)       # 禁止使用编译器特有扩展（比如 GNU++）
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # =========================
-#  收集源文件和头文件
+# 收集源文件和头文件
 # =========================
-# 递归收集头文件（hpp / h）
 file(GLOB_RECURSE LP_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LikesProgram/*.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LikesProgram/*.h
 )
-
-# 递归收集源码（cpp）
 file(GLOB_RECURSE LP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LikesProgram/*.cpp
 )
 
 # =========================
-#  定义库目标
+# 定义库目标
 # =========================
-# 根据 BUILD_SHARED_LIBS 自动生成 SHARED 或 STATIC 库
 add_library(LikesProgram ${LP_SOURCES})
-
-# 为 IDE 展示头文件（不影响实际编译）
 target_sources(LikesProgram PRIVATE ${LP_HEADERS})
 
-# 配置 include 路径
 target_include_directories(LikesProgram
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>  # 构建时使用
-        $<INSTALL_INTERFACE:include>                           # 安装后使用
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+# ---------- 输出名和目录 ----------
+if (BUILD_SHARED_LIBS)
+    # 动态库
+    set_target_properties(LikesProgram PROPERTIES
+        OUTPUT_NAME "LikesProgram"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
+    )
+else()
+    # 静态库
+    set_target_properties(LikesProgram PROPERTIES
+        OUTPUT_NAME "LikesProgramStatic"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
+    )
+endif()
+
+# Debug 后缀
+set_target_properties(LikesProgram PROPERTIES
+    DEBUG_POSTFIX "d"
 )
 
 # =========================
-#  平台相关宏/编译选项
+# 平台相关宏/编译选项
 # =========================
-if (WIN32) # Windows 平台
+if (WIN32)
     target_compile_definitions(LikesProgram
         PUBLIC
-            _WINSOCK_DEPRECATED_NO_WARNINGS   # 屏蔽 WinSock 旧 API 警告
-            NOMINMAX                          # 禁止 Windows 定义 min/max 宏
-            LIKESPROGRAM_EXPORT               # 库的导出宏（见 LikesProgramLibExport.hpp）
+            _WINSOCK_DEPRECATED_NO_WARNINGS
+            NOMINMAX
     )
-
-    # 如果构建动态库，则定义 LIKESPROGRAM_LIB_EXPORTS
     if (BUILD_SHARED_LIBS)
-        target_compile_definitions(LikesProgram PRIVATE LIKESPROGRAM_LIB_EXPORTS)
+        target_compile_definitions(LikesProgram PRIVATE LIKESPROGRAM_EXPORT LIKESPROGRAM_LIB_EXPORTS)
     endif()
-
-    # MSVC 专用编译选项：UTF-8 编码 + 最高级别警告
     if (MSVC)
         target_compile_options(LikesProgram PRIVATE /utf-8 /W4)
     endif()
-
-elseif (APPLE) # macOS / iOS
+elseif (APPLE)
     target_compile_definitions(LikesProgram PUBLIC LIKESPROGRAM_EXPORT)
     target_compile_options(LikesProgram PRIVATE -Wall -Wextra -Wpedantic)
-
-elseif (UNIX) # Linux / *BSD / 其他类 Unix
+elseif (UNIX)
     target_compile_definitions(LikesProgram PUBLIC LIKESPROGRAM_EXPORT)
     target_compile_options(LikesProgram PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # =========================
-# 可选启用严格警告
+# 严格警告
 # =========================
-if(ENABLE_STRICT_WARNINGS)
+if (ENABLE_STRICT_WARNINGS)
     include(cmake/CompilerWarnings.cmake)
     enable_strict_warnings(LikesProgram)
 endif()
 
 # =========================
-#  构建示例（可选）
+# 示例程序
 # =========================
 if (ENABLE_EXAMPLES)
-    # 创建示例可执行文件
-    add_executable(LikesProgramDemo src/main.cpp)
+    # 测试代码头文件
+    file(GLOB_RECURSE TEST_HEADERS
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/test/*.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/test/*.h
+    )
 
-    # 链接库
-    target_link_libraries(LikesProgramDemo PRIVATE LikesProgram)
+    # Demo 可执行文件（把所有源文件都编进去）
+    add_executable(LikesProgramDemo
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+        ${LP_HEADERS}
+        ${LP_SOURCES}
+        ${TEST_HEADERS}
+    )
 
-    # 添加头文件目录
-    target_include_directories(LikesProgramDemo PRIVATE include)
+    # 头文件搜索路径
+    target_include_directories(LikesProgramDemo PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/test
+    )
 
-    # 给 Demo 设置 MSVC 特定宏，避免 CRT 警告
+    # MSVC 特定编译定义
     target_compile_definitions(LikesProgramDemo PRIVATE
         $<$<BOOL:MSVC>:_CRT_SECURE_NO_WARNINGS>
     )
 endif()
 
 # =========================
-#  安装规则
+# 安装规则
 # =========================
-# 安装库文件（静态库/动态库/可执行文件）
-install(TARGETS LikesProgram
-    EXPORT LikesProgramTargets
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
-)
+if (BUILD_SHARED_LIBS)
+    install(TARGETS LikesProgram
+        EXPORT LikesProgramTargets
+        RUNTIME DESTINATION bin     # .dll
+        LIBRARY DESTINATION lib     # .so/.dylib
+        ARCHIVE DESTINATION lib     # .lib (import)
+    )
+else()
+    install(TARGETS LikesProgram
+        EXPORT LikesProgramTargets
+        ARCHIVE DESTINATION lib     # 静态库
+    )
+endif()
 
-# 安装头文件（保持 include/LikesProgram 层级）
 install(DIRECTORY include/LikesProgram DESTINATION include)
 
 # =========================
-#  生成并安装 CMake 包配置文件
+# 生成并安装 CMake 包配置文件
 # =========================
 include(CMakePackageConfigHelpers)
 
-# 生成版本文件（用于 find_package 版本检查）
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/LikesProgramConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY AnyNewerVersion
 )
 
-# 如果存在 Config.cmake.in，则生成配置文件
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in")
     configure_package_config_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/LikesProgramConfig.cmake"
         INSTALL_DESTINATION lib/cmake/LikesProgram
     )
-
-    # 安装导出信息（Targets）
     install(EXPORT LikesProgramTargets
         FILE LikesProgramTargets.cmake
         NAMESPACE LikesProgram::

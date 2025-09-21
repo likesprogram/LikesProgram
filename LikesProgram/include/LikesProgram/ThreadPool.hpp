@@ -19,7 +19,9 @@
 #include "Timer.hpp"
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <stringapiset.h>
 #elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
@@ -83,10 +85,7 @@ namespace LikesProgram {
             String ToString() const;
         };
 
-        explicit ThreadPool(Options opts = Options())
-            : opts_(std::move(opts)),
-            queueCapacity_(opts_.queueCapacity), timer_(Timer()) {
-        }
+        explicit ThreadPool(Options opts = Options());
 
         ~ThreadPool();
 
@@ -150,9 +149,10 @@ namespace LikesProgram {
                 (*task)();
             };
 
+            std::function<void(std::exception_ptr)> exceptionHandler = GetExceptionHandler();
             // 入队并返回是否成功
             bool success = EnqueueTask(std::function<void()>(wrapper));
-            if (!success && opts_.exceptionHandler) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
+            if (!success && exceptionHandler) exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
             return success;
         }
 
@@ -160,16 +160,24 @@ namespace LikesProgram {
         bool PostNoArg(std::function<void()> fn);
 
         // ---- 查询与监控 ----
+        // 获取任务队列中的任务数
         size_t GetQueueSize() const;
-        size_t GetActiveCount() const { return activeCount_.load(std::memory_order_acquire); } // 正在执行任务的线程数
-        size_t GetThreadCount() const { return aliveThreads_.load(std::memory_order_acquire); } // 返回“活着”的线程数
-        bool   IsRunning()     const { return running_.load(std::memory_order_acquire); }
-
-        size_t IetRejectedCount() const { return rejectedCount_.load(std::memory_order_acquire); } // 被拒绝的任务数量
-        size_t IetTotalTasksSubmitted() const { return submittedCount_.load(std::memory_order_acquire); }
-        size_t IetCompletedCount() const { return completedCount_.load(std::memory_order_acquire); }
-        size_t IetLargestPoolSize() const { return largestPoolSize_.load(std::memory_order_acquire); }
-        size_t IetPeakQueueSize() const { return peakQueueSize_.load(std::memory_order_acquire); }
+        // 正在执的行任务数
+        size_t GetActiveCount() const;
+        // 返回“活着”的线程数
+        size_t GetThreadCount() const;
+        // 是否在运行中
+        bool   IsRunning()     const;
+        // 被拒绝的任务数量
+        size_t IetRejectedCount() const;
+        // 总提交任务数
+        size_t IetTotalTasksSubmitted() const;
+        // 完成任务数
+        size_t IetCompletedCount() const;
+        // 历史最大线程数
+        size_t IetLargestPoolSize() const;
+        // 队列峰值
+        size_t IetPeakQueueSize() const;
 
         // 获取快照统计信息
         Statistics Snapshot() const;
@@ -194,40 +202,10 @@ namespace LikesProgram {
         // 唤醒所有工作线程
         void NotifyAllWorkers();
 
-        Options opts_;
+        // 获取异常处理函数
+        std::function<void(std::exception_ptr)> GetExceptionHandler() const;
 
-        // 真正的队列/同步结构
-        mutable std::mutex queueMutex_;
-        std::condition_variable queueNotEmptyCv_; // 通知 worker
-        std::condition_variable queueNotFullCv_;  // 通知 submit 等待
-        std::deque<std::function<void()>> taskQueue_; // 任务队列
-        size_t queueCapacity_; // 队列容量
-
-        // 工作线程容器（保持到最终join；活跃数用 aliveThreads_ 统计）
-        std::vector<std::thread> workers_;
-        mutable std::mutex workersMutex_;
-
-        // 运行标志
-        std::atomic<bool> running_{ false };       // 池是否处于运行状态（允许worker取任务）
-        std::atomic<bool> acceptTasks_{ false };   // 是否接受新任务（入队）
-        std::atomic<bool> shutdownNowFlag_{ false }; // 用于唤醒空闲 worker 退出（shutdown）
-
-        // 统计
-        std::atomic<size_t> submittedCount_{ 0 };  // 成功入队的任务数
-        std::atomic<size_t> rejectedCount_{ 0 };   // 被拒绝的任务数
-        std::atomic<size_t> completedCount_{ 0 };  // 完成任务数
-        std::atomic<size_t> activeCount_{ 0 };     // 正在执行的任务数
-        std::atomic<size_t> aliveThreads_{ 0 };    // 存活线程数
-        std::atomic<size_t> largestPoolSize_{ 0 }; // 历史最大线程数
-        std::atomic<size_t> peakQueueSize_{ 0 };   // 队列峰值
-        Timer timer_;
-
-        // 时间点（纳秒）
-        std::atomic<long long> lastSubmitNs_{ 0 };   // steady_clock::now().time_since_epoch() 的纳秒数
-        std::atomic<long long> lastFinishNs_{ 0 };
-
-        // 线程退出等待
-        mutable std::mutex workerExitMutex_;
-        std::condition_variable workerExitCv_;
+        struct ThreadPoolImpl;
+        ThreadPoolImpl* m_impl = nullptr;
     };
 }

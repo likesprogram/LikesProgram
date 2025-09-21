@@ -39,7 +39,7 @@ namespace LoggerTest {
 #ifdef _DEBUG
         logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
 #else
-        logger.SetLevel(LogLevel::Info);
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Info);
 #endif
         // 内置控制台输出 Sink
         logger.AddSink(LikesProgram::CreateConsoleSink()); // 输出到控制台

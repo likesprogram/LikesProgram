@@ -6,6 +6,44 @@
 #include <iomanip>
 
 namespace LikesProgram {
+    struct ThreadPool::ThreadPoolImpl {
+        Options opts_;
+
+        // 真正的队列/同步结构
+        mutable std::mutex queueMutex_;
+        std::condition_variable queueNotEmptyCv_; // 通知 worker
+        std::condition_variable queueNotFullCv_;  // 通知 submit 等待
+        std::deque<std::function<void()>> taskQueue_; // 任务队列
+        size_t queueCapacity_; // 队列容量
+
+        // 工作线程容器（保持到最终join；活跃数用 aliveThreads_ 统计）
+        std::vector<std::thread> workers_;
+        mutable std::mutex workersMutex_;
+
+        // 运行标志
+        std::atomic<bool> running_{ false };       // 池是否处于运行状态（允许worker取任务）
+        std::atomic<bool> acceptTasks_{ false };   // 是否接受新任务（入队）
+        std::atomic<bool> shutdownNowFlag_{ false }; // 用于唤醒空闲 worker 退出（shutdown）
+
+        // 统计
+        std::atomic<size_t> submittedCount_{ 0 };  // 成功入队的任务数
+        std::atomic<size_t> rejectedCount_{ 0 };   // 被拒绝的任务数
+        std::atomic<size_t> completedCount_{ 0 };  // 完成任务数
+        std::atomic<size_t> activeCount_{ 0 };     // 正在执行的任务数
+        std::atomic<size_t> aliveThreads_{ 0 };    // 存活线程数
+        std::atomic<size_t> largestPoolSize_{ 0 }; // 历史最大线程数
+        std::atomic<size_t> peakQueueSize_{ 0 };   // 队列峰值
+        Timer timer_;
+
+        // 时间点（纳秒）
+        std::atomic<long long> lastSubmitNs_{ 0 };   // steady_clock::now().time_since_epoch() 的纳秒数
+        std::atomic<long long> lastFinishNs_{ 0 };
+
+        // 线程退出等待
+        mutable std::mutex workerExitMutex_;
+        std::condition_variable workerExitCv_;
+    };
+
     String ThreadPool::Statistics::ToString() const {
         LikesProgram::String statsStr;
         statsStr.Append(u"成功入队的任务数：")
@@ -67,6 +105,12 @@ namespace LikesProgram {
         return statsStr;
     }
 
+    ThreadPool::ThreadPool(Options opts): m_impl(new ThreadPoolImpl) {
+        m_impl->opts_ = std::move(opts);
+        m_impl->queueCapacity_ = opts.queueCapacity;
+        m_impl->timer_ = Timer();
+    }
+
     ThreadPool::~ThreadPool() {
         try {
             Shutdown(ShutdownPolicy::CancelNow);
@@ -80,147 +124,179 @@ namespace LikesProgram {
 
     void ThreadPool::Start() {
         bool expected = false;
-        if (!running_.compare_exchange_strong(expected, true)) {
+        if (!m_impl->running_.compare_exchange_strong(expected, true)) {
             return; // 已经启动
         }
-        acceptTasks_.store(true, std::memory_order_release);
+        m_impl->acceptTasks_.store(true, std::memory_order_release);
 
         // 至少起 coreThreads 个
-        for (size_t i = 0; i < opts_.coreThreads; ++i) SpawnWorker();
+        for (size_t i = 0; i < m_impl->opts_.coreThreads; ++i) SpawnWorker();
     }
 
     void ThreadPool::Shutdown(ShutdownPolicy mode) {
         // 已经停止
-        if (!running_.load(std::memory_order_acquire) &&
-            !acceptTasks_.load(std::memory_order_acquire)) {
+        if (!m_impl->running_.load(std::memory_order_acquire) &&
+            !m_impl->acceptTasks_.load(std::memory_order_acquire)) {
             return;
         }
 
         switch (mode) {
         case ShutdownPolicy::Graceful:
             // 不接受新任务；允许 worker 继续取队列直到队列与正在运行任务跑完
-            acceptTasks_.store(false, std::memory_order_release);
-            running_.store(false, std::memory_order_release);
+            m_impl->acceptTasks_.store(false, std::memory_order_release);
+            m_impl->running_.store(false, std::memory_order_release);
             break;
         case ShutdownPolicy::Drain:
             // 语义：拒绝新任务，但允许队列中已有任务被执行。不要清空队列。
-            acceptTasks_.store(false, std::memory_order_release);
-            running_.store(false, std::memory_order_release);
+            m_impl->acceptTasks_.store(false, std::memory_order_release);
+            m_impl->running_.store(false, std::memory_order_release);
             break;
         case ShutdownPolicy::CancelNow:
-            acceptTasks_.store(false, std::memory_order_release);
-            running_.store(false, std::memory_order_release);
-            shutdownNowFlag_.store(true, std::memory_order_release);
+            m_impl->acceptTasks_.store(false, std::memory_order_release);
+            m_impl->running_.store(false, std::memory_order_release);
+            m_impl->shutdownNowFlag_.store(true, std::memory_order_release);
             {
-                std::lock_guard<std::mutex> lk(queueMutex_);
-                rejectedCount_.fetch_add(taskQueue_.size(), std::memory_order_relaxed);
-                taskQueue_.clear();
+                std::lock_guard<std::mutex> lk(m_impl->queueMutex_);
+                m_impl->rejectedCount_.fetch_add(m_impl->taskQueue_.size(), std::memory_order_relaxed);
+                m_impl->taskQueue_.clear();
             }
             break;
         }
 
         NotifyAllWorkers();
-        queueNotFullCv_.notify_all(); // 保证等待入队的线程也退出
+        m_impl->queueNotFullCv_.notify_all(); // 保证等待入队的线程也退出
     }
 
     bool ThreadPool::AwaitTermination(std::chrono::milliseconds timeout) {
         if (timeout.count() == 0) {
-            return aliveThreads_.load(std::memory_order_acquire) == 0;
+            return m_impl->aliveThreads_.load(std::memory_order_acquire) == 0;
         }
         auto deadline = std::chrono::steady_clock::now() + timeout;
-        std::unique_lock<std::mutex> lk(workerExitMutex_);
-        return workerExitCv_.wait_until(lk, deadline, [&] { return aliveThreads_.load(std::memory_order_acquire) == 0; });
+        std::unique_lock<std::mutex> lk(m_impl->workerExitMutex_);
+        return m_impl->workerExitCv_.wait_until(lk, deadline, [&] { return m_impl->aliveThreads_.load(std::memory_order_acquire) == 0; });
     }
 
     bool ThreadPool::PostNoArg(std::function<void()> fn) {
         bool success = EnqueueTask(std::move(fn));
-        if (!success && opts_.exceptionHandler) opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
+        if (!success && m_impl->opts_.exceptionHandler) m_impl->opts_.exceptionHandler(std::make_exception_ptr(std::runtime_error("Task rejected")));
         return success;
     }
 
     size_t ThreadPool::GetQueueSize() const {
-        std::lock_guard<std::mutex> lk(queueMutex_);
-        return taskQueue_.size();
+        std::lock_guard<std::mutex> lk(m_impl->queueMutex_);
+        return m_impl->taskQueue_.size();
+    }
+
+    size_t ThreadPool::GetActiveCount() const {
+        return m_impl->activeCount_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::GetThreadCount() const {
+        return m_impl->aliveThreads_.load(std::memory_order_acquire);
+    }
+
+    bool ThreadPool::IsRunning() const {
+        return m_impl->running_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::IetRejectedCount() const {
+        return m_impl->rejectedCount_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::IetTotalTasksSubmitted() const {
+        return m_impl->submittedCount_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::IetCompletedCount() const {
+        return m_impl->completedCount_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::IetLargestPoolSize() const {
+        return m_impl->largestPoolSize_.load(std::memory_order_acquire);
+    }
+
+    size_t ThreadPool::IetPeakQueueSize() const {
+        return m_impl->peakQueueSize_.load(std::memory_order_acquire);
     }
 
     ThreadPool::Statistics ThreadPool::Snapshot() const {
         Statistics s;
-        s.submitted = submittedCount_.load();
-        s.rejected = rejectedCount_.load();
-        s.completed = completedCount_.load();
-        s.active = activeCount_.load();
-        s.aliveThreads = aliveThreads_.load();
-        s.largestPoolSize = largestPoolSize_.load();
-        s.peakQueueSize = peakQueueSize_.load();
+        s.submitted = m_impl->submittedCount_.load();
+        s.rejected = m_impl->rejectedCount_.load();
+        s.completed = m_impl->completedCount_.load();
+        s.active = m_impl->activeCount_.load();
+        s.aliveThreads = m_impl->aliveThreads_.load();
+        s.largestPoolSize = m_impl->largestPoolSize_.load();
+        s.peakQueueSize = m_impl->peakQueueSize_.load();
 
-        long long lastSubmitNs = lastSubmitNs_.load();
-        long long lastFinishNs = lastFinishNs_.load();
+        long long lastSubmitNs = m_impl->lastSubmitNs_.load();
+        long long lastFinishNs = m_impl->lastFinishNs_.load();
         if (lastSubmitNs > 0)
             s.lastSubmitTime = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(lastSubmitNs));
         if (lastFinishNs > 0)
             s.lastFinishTime = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(lastFinishNs));
 
-        s.longestTaskTime = timer_.GetLongestElapsed();
-        s.averageTaskTime = timer_.GetEMAAverageElapsed();
-        s.arithmeticAverageTaskTime = timer_.GetArithmeticAverageElapsed();
+        s.longestTaskTime = m_impl->timer_.GetLongestElapsed();
+        s.averageTaskTime = m_impl->timer_.GetEMAAverageElapsed();
+        s.arithmeticAverageTaskTime = m_impl->timer_.GetArithmeticAverageElapsed();
         return s;
     }
 
     void ThreadPool::JoinAll() {
-        std::lock_guard<std::mutex> lk(workersMutex_);
-        for (auto& t : workers_) {
+        std::lock_guard<std::mutex> lk(m_impl->workersMutex_);
+        for (auto& t : m_impl->workers_) {
             if (t.joinable()) t.join();
         }
-        workers_.clear();
+        m_impl->workers_.clear();
     }
 
     bool ThreadPool::EnqueueTask(std::function<void()>&& task) {
-        if (!running_.load(std::memory_order_acquire) || !acceptTasks_.load(std::memory_order_acquire)) {
-            rejectedCount_.fetch_add(1, std::memory_order_relaxed);
+        if (!m_impl->running_.load(std::memory_order_acquire) || !m_impl->acceptTasks_.load(std::memory_order_acquire)) {
+            m_impl->rejectedCount_.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
 
-        std::unique_lock<std::mutex> lock(queueMutex_);
+        std::unique_lock<std::mutex> lock(m_impl->queueMutex_);
 
-        if (taskQueue_.size() >= queueCapacity_) {
-            switch (opts_.rejectPolicy) {
+        if (m_impl->taskQueue_.size() >= m_impl->queueCapacity_) {
+            switch (m_impl->opts_.rejectPolicy) {
             case RejectPolicy::Block:
-                queueNotFullCv_.wait(lock, [&] {
-                    return taskQueue_.size() < queueCapacity_ || !acceptTasks_.load(std::memory_order_acquire) || shutdownNowFlag_.load(std::memory_order_acquire);
+                m_impl->queueNotFullCv_.wait(lock, [&] {
+                    return m_impl->taskQueue_.size() < m_impl->queueCapacity_ || !m_impl->acceptTasks_.load(std::memory_order_acquire) || m_impl->shutdownNowFlag_.load(std::memory_order_acquire);
                     });
-                if (!running_.load(std::memory_order_acquire) || !acceptTasks_.load(std::memory_order_acquire) || shutdownNowFlag_.load(std::memory_order_acquire)) {
-                    rejectedCount_.fetch_add(1, std::memory_order_relaxed);
+                if (!m_impl->running_.load(std::memory_order_acquire) || !m_impl->acceptTasks_.load(std::memory_order_acquire) || m_impl->shutdownNowFlag_.load(std::memory_order_acquire)) {
+                    m_impl->rejectedCount_.fetch_add(1, std::memory_order_relaxed);
                     return false;
                 }
                 break;
             case RejectPolicy::Discard:
-                rejectedCount_.fetch_add(1, std::memory_order_relaxed);
+                m_impl->rejectedCount_.fetch_add(1, std::memory_order_relaxed);
                 return false;
             case RejectPolicy::DiscardOld:
-                if (!taskQueue_.empty()) taskQueue_.pop_front();
+                if (!m_impl->taskQueue_.empty()) m_impl->taskQueue_.pop_front();
                 break;
             case RejectPolicy::Throw:
                 throw std::runtime_error("ThreadPool: Task rejected (Throw policy)");
             }
         }
 
-        taskQueue_.emplace_back(std::move(task));
-        submittedCount_.fetch_add(1, std::memory_order_relaxed);
+        m_impl->taskQueue_.emplace_back(std::move(task));
+        m_impl->submittedCount_.fetch_add(1, std::memory_order_relaxed);
 
         // 记录最近一次提交时间（统一使用纳秒）
         auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-        lastSubmitNs_.store(now_ns, std::memory_order_relaxed);
+        m_impl->lastSubmitNs_.store(now_ns, std::memory_order_relaxed);
 
         // 峰值队列
-        const size_t qsz = taskQueue_.size();
-        Math::UpdateMax(peakQueueSize_, qsz);
+        const size_t qsz = m_impl->taskQueue_.size();
+        Math::UpdateMax(m_impl->peakQueueSize_, qsz);
 
-        queueNotEmptyCv_.notify_one();
+        m_impl->queueNotEmptyCv_.notify_one();
 
         // 动态扩容：队列长度 > 活跃线程数 且还没到 maxThreads
-        if (opts_.allowDynamicResize && running_.load(std::memory_order_acquire)) {
-            size_t alive = aliveThreads_.load(std::memory_order_acquire);
-            if (alive < opts_.maxThreads && qsz > alive) {
+        if (m_impl->opts_.allowDynamicResize && m_impl->running_.load(std::memory_order_acquire)) {
+            size_t alive = m_impl->aliveThreads_.load(std::memory_order_acquire);
+            if (alive < m_impl->opts_.maxThreads && qsz > alive) {
                 SpawnWorker();
             }
         }
@@ -229,7 +305,7 @@ namespace LikesProgram {
 
     void ThreadPool::WorkerLoop() {
         // 线程命名（可选）
-        if (!opts_.threadNamePrefix.Empty()) {
+        if (!m_impl->opts_.threadNamePrefix.Empty()) {
             std::wostringstream woss;
             // 获取当前线程的 ID 并直接转换为整数（通常是一个指针值）
             std::thread::id threadId = std::this_thread::get_id();
@@ -240,26 +316,26 @@ namespace LikesProgram {
             // 保证生成一个 5 位数 ID（通过对 idValue 进行模运算）
             size_t threadIdNum = idValue % 100000;  // 保证为 5 位数
 
-            opts_.threadNamePrefix = opts_.threadNamePrefix.SubString(0, 15 - 5);
+            m_impl->opts_.threadNamePrefix = m_impl->opts_.threadNamePrefix.SubString(0, 15 - 5);
 
             // 确保输出为 5 位数（不足前面补零）
             woss << std::setw(5) << std::setfill(L'0') << threadIdNum;
             String threadName;
-            threadName.Append(opts_.threadNamePrefix).Append(String(woss.str()));
+            threadName.Append(m_impl->opts_.threadNamePrefix).Append(String(woss.str()));
             CoreUtils::SetCurrentThreadName(threadName);
         }
 
         // 更新历史最大线程数（spawnWorker 已把 aliveThreads_++）
         {
-            size_t cur = aliveThreads_.load(std::memory_order_acquire);
-            Math::UpdateMax(largestPoolSize_, cur);
+            size_t cur = m_impl->aliveThreads_.load(std::memory_order_acquire);
+            Math::UpdateMax(m_impl->largestPoolSize_, cur);
         }
 
         auto tryExit = [this]() -> bool {
-            if (shutdownNowFlag_.load(std::memory_order_acquire)) return true;
-            if (!running_.load(std::memory_order_acquire)) {
-                std::lock_guard<std::mutex> lk(queueMutex_);
-                return taskQueue_.empty(); // drain 完队列即可退出
+            if (m_impl->shutdownNowFlag_.load(std::memory_order_acquire)) return true;
+            if (!m_impl->running_.load(std::memory_order_acquire)) {
+                std::lock_guard<std::mutex> lk(m_impl->queueMutex_);
+                return m_impl->taskQueue_.empty(); // drain 完队列即可退出
             }
             return false;
             };
@@ -268,49 +344,49 @@ namespace LikesProgram {
             std::function<void()> task;
 
             {
-                std::unique_lock<std::mutex> lock(queueMutex_);
+                std::unique_lock<std::mutex> lock(m_impl->queueMutex_);
 
-                if (!shutdownNowFlag_.load(std::memory_order_acquire)) {
+                if (!m_impl->shutdownNowFlag_.load(std::memory_order_acquire)) {
                     // 空闲等待，带 keepAlive，用于缩容
-                    queueNotEmptyCv_.wait_for(lock, opts_.keepAlive, [&] {
-                        return !taskQueue_.empty() || shutdownNowFlag_.load(std::memory_order_acquire) || !running_.load(std::memory_order_acquire);
-                        });
+                    m_impl->queueNotEmptyCv_.wait_for(lock, m_impl->opts_.keepAlive, [&] {
+                        return !m_impl->taskQueue_.empty() || m_impl->shutdownNowFlag_.load(std::memory_order_acquire) || !m_impl->running_.load(std::memory_order_acquire);
+                    });
                 }
 
                 // CancelNow 直接退
-                if (shutdownNowFlag_.load(std::memory_order_acquire)) break;
+                if (m_impl->shutdownNowFlag_.load(std::memory_order_acquire)) break;
 
                 // Graceful/Drain：队列空且不再运行 -> 退出
-                if (!running_.load(std::memory_order_acquire) && taskQueue_.empty()) break;
+                if (!m_impl->running_.load(std::memory_order_acquire) && m_impl->taskQueue_.empty()) break;
 
                 // 动态缩容：超时空闲且线程数超过 core -> 退出
-                if (taskQueue_.empty() && opts_.allowDynamicResize && aliveThreads_.load(std::memory_order_acquire) > opts_.coreThreads) {
+                if (m_impl->taskQueue_.empty() && m_impl->opts_.allowDynamicResize && m_impl->aliveThreads_.load(std::memory_order_acquire) > m_impl->opts_.coreThreads) {
                     break;
                 }
 
-                if (!taskQueue_.empty()) {
-                    task = std::move(taskQueue_.front());
-                    taskQueue_.pop_front();
-                    queueNotFullCv_.notify_one();
+                if (!m_impl->taskQueue_.empty()) {
+                    task = std::move(m_impl->taskQueue_.front());
+                    m_impl->taskQueue_.pop_front();
+                    m_impl->queueNotFullCv_.notify_one();
                 }
             }
 
             if (task) {
-                activeCount_.fetch_add(1, std::memory_order_relaxed);
-                Timer timer(true, &timer_);
+                m_impl->activeCount_.fetch_add(1, std::memory_order_relaxed);
+                Timer timer(true, &m_impl->timer_);
                 try {
                     task();
                 }
                 catch (...) {
-                    if (opts_.exceptionHandler) {
-                        try { opts_.exceptionHandler(std::current_exception()); }
+                    if (m_impl->opts_.exceptionHandler) {
+                        try { m_impl->opts_.exceptionHandler(std::current_exception()); }
                         catch (...) {} // 回调自己异常也吞掉，避免杀死worker
                     }
                 }
                 auto elapsed = timer.Stop(); // 自动更新全局 EMA 和最长耗时
-                completedCount_.fetch_add(1, std::memory_order_relaxed);
-                activeCount_.fetch_sub(1, std::memory_order_relaxed);
-                lastFinishNs_.store(
+                m_impl->completedCount_.fetch_add(1, std::memory_order_relaxed);
+                m_impl->activeCount_.fetch_sub(1, std::memory_order_relaxed);
+                m_impl->lastFinishNs_.store(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::steady_clock::now().time_since_epoch()
                     ).count(), std::memory_order_relaxed
@@ -322,30 +398,33 @@ namespace LikesProgram {
 
         // 线程退出
         {
-            std::lock_guard<std::mutex> lk(workerExitMutex_);
-            long long prev = aliveThreads_.load(std::memory_order_acquire);
-            aliveThreads_.store((prev > 0 ? prev - 1 : 0), std::memory_order_release);
-            if (aliveThreads_.load(std::memory_order_acquire) == 0) workerExitCv_.notify_all();
+            std::lock_guard<std::mutex> lk(m_impl->workerExitMutex_);
+            long long prev = m_impl->aliveThreads_.load(std::memory_order_acquire);
+            m_impl->aliveThreads_.store((prev > 0 ? prev - 1 : 0), std::memory_order_release);
+            if (m_impl->aliveThreads_.load(std::memory_order_acquire) == 0) m_impl->workerExitCv_.notify_all();
         }
     }
 
     void ThreadPool::SpawnWorker() {
         {
-            std::lock_guard<std::mutex> lk(workerExitMutex_);
-            aliveThreads_.fetch_add(1, std::memory_order_relaxed);
-            size_t cur = aliveThreads_.load(std::memory_order_acquire);
-            Math::UpdateMax(largestPoolSize_, cur);
+            std::lock_guard<std::mutex> lk(m_impl->workerExitMutex_);
+            m_impl->aliveThreads_.fetch_add(1, std::memory_order_relaxed);
+            size_t cur = m_impl->aliveThreads_.load(std::memory_order_acquire);
+            Math::UpdateMax(m_impl->largestPoolSize_, cur);
         }
 
         std::thread t([this] { WorkerLoop(); });
         {
-            std::lock_guard<std::mutex> lk(workersMutex_);
-            workers_.emplace_back(std::move(t));
+            std::lock_guard<std::mutex> lk(m_impl->workersMutex_);
+            m_impl->workers_.emplace_back(std::move(t));
         }
     }
 
     void ThreadPool::NotifyAllWorkers() {
-        queueNotEmptyCv_.notify_all();
-        queueNotFullCv_.notify_all();
+        m_impl->queueNotEmptyCv_.notify_all();
+        m_impl->queueNotFullCv_.notify_all();
+    }
+    std::function<void(std::exception_ptr)> ThreadPool::GetExceptionHandler() const {
+        return m_impl->opts_.exceptionHandler;
     }
 }

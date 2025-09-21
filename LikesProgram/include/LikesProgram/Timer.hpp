@@ -10,10 +10,21 @@ namespace LikesProgram {
     class LIKESPROGRAM_API Timer {
     public:
         using Duration = std::chrono::nanoseconds;
+        // 构造函数, 默认不启动, 父计时器为空
         explicit Timer(bool autoStart = false, Timer* parent = nullptr);
+
+        // 设置父计时器
         void SetParent(Timer* parent);
-        ~Timer() = default;
-        
+        ~Timer();
+
+        // 拷贝构造 & 拷贝赋值
+        Timer(const Timer& other);
+        Timer& operator=(const Timer& other);
+
+        // 移动构造 & 移动赋值
+        Timer(Timer&& other) noexcept;
+        Timer& operator=(Timer&& other) noexcept;
+
         // 开始计时
         void Start();
 
@@ -50,14 +61,7 @@ namespace LikesProgram {
         static int64_t NowNs();
         Timer* m_parent = nullptr;
 
-        std::atomic<int64_t> m_startNs = 0;
-        std::atomic<int64_t> m_lastNs = 0;
-        std::atomic<bool> m_running = false;
-        std::atomic<long long> m_totalNs{ 0 };
-        std::atomic<long long> m_count{ 0 };
-        std::atomic<long long> m_longestNs{ 0 };
-        std::atomic<double> m_averageNs{ 0 };
-
-        mutable std::shared_mutex m_mutex;
+        struct TimerImpl;
+        TimerImpl* m_impl = nullptr;
     };
 }

@@ -134,11 +134,8 @@ namespace LikesProgram {
         CodePointIterator end() const { return CodePointIterator(this, Size()); }
 
     private:
-        std::unique_ptr<char16_t[]> m_data;  // UTF-16 数据
-        size_t m_size;                        // UTF-16 单元长度
-        Encoding encoding;                     // 原始编码
-        mutable std::vector<size_t> cp_offsets; // 每个 Unicode code point 在 UTF-16 中的偏移
-        mutable bool cp_cache_valid = false;   // 是否缓存有效
+        struct StringImpl;
+        StringImpl* m_impl = nullptr;
 
         size_t CodePointOffset(size_t index) const;
 
