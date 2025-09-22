@@ -18,6 +18,8 @@ namespace TimerTest {
 
 		auto elapsed = threadTimer.Stop(); // 停止并获取耗时
         std::cout << "Thread 【" << data->index << "】：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+
+		delete data;
 	}
 
     void Test() {

@@ -178,7 +178,7 @@ namespace LikesProgram {
 
     // 析构函数
     String::~String() {
-        delete m_impl;
+        if (m_impl) delete m_impl;
         m_impl = nullptr; // 避免悬空指针
     }
 
@@ -194,7 +194,7 @@ namespace LikesProgram {
 
     String& String::operator=(String&& other) noexcept {
         if (this != &other) {
-            delete m_impl;
+            if(m_impl) delete m_impl;
             m_impl = other.m_impl;
             other.m_impl = nullptr;
         }
@@ -338,6 +338,7 @@ namespace LikesProgram {
         String result;
         result.m_impl->m_size = new_len;
         result.m_impl->m_data = std::move(new_data);
+        result.m_impl->encoding = m_impl->encoding; // 或保持原始 encoding
         return result;
     }
 

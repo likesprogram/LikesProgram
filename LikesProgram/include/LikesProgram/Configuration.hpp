@@ -35,7 +35,7 @@ namespace LikesProgram {
         Configuration(const Configuration& other); // 拷贝构造：复制值，创建新锁
         Configuration(Configuration&& other) noexcept; // 移动构造
 
-        ~Configuration() = default;
+        ~Configuration();
 
         Configuration& operator=(int v);
         Configuration& operator=(int64_t v);

@@ -33,6 +33,6 @@ int main()
 
         std::cout << std::endl << std::endl << "===== ConfigurationTest =====" << std::endl << std::endl;
         ConfigurationTest::Test();
-    } while (false);
+    } while (true);
     return 0;
 }

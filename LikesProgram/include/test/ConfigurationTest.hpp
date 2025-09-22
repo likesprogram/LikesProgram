@@ -266,7 +266,7 @@ namespace ConfigurationTest {
         cfg.SetSerializer(LikesProgram::CreateSimpleSerializer());
         LikesProgram::String simpleText1 = cfg.Dump(4); // 缩进4空格
 #ifdef _WIN32
-        std::cout << "\SimpleSerializer Text:\n" << simpleText1.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
+        std::cout << "\nSimpleSerializer Text:\n" << simpleText1.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
 #else
         std::cout << "\nSimpleSerializer Text:\n" << simpleText1 << std::endl;
 #endif

@@ -14,7 +14,7 @@ namespace LikesProgram {
         std::condition_variable queueNotEmptyCv_; // 通知 worker
         std::condition_variable queueNotFullCv_;  // 通知 submit 等待
         std::deque<std::function<void()>> taskQueue_; // 任务队列
-        size_t queueCapacity_; // 队列容量
+        size_t queueCapacity_ = 1000; // 队列容量
 
         // 工作线程容器（保持到最终join；活跃数用 aliveThreads_ 统计）
         std::vector<std::thread> workers_;
@@ -109,6 +109,7 @@ namespace LikesProgram {
         m_impl->opts_ = std::move(opts);
         m_impl->queueCapacity_ = opts.queueCapacity;
         m_impl->timer_ = Timer();
+        m_impl->opts_.threadNamePrefix = m_impl->opts_.threadNamePrefix.SubString(0, 15 - 5);
     }
 
     ThreadPool::~ThreadPool() {
@@ -120,6 +121,10 @@ namespace LikesProgram {
         catch (...) {
             // 析构中不抛
         }
+
+        // 释放 m_impl
+        if (m_impl) delete m_impl;
+        m_impl = nullptr;
     }
 
     void ThreadPool::Start() {
@@ -316,10 +321,10 @@ namespace LikesProgram {
             // 保证生成一个 5 位数 ID（通过对 idValue 进行模运算）
             size_t threadIdNum = idValue % 100000;  // 保证为 5 位数
 
-            m_impl->opts_.threadNamePrefix = m_impl->opts_.threadNamePrefix.SubString(0, 15 - 5);
-
             // 确保输出为 5 位数（不足前面补零）
             woss << std::setw(5) << std::setfill(L'0') << threadIdNum;
+
+            // 创建线程名称
             String threadName;
             threadName.Append(m_impl->opts_.threadNamePrefix).Append(String(woss.str()));
             CoreUtils::SetCurrentThreadName(threadName);

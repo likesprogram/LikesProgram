@@ -78,7 +78,7 @@ namespace LikesProgram {
     Logger& Logger::Instance() {
         static Logger inst;
         if (inst.m_impl == nullptr || inst.m_impl->stop) {
-            delete inst.m_impl;
+            if (inst.m_impl) delete inst.m_impl;
             inst.m_impl = new LoggerImpl();
         }
         return inst;
@@ -89,7 +89,8 @@ namespace LikesProgram {
     }
 
     Logger::~Logger() {
-        delete m_impl;
+        if (m_impl) delete m_impl;
+        m_impl = nullptr;
     }
 
     void Logger::ProcessLoop()

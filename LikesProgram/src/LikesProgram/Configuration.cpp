@@ -88,6 +88,11 @@ namespace LikesProgram {
         other.m_impl = nullptr; // 移交完成
     }
 
+    Configuration::~Configuration() {
+        if (m_impl) delete m_impl;
+        m_impl = nullptr;
+    }
+
     Configuration& Configuration::operator=(int v) {
         std::unique_lock lock(m_impl->mutex_);
         m_impl->value_ = v;

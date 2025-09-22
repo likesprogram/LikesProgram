@@ -49,7 +49,7 @@ HEADER_COMMENT = """\
 """
 # ---------------------- BMP 直接数组索引 ----------------------
 def write_bmp_cpp(filename, upper_map, lower_map):
-    with open(filename, "w", encoding="utf-8") as f:
+    with open(filename, "w", encoding="utf-8-sig") as f:
         f.write(HEADER_COMMENT + "\n\n")
         f.write('#include "' + HEADER_PATH + '"\n\n')
         f.write("namespace LikesProgram {\n")
@@ -110,7 +110,7 @@ def emit_smp_table(f, name, mapping_upper, mapping_lower):
 
 def write_smp_cpp(filename, mapping_upper, mapping_lower):
     """生成 SMP C++ 文件，使用合并数组 + 二分查找"""
-    with open(filename, "w", encoding="utf-8") as f:
+    with open(filename, "w", encoding="utf-8-sig") as f:
         f.write(HEADER_COMMENT + "\n\n")
         f.write('#include "' + HEADER_PATH + '"\n')
         f.write('#include <cstddef>\n\n')
