@@ -184,6 +184,14 @@ int main() {
 * `Vector()`：默认构造，初始化为 `(0, 0)`
 * `Vector(double x, double y)`：指定 x、y 坐标
 * `explicit Vector(double s)`：同时初始化 x 和 y 为同一标量 `s`
+* `Vector FromPolar(double length, double angle)`：根据极坐标生成向量，其中 length 是向量长度，angle 是与 X 轴的角度（弧度）
+
+#### 构造函数
+
+* `Vector::Zero()` → `(0,0)`：零向量。
+* `Vector::One()` → `(1,1)`：所有分量为 1。
+* `Vector::UnitX()` → `(1,0)`：X 轴单位向量。
+* `Vector::UnitY()` → `(0,1)`：Y 轴单位向量。
 
 #### 运算符重载
 
@@ -194,8 +202,10 @@ int main() {
 
 * **向量运算**：
 
-  * `v + u` / `v - u` / `v * u` (分量乘) / `v / u` (分量除)
-  * `v += u` / `v -= u` / `v *= u` / `v /= u`
+  * `v + u` / `v - u`
+  * `v * u`（分量乘）
+  * `v / u`（分量除）
+  * 对应的 `+=`、`-=``、`\*=`、`/=\` 复合赋值操作。
 
 * **一元运算**：
 
@@ -223,21 +233,42 @@ int main() {
 
 #### 常用方法
 
-* `Length()`：返回向量长度
-* `Normalized()`：返回单位向量
-* `Dot(const Vector& v)`：点积
-* `Distance(const Vector& v)`：两向量距离
-* `Rotated(double angle)`：逆时针旋转 `angle` 弧度
-* `IsZero()`：判断是否为零向量
-* `Perpendicular()`：返回垂直向量
-* `Clamped(double maxLength)`：限制向量最大长度
-* `Cross(const Vector& v)`：二维叉积，返回标量
-* `Angle()`：返回极角 `atan2(y, x)`
-* `AngleBetween(const Vector& v)`：返回夹角 `[0, pi]`
-* `Reflected(const Vector& normal)`：沿单位法线反射
-* `Project(const Vector& on)`：向量投影
-* `Reject(const Vector& on)`：向量拒投影（去掉投影部分）
-* `static Lerp(const Vector& a, const Vector& b, double t)`：线性插值
+##### 基本属性
+
+  * `double Length() const`：返回向量长度
+  * `double LengthSquared() const`：返回长度平方
+  * `Vector Normalized() const`：返回单位向量（长度为 1），原向量不变
+  * `void Normalize()`：就地归一化向量，使长度为 1
+  * `Vector SafeNormalized(double epsilon = 1e-9) const`：安全归一化：长度小于 `epsilon` 返回零向量，否则返回单位向量
+  * `bool IsNormalized(double epsilon = 1e-9) const`：判断长度是否接近 1（在误差范围内）
+  * `bool IsZero(double epsilon = 1e-9) const`：判断向量长度是否接近 0
+  * `Vector WithLength(length)`：返回方向不变，但长度为指定 `length` 的新向量
+  * `Vector Clamped(maxLength)`：长度超过 `maxLength` 若长度超过 `maxLength`，按比例缩放到该长度，否则返回原向量
+
+##### 代数运算
+
+  * `double Dot(const Vector& v) const` / `static double Dot(const Vector& a, const Vector& b)`：点积 `x1*x2 + y1*y2`，可用作投影或夹角计算
+  * `double Cross(const Vector& v) const`：二维叉积（标量）：`x1*y2 - y1*x2`，用于判断方向或旋转方向
+  * `double Distance(const Vector& v) const`：两向量欧氏距离
+  * `double DistanceSquared(const Vector& v) const`：距离平方，避免开方
+  * `Vector Abs() const`：每个分量取绝对值，返回新向量
+  * `Vector Min(const Vector& v) const`：按分量取最小值组成新向量
+  * `Vector Max(const Vector& v) const`：按分量取最大值组成新向量
+  * `bool NearlyEquals(const Vector& v, double epsilon = 1e-9) const`：判断向量是否“几乎相等”，误差不超过 `epsilon`
+
+##### 代数运算
+
+  * `Vector Perpendicular() const`：返回垂直向量（逆时针 90°）
+  * `Vector Reflected(const Vector& normal) const`：沿单位法线反射向量，返回新向量
+  * `Vector Project(const Vector& on) const`：将当前向量投影到向量 `on` 上
+  * `Vector Reject(const Vector& on) const`：去掉投影部分，得到正交向量
+
+##### 插值
+
+  * `static Vector Lerp(const Vector& a, const Vector& b, double t)`：线性插值 `(1-t)*a + t*b`，`t ∈ [0,1]`。
+  * `static Vector Slerp(const Vector& a, const Vector& b, double t)`：圆弧插值（球面线性插值），保持向量长度随角度变化。
+
+
 
 #### 使用示例
 
@@ -250,93 +281,105 @@ int main() {
 
 namespace VectorTest {
     void StressTest(size_t count = 100000) {
-        std::cout << std::endl << "===== 随机 Stress Test (" << count << " 次) =====" << std::endl;
+        std::cout << "\n===== 随机 Stress Test (" << count << " 次) =====\n";
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
-        LikesProgram::Timer::Start(); // 开始计时
+        LikesProgram::Timer timer(true);
 
-        LikesProgram::Math::Vector acc(0.0, 0.0); // 累积结果
+        LikesProgram::Math::Vector acc(0.0, 0.0);
         for (size_t i = 0; i < count; i++) {
             LikesProgram::Math::Vector a(dist(rng), dist(rng));
             LikesProgram::Math::Vector b(dist(rng), dist(rng));
 
-            // 做一些运算
             acc += a + b;
             acc -= a - b;
             acc *= 0.5;
-            acc += a * b;     // 分量乘
-            acc -= a / (b + LikesProgram::Math::Vector(1.0, 1.0)); // 避免除 0
+            acc += a * b; // 分量乘
+            acc -= a / (b + LikesProgram::Math::Vector(1.0, 1.0));
             acc += a.Normalized().Clamped(10.0);
             acc += LikesProgram::Math::Vector::Lerp(a, b, 0.5);
         }
 
-
-        std::cout << "Stress Test 完成" << std::endl;
-        std::cout << "最终累积结果: " << acc << std::endl;
-        std::cout << "耗时: " << LikesProgram::Timer::ToString(LikesProgram::Timer::Stop()) << std::endl;
+        std::cout << "Stress Test 完成\n";
+        std::cout << "最终累积结果: " << acc << "\n";
+        std::cout << "耗时: " << LikesProgram::Timer::ToString(timer.Stop()) << "\n";
     }
 
     void BasicOps() {
-        std::cout << "===== 基本运算符测试 =====" << std::endl;
+        std::cout << "===== 基本运算符测试 =====\n";
         LikesProgram::Math::Vector a(3.0, 4.0);
         LikesProgram::Math::Vector b(1.0, 2.0);
 
-        std::cout << "a = " << a << ", b = " << b << std::endl;
-        std::cout << "a + b = " << (a + b) << std::endl;
-        std::cout << "a - b = " << (a - b) << std::endl;
-        std::cout << "a * 2 = " << (a * 2.0) << std::endl;
-        std::cout << "2 * a = " << (2.0 * a) << std::endl;
-        std::cout << "a / 2 = " << (a / 2.0) << std::endl;
-        std::cout << "a * b (分量乘) = " << (a * b) << std::endl;
-        std::cout << "a / b (分量除) = " << (a / b) << std::endl;
-        std::cout << "-a = " << (-a) << std::endl;
-        std::cout << "+a = " << (+a) << std::endl;
+        std::cout << "a = " << a << ", b = " << b << "\n";
+        std::cout << "a + b = " << (a + b) << "\n";
+        std::cout << "a - b = " << (a - b) << "\n";
+        std::cout << "a * 2 = " << (a * 2.0) << "\n";
+        std::cout << "2 * a = " << (2.0 * a) << "\n";
+        std::cout << "a / 2 = " << (a / 2.0) << "\n";
+        std::cout << "a * b (分量乘) = " << (a * b) << "\n";
+        std::cout << "a / b (分量除) = " << (a / b) << "\n";
+        std::cout << "-a = " << (-a) << "\n";
+        std::cout << "+a = " << (+a) << "\n";
     }
 
     void CompoundOps() {
-        std::cout << std::endl << "===== 复合赋值测试 =====" << std::endl;
+        std::cout << "\n===== 复合赋值测试 =====\n";
         LikesProgram::Math::Vector v(2.0, 3.0);
-        std::cout << "v = " << v << std::endl;
+        std::cout << "v = " << v << "\n";
         v += LikesProgram::Math::Vector(1.0, 1.0);
-        std::cout << "v += (1,1) -> " << v << std::endl;
+        std::cout << "v += (1,1) -> " << v << "\n";
         v -= LikesProgram::Math::Vector(0.5, 0.5);
-        std::cout << "v -= (0.5,0.5) -> " << v << std::endl;
+        std::cout << "v -= (0.5,0.5) -> " << v << "\n";
         v *= 2.0;
-        std::cout << "v *= 2 -> " << v << std::endl;
+        std::cout << "v *= 2 -> " << v << "\n";
         v /= 2.0;
-        std::cout << "v /= 2 -> " << v << std::endl;
+        std::cout << "v /= 2 -> " << v << "\n";
     }
 
     void MathOps() {
-        std::cout << std::endl << "===== 数学运算测试 =====" << std::endl;
+        std::cout << "\n===== 数学运算测试 =====\n";
         LikesProgram::Math::Vector a(3.0, 4.0);
         LikesProgram::Math::Vector b(1.0, 0.0);
+        LikesProgram::Math::Vector n(0.0, 1.0);
 
-        std::cout << "a = " << a << ", b = " << b << std::endl;
-        std::cout << "Length(a) = " << a.Length() << std::endl;
-        std::cout << "a.Normalized() = " << a.Normalized() << std::endl;
-        std::cout << "a.Dot(b) = " << a.Dot(b) << std::endl;
-        std::cout << "a.Distance(b) = " << a.Distance(b) << std::endl;
-        std::cout << "a.Rotated(90°) = " << a.Rotated(LikesProgram::Math::PI / 2) << std::endl;
-        std::cout << "a.Perpendicular() = " << a.Perpendicular() << std::endl;
-        std::cout << "a.Clamped(2.0) = " << a.Clamped(2.0) << std::endl;
-        std::cout << "a.Cross(b) = " << a.Cross(b) << std::endl;
-        std::cout << "a.Angle() = " << a.Angle() << std::endl;
-        std::cout << "a.AngleBetween(b) = " << a.AngleBetween(b) << std::endl;
-        std::cout << "a.Reflected(b) = " << a.Reflected(b) << std::endl;
-        std::cout << "a.Project(b) = " << a.Project(b) << std::endl;
-        std::cout << "a.Reject(b) = " << a.Reject(b) << std::endl;
+        std::cout << "a = " << a << ", b = " << b << ", n = " << n << "\n";
+        std::cout << "Length(a) = " << a.Length() << "\n";
+        std::cout << "a.Normalized() = " << a.Normalized() << "\n";
+        std::cout << "a.SafeNormalized() = " << a.SafeNormalized() << "\n";
+        std::cout << "a.WithLength(10) = " << a.WithLength(10) << "\n";
+        std::cout << "a.Clamped(2) = " << a.Clamped(2) << "\n";
+        std::cout << "a.Cross(b) = " << a.Cross(b) << "\n";
+        std::cout << "a.Dot(b) = " << a.Dot(b) << "\n";
+        std::cout << "a.Distance(b) = " << a.Distance(b) << "\n";
+        std::cout << "a.Abs() = " << a.Abs() << "\n";
+        std::cout << "a.Min(b) = " << a.Min(b) << ", a.Max(b) = " << a.Max(b) << "\n";
+        std::cout << "a.NearlyEquals(b) = " << a.NearlyEquals(b) << "\n";
+
+
+        std::cout << "Angle(a) = " << a.Angle() << "\n";
+        std::cout << "AngleBetween(a,b) = " << a.AngleBetween(b) << "\n";
+        std::cout << "SignedAngle(a,b) = " << a.SignedAngle(b) << "\n";
+        std::cout << "Rotated(a, pi/2) = " << a.Rotated(LikesProgram::Math::PI / 2) << "\n";
+        std::cout << "RotatedAround(a, b, pi/2) = " << a.RotatedAround(b, LikesProgram::Math::PI / 2) << "\n";
+
+
+        std::cout << "Perpendicular(a) = " << a.Perpendicular() << "\n";
+        std::cout << "Reflected(a,n) = " << a.Reflected(n) << "\n";
+        std::cout << "Project(a,n) = " << a.Project(n) << "\n";
+        std::cout << "Reject(a,n) = " << a.Reject(n) << "\n";
+        std::cout << "FromPolar(5, pi/4) = " << LikesProgram::Math::Vector::FromPolar(5, LikesProgram::Math::PI / 4) << "\n";
     }
 
     void LerpTest() {
-        std::cout << std::endl << "===== 插值测试 =====" << std::endl;
+        std::cout << "\n===== 插值测试 =====\n";
         LikesProgram::Math::Vector a(0.0, 0.0);
         LikesProgram::Math::Vector b(10.0, 10.0);
 
         for (double t = 0.0; t <= 1.0; t += 0.25) {
-            std::cout << "Lerp(a, b, " << t << ") = " << LikesProgram::Math::Vector::Lerp(a, b, t) << std::endl;
+            std::cout << "Lerp(a,b," << t << ") = " << LikesProgram::Math::Vector::Lerp(a, b, t) << "\n";
+            std::cout << "Slerp(a,b," << t << ") = " << LikesProgram::Math::Vector::Slerp(a, b, t) << "\n";
         }
     }
 
@@ -1318,6 +1361,7 @@ namespace ThreadPoolTest {
 ```cpp
 #include <LikesProgram/Configuration.hpp>
 #include <LikesProgram/String.hpp>
+#include <LikesProgram/Logger.hpp>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -1416,6 +1460,14 @@ namespace LikesProgram {
 
 namespace ConfigurationTest {
 	void Test() {
+        auto& logger = LikesProgram::Logger::Instance();
+#ifdef _WIN32
+        logger.SetEncoding(LikesProgram::String::Encoding::GBK);
+#endif
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
+        // 内置控制台输出 Sink
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+
         // 创建顶层配置对象
         LikesProgram::Configuration cfg;
 
@@ -1449,7 +1501,7 @@ namespace ConfigurationTest {
 
         LikesProgram::Configuration proj1;
         proj1[u"name"] = u"LikesProgram - C++ 通用库";
-        proj1[u"stars"] = 800;
+        proj1[u"stars"] = 0;
         projectList.Push_back(proj1); // LikesProgram::Configuration 中需要使用 Push_back 添加数组元素
 
         LikesProgram::Configuration proj2;
@@ -1466,68 +1518,72 @@ namespace ConfigurationTest {
             int64_t userId = cfg[u"user_id"].AsInt64();
             LikesProgram::String street = cfg[u"address"][u"street"].AsString();
             bool active = cfg[u"is_active"].AsBool();
-            std::cout << "User ID: " << userId
-                << ", Street: " << street
-                << ", Zip: " << zip
-                << ", Active: " << active << std::endl;
+            
+            LikesProgram::String out = u"User ID: ";
+            out += LikesProgram::String(std::to_string(userId));
+            out += u", Street: "; out += street;
+            out += u", Zip: "; out += LikesProgram::String(std::to_string(zip));
+            out += u", Active: "; out += LikesProgram::String(active ? u"true" : u"false");
+            LOG_DEBUG(out);
         }
         catch (std::exception& e) {
-            std::cerr << "Conversion error: " << e.what() << std::endl;
+            LikesProgram::String out = u"Conversion error: ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         // CastPolicy 示例
         try {
             double userIdDouble = cfg[u"user_id"].AsDouble(LikesProgram::Configuration::CastPolicy::Strict);
-            std::cout << "User ID as double: " << userIdDouble << std::endl;
+            LikesProgram::String out = u"User ID as double: ";
+            out += (LikesProgram::String)std::to_string(userIdDouble);
+            LOG_DEBUG(out);
         }
         catch (std::exception& e) {
-            std::cerr << "Strict cast error: " << e.what() << std::endl;
+            LikesProgram::String out = u"Strict cast error: ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         // 安全获取 tryGet
         int stars = 0;
         if (cfg[u"projects"][u"list"][1][u"stars"].TryGet(stars)) {
-            std::cout << "Project 2 stars: " << stars << std::endl;
+            LikesProgram::String out = u"Project 2 stars: ";
+            out += (LikesProgram::String)std::to_string(stars);
+            LOG_DEBUG(out);
         }
 
         // 遍历对象
-        std::cout << "\nUser info:\n";
+        LOG_WARN(u"User info : ");
         for (auto it = cfg.beginObject(); it != cfg.endObject(); ++it) {
-#ifdef _WIN32
-            std::cout << it->first << ": " << it->second.AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << it->first << ": " << it->second.AsString() << std::endl;
-#endif
+            LikesProgram::String out = it->first;
+            out += u": "; out += it->second.AsString();
+            LOG_DEBUG(out);
         }
 
         // 遍历数组
-        std::cout << "\nHobbies:\n";
+        LOG_WARN(u"Hobbies : ");
         for (const auto& hobby : cfg[u"hobbies"]) {
-#ifdef _WIN32
-            std::cout << "- " << hobby.AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << "- " << hobby.AsString() << std::endl;
-#endif
+            LikesProgram::String out = u"- ";
+            out += hobby.AsString();
+            LOG_DEBUG(out);
         }
         // 遍历数组
-        std::cout << "\nHobbies:\n";
+        LOG_WARN(u"Hobbies : ");
         for (size_t i = 0; i < cfg[u"hobbies"].Size(); ++i) {
-#ifdef _WIN32  // 使用 at() 确保安全访问
-            std::cout << "- " << cfg[u"hobbies"].At(i).AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << "- " << cfg[u"hobbies"].At(i).AsString() << std::endl;
-#endif
+            LikesProgram::String out = u"- ";
+            out += cfg[u"hobbies"].At(i).AsString();
+            LOG_DEBUG(out);
         }
 
         // 遍历嵌套数组 + 对象
-        std::cout << "\nProjects:\n";
+        LOG_WARN(u"nProjects : ");
         for (const auto& project : cfg[u"projects"][u"list"]) {
-#ifdef _WIN32
-            std::cout << "- " << project[u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK)
-#else 
-            std::cout << "- " << project[u"name"].AsString()
-#endif
-                << " (" << project[u"stars"].AsInt() << " stars)" << std::endl;
+            LikesProgram::String out = u"- ";
+            out += project[u"name"].AsString();
+            out += u" ("; out += (LikesProgram::String)std::to_string(project[u"stars"].AsInt());
+            out += u" stars)";
+            LOG_DEBUG(out);
         }
         // JSON 序列化 / 反序列化
 
@@ -1537,65 +1593,64 @@ namespace ConfigurationTest {
 
         // 使用默认的序列化器，获取 JSON 文本
         LikesProgram::String jsonText = cfg.Dump(4); // 缩进4空格
-#ifdef _WIN32
-        std::cout << "\nSerialized JSON:\n" << jsonText.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-        std::cout << "\nSerialized JSON:\n" << jsonText << std::endl;
-#endif
+        LikesProgram::String jsonTextOut = u"Serialized JSON : \n";
+        jsonTextOut += jsonText;
+        LOG_DEBUG(jsonTextOut);
+
         // 使用默认的序列化器，反序列化
         LikesProgram::Configuration loadedCfg;
         loadedCfg.Load(jsonText);
-        std::cout << "\nLoaded project 1 name: "
-#ifdef _WIN32
-            << loadedCfg[u"projects"][u"list"][0][u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            << loadedCfg[u"projects"][u"list"][0][u"name"].AsString() << std::endl;
-#endif
+        LikesProgram::String loadedOut = u"Loaded project 1 name: ";
+        loadedOut += loadedCfg[u"projects"][u"list"][0][u"name"].AsString();
+        LOG_DEBUG(loadedOut);
 
-        std::cout << std::endl;
         // 异常捕获示例
         try {
             int invalid = loadedCfg[u"nonexistent"].AsInt(); // key 不存在
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (key missing): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (key missing): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         try {
             double invalidType = loadedCfg[u"user_name"].AsDouble(); // 类型不匹配
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (type mismatch): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (type mismatch): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         try {
             auto hobby = loadedCfg[u"hobbies"].At(10); // 越界
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (array out-of-range): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (array out-of-range): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
-        std::cout << std::endl;
         // 使用自定义序列化器，注意：因为自定义序列化器是JSON，与上面使用的默认序列化器输出格式相同，因此才可以正常读取
         // 在正常开发中，需要注意：不同序列化器读取的配置文件不同
         // 在实际使用中，推荐使用 SetDefaultSerializer，不推荐给对象单独设置序列化器
         // 因为这样会造成输出格式紊乱，导致输出结果不可读
         cfg.SetSerializer(LikesProgram::CreateSimpleSerializer());
-        LikesProgram::String simpleText1 = cfg.Dump(4); // 缩进4空格
-#ifdef _WIN32
-        std::cout << "\nSimpleSerializer Text:\n" << simpleText1.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-        std::cout << "\nSimpleSerializer Text:\n" << simpleText1 << std::endl;
-#endif
+        LikesProgram::String simpleText = cfg.Dump(4); // 缩进4空格
+        LikesProgram::String simpleTextOut = u"SimpleSerializer Text : \n";
+        simpleTextOut += simpleText;
+        LOG_DEBUG(simpleTextOut);
+
         LikesProgram::Configuration loadedCfg1;
         loadedCfg1.SetSerializer(LikesProgram::CreateSimpleSerializer());
-        loadedCfg1.Load(simpleText1);
-        std::cout << "\nLoaded project 1 name: "
-#ifdef _WIN32
-            << loadedCfg1[u"projects"][u"list"][0][u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            << loadedCfg1[u"projects"][u"list"][0][u"name"].AsString() << std::endl;
-#endif
+        loadedCfg1.Load(simpleText);
+        LikesProgram::String loadedOut1 = u"Loaded project 1 name: ";
+        loadedOut1 += loadedCfg1[u"projects"][u"list"][0][u"name"].AsString();
+        LOG_DEBUG(loadedOut1);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
+        logger.Shutdown();
 	}
 }
 ```

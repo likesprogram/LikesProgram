@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "../LikesProgram/Configuration.hpp"
 #include "../LikesProgram/String.hpp"
-#include <iostream>
+#include "../LikesProgram/Logger.hpp"
 #include <sstream>
 #include <vector>
 
@@ -99,6 +99,14 @@ namespace LikesProgram {
 
 namespace ConfigurationTest {
 	void Test() {
+        auto& logger = LikesProgram::Logger::Instance();
+#ifdef _WIN32
+        logger.SetEncoding(LikesProgram::String::Encoding::GBK);
+#endif
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
+        // 内置控制台输出 Sink
+        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+
         // 创建顶层配置对象
         LikesProgram::Configuration cfg;
 
@@ -132,7 +140,7 @@ namespace ConfigurationTest {
 
         LikesProgram::Configuration proj1;
         proj1[u"name"] = u"LikesProgram - C++ 通用库";
-        proj1[u"stars"] = 800;
+        proj1[u"stars"] = 0;
         projectList.Push_back(proj1); // LikesProgram::Configuration 中需要使用 Push_back 添加数组元素
 
         LikesProgram::Configuration proj2;
@@ -149,68 +157,72 @@ namespace ConfigurationTest {
             int64_t userId = cfg[u"user_id"].AsInt64();
             LikesProgram::String street = cfg[u"address"][u"street"].AsString();
             bool active = cfg[u"is_active"].AsBool();
-            std::cout << "User ID: " << userId
-                << ", Street: " << street
-                << ", Zip: " << zip
-                << ", Active: " << active << std::endl;
+            
+            LikesProgram::String out = u"User ID: ";
+            out += LikesProgram::String(std::to_string(userId));
+            out += u", Street: "; out += street;
+            out += u", Zip: "; out += LikesProgram::String(std::to_string(zip));
+            out += u", Active: "; out += LikesProgram::String(active ? u"true" : u"false");
+            LOG_DEBUG(out);
         }
         catch (std::exception& e) {
-            std::cerr << "Conversion error: " << e.what() << std::endl;
+            LikesProgram::String out = u"Conversion error: ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         // CastPolicy 示例
         try {
             double userIdDouble = cfg[u"user_id"].AsDouble(LikesProgram::Configuration::CastPolicy::Strict);
-            std::cout << "User ID as double: " << userIdDouble << std::endl;
+            LikesProgram::String out = u"User ID as double: ";
+            out += (LikesProgram::String)std::to_string(userIdDouble);
+            LOG_DEBUG(out);
         }
         catch (std::exception& e) {
-            std::cerr << "Strict cast error: " << e.what() << std::endl;
+            LikesProgram::String out = u"Strict cast error: ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         // 安全获取 tryGet
         int stars = 0;
         if (cfg[u"projects"][u"list"][1][u"stars"].TryGet(stars)) {
-            std::cout << "Project 2 stars: " << stars << std::endl;
+            LikesProgram::String out = u"Project 2 stars: ";
+            out += (LikesProgram::String)std::to_string(stars);
+            LOG_DEBUG(out);
         }
 
         // 遍历对象
-        std::cout << "\nUser info:\n";
+        LOG_WARN(u"User info : ");
         for (auto it = cfg.beginObject(); it != cfg.endObject(); ++it) {
-#ifdef _WIN32
-            std::cout << it->first << ": " << it->second.AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << it->first << ": " << it->second.AsString() << std::endl;
-#endif
+            LikesProgram::String out = it->first;
+            out += u": "; out += it->second.AsString();
+            LOG_DEBUG(out);
         }
 
         // 遍历数组
-        std::cout << "\nHobbies:\n";
+        LOG_WARN(u"Hobbies : ");
         for (const auto& hobby : cfg[u"hobbies"]) {
-#ifdef _WIN32
-            std::cout << "- " << hobby.AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << "- " << hobby.AsString() << std::endl;
-#endif
+            LikesProgram::String out = u"- ";
+            out += hobby.AsString();
+            LOG_DEBUG(out);
         }
         // 遍历数组
-        std::cout << "\nHobbies:\n";
+        LOG_WARN(u"Hobbies : ");
         for (size_t i = 0; i < cfg[u"hobbies"].Size(); ++i) {
-#ifdef _WIN32  // 使用 at() 确保安全访问
-            std::cout << "- " << cfg[u"hobbies"].At(i).AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            std::cout << "- " << cfg[u"hobbies"].At(i).AsString() << std::endl;
-#endif
+            LikesProgram::String out = u"- ";
+            out += cfg[u"hobbies"].At(i).AsString();
+            LOG_DEBUG(out);
         }
 
         // 遍历嵌套数组 + 对象
-        std::cout << "\nProjects:\n";
+        LOG_WARN(u"nProjects : ");
         for (const auto& project : cfg[u"projects"][u"list"]) {
-#ifdef _WIN32
-            std::cout << "- " << project[u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK)
-#else 
-            std::cout << "- " << project[u"name"].AsString()
-#endif
-                << " (" << project[u"stars"].AsInt() << " stars)" << std::endl;
+            LikesProgram::String out = u"- ";
+            out += project[u"name"].AsString();
+            out += u" ("; out += (LikesProgram::String)std::to_string(project[u"stars"].AsInt());
+            out += u" stars)";
+            LOG_DEBUG(out);
         }
         // JSON 序列化 / 反序列化
 
@@ -220,64 +232,63 @@ namespace ConfigurationTest {
 
         // 使用默认的序列化器，获取 JSON 文本
         LikesProgram::String jsonText = cfg.Dump(4); // 缩进4空格
-#ifdef _WIN32
-        std::cout << "\nSerialized JSON:\n" << jsonText.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-        std::cout << "\nSerialized JSON:\n" << jsonText << std::endl;
-#endif
+        LikesProgram::String jsonTextOut = u"Serialized JSON : \n";
+        jsonTextOut += jsonText;
+        LOG_DEBUG(jsonTextOut);
+
         // 使用默认的序列化器，反序列化
         LikesProgram::Configuration loadedCfg;
         loadedCfg.Load(jsonText);
-        std::cout << "\nLoaded project 1 name: "
-#ifdef _WIN32
-            << loadedCfg[u"projects"][u"list"][0][u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            << loadedCfg[u"projects"][u"list"][0][u"name"].AsString() << std::endl;
-#endif
+        LikesProgram::String loadedOut = u"Loaded project 1 name: ";
+        loadedOut += loadedCfg[u"projects"][u"list"][0][u"name"].AsString();
+        LOG_DEBUG(loadedOut);
 
-        std::cout << std::endl;
         // 异常捕获示例
         try {
             int invalid = loadedCfg[u"nonexistent"].AsInt(); // key 不存在
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (key missing): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (key missing): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         try {
             double invalidType = loadedCfg[u"user_name"].AsDouble(); // 类型不匹配
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (type mismatch): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (type mismatch): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
         try {
             auto hobby = loadedCfg[u"hobbies"].At(10); // 越界
         }
         catch (std::exception& e) {
-            std::cerr << "Expected error (array out-of-range): " << e.what() << std::endl;
+            LikesProgram::String out = u"Expected error (array out-of-range): ";
+            out += (LikesProgram::String)e.what();
+            LOG_ERROR(out);
         }
 
-        std::cout << std::endl;
         // 使用自定义序列化器，注意：因为自定义序列化器是JSON，与上面使用的默认序列化器输出格式相同，因此才可以正常读取
         // 在正常开发中，需要注意：不同序列化器读取的配置文件不同
         // 在实际使用中，推荐使用 SetDefaultSerializer，不推荐给对象单独设置序列化器
         // 因为这样会造成输出格式紊乱，导致输出结果不可读
         cfg.SetSerializer(LikesProgram::CreateSimpleSerializer());
-        LikesProgram::String simpleText1 = cfg.Dump(4); // 缩进4空格
-#ifdef _WIN32
-        std::cout << "\nSimpleSerializer Text:\n" << simpleText1.ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-        std::cout << "\nSimpleSerializer Text:\n" << simpleText1 << std::endl;
-#endif
+        LikesProgram::String simpleText = cfg.Dump(4); // 缩进4空格
+        LikesProgram::String simpleTextOut = u"SimpleSerializer Text : \n";
+        simpleTextOut += simpleText;
+        LOG_DEBUG(simpleTextOut);
+
         LikesProgram::Configuration loadedCfg1;
         loadedCfg1.SetSerializer(LikesProgram::CreateSimpleSerializer());
-        loadedCfg1.Load(simpleText1);
-        std::cout << "\nLoaded project 1 name: "
-#ifdef _WIN32
-            << loadedCfg1[u"projects"][u"list"][0][u"name"].AsString().ToStdString(LikesProgram::String::Encoding::GBK) << std::endl;
-#else
-            << loadedCfg1[u"projects"][u"list"][0][u"name"].AsString() << std::endl;
-#endif
+        loadedCfg1.Load(simpleText);
+        LikesProgram::String loadedOut1 = u"Loaded project 1 name: ";
+        loadedOut1 += loadedCfg1[u"projects"][u"list"][0][u"name"].AsString();
+        LOG_DEBUG(loadedOut1);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
+        logger.Shutdown();
 	}
 }
