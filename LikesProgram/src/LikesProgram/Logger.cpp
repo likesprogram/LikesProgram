@@ -197,8 +197,9 @@ namespace LikesProgram {
             case Logger::LogLevel::Trace: color = FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
             }
             SetConsoleTextAttribute(hConsole, color);
-            std::cout << formatted.ToStdString(encoding) << std::endl;
+            std::cout << formatted.ToStdString(encoding) << ' ';
             SetConsoleTextAttribute(hConsole, info.wAttributes);
+            std::cout << "\b" << std::endl;
 #else
             const char* colorCode = "";
             switch (message.level) {
