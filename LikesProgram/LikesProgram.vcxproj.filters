@@ -51,6 +51,24 @@
     <ClCompile Include="src\LikesProgram\Configuration.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Counter.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Metrics.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Histogram.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Summary.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\metrics\Registry.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
@@ -111,6 +129,24 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\test\ConfigurationTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Metrics.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Counter.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Gauge.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Histogram.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Summary.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\metrics\Registry.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

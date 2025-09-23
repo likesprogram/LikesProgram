@@ -601,45 +601,6 @@ namespace LikesProgram {
 
     private:
         // =================== 序列化 ===================
-        static void EscapeString(const String& s, std::wostringstream& woss) {
-            for (char32_t c : s) {
-                switch (c) {
-                case U'"':  woss << L"\\\""; break;
-                case U'\\': woss << L"\\\\"; break;
-                case U'\b': woss << L"\\b";  break;
-                case U'\f': woss << L"\\f";  break;
-                case U'\n': woss << L"\\n";  break;
-                case U'\r': woss << L"\\r";  break;
-                case U'\t': woss << L"\\t";  break;
-                default:
-                    if (c < 0x20 || c == 0x7F) {
-                        // 控制字符
-                        woss << L"\\u";
-                        woss << std::setw(4) << std::setfill(L'0')
-                            << std::hex << std::uppercase << static_cast<uint32_t>(c)
-                            << std::dec;
-                    }
-                    else if (c <= 0xFFFF) {
-                        // BMP 直接输出
-                        woss << static_cast<wchar_t>(c);
-                    }
-                    else {
-                        // SMP: 转成 UTF-16 代理对
-                        char32_t cp = c - 0x10000;
-                        char16_t high = static_cast<char16_t>(0xD800 + (cp >> 10));
-                        char16_t low  = static_cast<char16_t>(0xDC00 + (cp & 0x3FF));
-
-                        woss << L"\\u"
-                            << std::setw(4) << std::setfill(L'0')
-                            << std::hex << std::uppercase << static_cast<uint16_t>(high) << L"\\u"
-                            << std::setw(4) << std::setfill(L'0')
-                            << std::hex << std::uppercase << static_cast<uint16_t>(low)
-                            << std::dec;
-                    }
-                }
-            }
-        }
-
         void SerializeValue(const Configuration& cfg, int indent, int level, std::wostringstream& woss) const {
             String ind;
             if (indent > 0) {
@@ -654,7 +615,7 @@ namespace LikesProgram {
 
             // 处理布尔值
             if (cfg.IsBool()) {
-                woss << (cfg.AsBool() ? L"true" : L"false");
+                woss << String::FromBool(cfg.AsBool());
                 return;
             }
 
@@ -679,7 +640,7 @@ namespace LikesProgram {
             // 处理字符串
             if (cfg.IsString()) {
                 woss << L"\"";
-                EscapeString(cfg.AsString(), woss);
+                woss << String::EscapeJson(cfg.AsString());
                 woss << L"\"";
                 return;
             }
@@ -722,7 +683,7 @@ namespace LikesProgram {
                         if (count++) woss << L",";
                         woss << L"\n" << String((level + 1) * indent, u' ');
                         woss << L"\"";
-                        EscapeString(k, woss);
+                        woss << String::EscapeJson(k);
                         woss << L"\": ";
                         SerializeValue(v, indent, level + 1, woss);
                     }
@@ -734,7 +695,7 @@ namespace LikesProgram {
                     for (const auto& [k, v] : obj) {
                         if (count++) woss << L",";
                         woss << L"\"";
-                        EscapeString(k, woss);
+                        woss << String::EscapeJson(k);
                         woss << L"\": ";
                         SerializeValue(v, indent, level, woss);
                     }

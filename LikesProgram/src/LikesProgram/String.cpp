@@ -15,6 +15,7 @@
 #endif
 #include <windows.h>
 #endif
+#include <iomanip>
 
 namespace LikesProgram {
     struct String::StringImpl {
@@ -132,6 +133,54 @@ namespace LikesProgram {
 
     String::String(String&& other) noexcept : m_impl(other.m_impl) {
         other.m_impl = nullptr;
+    }
+
+    String::String(char c, Encoding enc) : m_impl(new StringImpl{}) {
+        m_impl->encoding = enc;
+
+        switch (enc) {
+        case Encoding::UTF8: {
+            char s[2] = { c, '\0' };
+            auto utf16 = Unicode::Convert::Utf8ToUtf16(
+                std::u8string(reinterpret_cast<const char8_t*>(s))
+            );
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
+                m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            break;
+        }
+        case Encoding::GBK: {
+            std::string s(1, c);
+            auto utf16 = Unicode::Convert::GbkToUtf16(s);
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
+                m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            break;
+        }
+        case Encoding::UTF16: {
+            m_impl->m_size = 1;
+            m_impl->m_data = std::make_unique<char16_t[]>(2);
+            m_impl->m_data[0] = static_cast<char16_t>(static_cast<unsigned char>(c));
+            m_impl->m_data[1] = u'\0';
+            break;
+        }
+        case Encoding::UTF32: {
+            char32_t cp = static_cast<unsigned char>(c);
+            auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, cp));
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
+                m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            break;
+        }
+        default:
+            throw std::runtime_error("Unsupported encoding for char");
+        }
     }
 
     String::String(const char8_t c): m_impl(new StringImpl{}) {
@@ -274,6 +323,12 @@ namespace LikesProgram {
 
     String& String::operator+=(const String& str) {
         return Append(str);
+    }
+
+    String operator+(const String& lhs, const String& rhs) {
+        String result(lhs);
+        result.Append(rhs);
+        return result;
     }
 
     std::ostream& operator<<(std::ostream& os, const String& str) {
@@ -773,6 +828,70 @@ namespace LikesProgram {
         }
 
         return result;
+    }
+
+    String String::EscapeJson(const String& str) {
+        std::wostringstream woss;
+
+        for (char32_t c : str) {
+            switch (c) {
+            case U'"':  woss << L"\\\""; break;
+            case U'\\': woss << L"\\\\"; break;
+            case U'\b': woss << L"\\b";  break;
+            case U'\f': woss << L"\\f";  break;
+            case U'\n': woss << L"\\n";  break;
+            case U'\r': woss << L"\\r";  break;
+            case U'\t': woss << L"\\t";  break;
+            default:
+                if (c < 0x20 || c == 0x7F) {
+                    // 控制字符
+                    woss << L"\\u";
+                    woss << std::setw(4) << std::setfill(L'0')
+                        << std::hex << std::uppercase << static_cast<uint32_t>(c)
+                        << std::dec;
+                }
+                else if (c <= 0xFFFF) {
+                    // BMP 直接输出
+                    woss << static_cast<wchar_t>(c);
+                }
+                else {
+                    // SMP: 转成 UTF-16 代理对
+                    char32_t cp = c - 0x10000;
+                    char16_t high = static_cast<char16_t>(0xD800 + (cp >> 10));
+                    char16_t low = static_cast<char16_t>(0xDC00 + (cp & 0x3FF));
+
+                    woss << L"\\u"
+                        << std::setw(4) << std::setfill(L'0')
+                        << std::hex << std::uppercase << static_cast<uint16_t>(high) << L"\\u"
+                        << std::setw(4) << std::setfill(L'0')
+                        << std::hex << std::uppercase << static_cast<uint16_t>(low)
+                        << std::dec;
+                }
+            }
+        }
+
+        return String(woss.str());
+    }
+
+    String String::FromInt(int64_t value) {
+        return String(std::to_wstring(value));
+    }
+
+    String String::FromUInt(uint64_t value) {
+        return String(std::to_wstring(value));
+    }
+
+    String String::FromFloat(double value, size_t precision) {
+        std::wostringstream woss;
+        if (precision > 0) {
+            woss << std::fixed << std::setprecision(precision);
+        }
+        woss << value;
+        return String(woss.str());
+    }
+
+    String String::FromBool(bool value) {
+        return value ? String(L"true") : String(L"false");
     }
 
     size_t String::CodePointOffset(size_t index) const {

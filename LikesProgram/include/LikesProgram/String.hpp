@@ -25,6 +25,7 @@ namespace LikesProgram {
         // 移动构造
         String(String&& other) noexcept;
         // 构造单个字符
+        String(const char c, Encoding enc = Encoding::UTF8);
         String(const char8_t c);
         String(const char16_t c);
         String(const size_t count, const char16_t c);
@@ -56,6 +57,7 @@ namespace LikesProgram {
         // 拼接字符串
         String& Append(const String& str);
         String& operator+=(const String& str);
+        friend String operator+(const String& lhs, const String& rhs);
 
         // 输入输出重载
         friend std::ostream& operator<<(std::ostream& os, const String& str);
@@ -134,6 +136,14 @@ namespace LikesProgram {
         CodePointIterator begin() const { return CodePointIterator(this, 0); }
         CodePointIterator end() const { return CodePointIterator(this, Size()); }
 
+
+        // JSON 转义
+        static String EscapeJson(const String& str);
+        static String FromInt(int64_t value);
+        static String FromUInt(uint64_t value);
+        static String FromFloat(double value, size_t precision = 0);
+        static String FromBool(bool value);
+
     private:
         struct StringImpl;
         StringImpl* m_impl = nullptr;
@@ -141,5 +151,16 @@ namespace LikesProgram {
         size_t CodePointOffset(size_t index) const;
 
         void update_cp_cache() const;
+    };
+}
+
+namespace std {
+    template<>
+    struct hash<LikesProgram::String> {
+        size_t operator()(const LikesProgram::String& s) const noexcept {
+            size_t h = 0;
+            for (auto cp : s) h = h * 31 + static_cast<size_t>(cp);
+            return h;
+        }
     };
 }

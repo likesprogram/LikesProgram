@@ -34,6 +34,16 @@ namespace StringTest {
         std::cout << "s1 size: " << s1.Size() << "\n"; // Unicode code points
         std::cout << "s3 size: " << s3.Size() << "\n";
 
+        LikesProgram::String sAdd1 = u"LikesProgram 字符串 - " + s1;
+        LikesProgram::String sAdd2 = s1 + u" - LikesProgram 字符串";
+#ifdef _WIN32
+        std::cout << "sAdd1: " << sAdd1.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+        std::cout << "sAdd2: " << sAdd2.ToStdString(LikesProgram::String::Encoding::GBK) << "\n";
+#else
+        std::cout << "sAdd1: " << sAdd1 << "\n";
+        std::cout << "sAdd2: " << sAdd2 << "\n";
+#endif
+
         // 拼接
         s1.Append(s3);
         std::cout << "After append, s1 size: " << s1.Size() << "\n";
