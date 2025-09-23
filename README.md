@@ -742,6 +742,7 @@ namespace UnicodeTest {
 
 * `String& Append(const String& str)`：追加字符串
 * `String& operator+=(const String& str)`：追加字符串
+* `String operator+(const String& lhs, const String& rhs)`：字符串相加
 * `String SubString(size_t index, size_t count) const`：获取指定范围子串
 * `String Left(size_t count) const`：截取左侧子串
 * `String Right(size_t count) const`：截取右侧子串
