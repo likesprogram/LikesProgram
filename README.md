@@ -706,6 +706,7 @@ namespace UnicodeTest {
 * `String(const char32_t* s)`：从 UTF-32 字符串构造
 * `String(const String& other)`：拷贝构造
 * `String(String&& other) noexcept`：移动构造
+* `String(const char c, Encoding enc = Encoding::UTF8);`：从 C 风格字符构造，默认按 UTF-8 解析
 * `String(const char8_t c)`：构造单字符 UTF-8 字符串
 * `String(const char16_t c)`：构造单字符 UTF-16 字符串
 * `String(const size_t count, const char16_t c)`：构造指定数量的相同字符的字符串
