@@ -765,7 +765,7 @@ namespace UnicodeTest {
 
 * 比较运算：`==` / `!=` / `<` / `<=` / `>` / `>=`
   `<` 采用字典序比较
-* 拼接运算：`operator+=`
+* 拼接运算：`operator+=` / `operator+`
 * 迭代器支持范围 for 循环：`begin()` / `end()`
 
 #### 转换函数
