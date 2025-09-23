@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\LikesProgram\math\PercentileSketch.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
     <ClCompile Include="src\LikesProgram\CoreUtils.cpp" />
@@ -155,6 +156,7 @@
     <ClInclude Include="include\LikesProgram\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />
+    <ClInclude Include="include\LikesProgram\math\PercentileSketch.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Counter.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Gauge.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Histogram.hpp" />

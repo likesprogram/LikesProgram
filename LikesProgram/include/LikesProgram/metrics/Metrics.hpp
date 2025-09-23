@@ -5,7 +5,7 @@
 
 namespace LikesProgram {
 	namespace Metrics {
-		class LIKESPROGRAM_API MetricsObject {
+		class MetricsObject {
 		public:
 			MetricsObject(const LikesProgram::String& name = u"", const LikesProgram::String& help = u"",
 				const std::unordered_map<LikesProgram::String, LikesProgram::String>& labels = {})

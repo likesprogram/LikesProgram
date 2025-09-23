@@ -4,13 +4,13 @@
 
 namespace LikesProgram {
 	namespace Metrics {
-        class LIKESPROGRAM_API Counter : public MetricsObject {
+        class Counter : public MetricsObject {
 		public:
 			Counter(const LikesProgram::String& name, const LikesProgram::String& help = u"",
 				const std::unordered_map<LikesProgram::String, LikesProgram::String>& labels = {});
 
-            void Increment(int64_t value = 1.0);
-			int64_t Value() const;
+            void Increment(double value = 1.0);
+			double Value() const;
 
 			LikesProgram::String Name() const override;
 			std::unordered_map<LikesProgram::String, LikesProgram::String> Labels() const override;
@@ -19,7 +19,7 @@ namespace LikesProgram {
             LikesProgram::String ToPrometheus() const override;
             LikesProgram::String ToJson() const override;
 		private:
-			std::atomic<int64_t> m_value{ 0 };
+			std::atomic<double> m_value{ 0 };
         };
 	}
 }

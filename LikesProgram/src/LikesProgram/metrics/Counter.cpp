@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/metrics/Counter.hpp"
+﻿#include "../../../include/LikesProgram/metrics/Counter.hpp"
 
 namespace LikesProgram {
 	namespace Metrics {
@@ -6,11 +6,11 @@ namespace LikesProgram {
 			const std::unordered_map<LikesProgram::String, LikesProgram::String>& labels)
 		: MetricsObject(name, help, labels) { }
 
-		void Counter::Increment(int64_t value) {
+		void Counter::Increment(double value) {
 			m_value.fetch_add(value, std::memory_order_relaxed);
 		}
 
-		int64_t Counter::Value() const {
+		double Counter::Value() const {
 			return m_value.load(std::memory_order_relaxed);
 		}
 
@@ -48,7 +48,7 @@ namespace LikesProgram {
 			}
 
 			result.Append(u" ");
-			result.Append(LikesProgram::String::FromInt(m_value.load(std::memory_order_relaxed)));
+			result.Append(LikesProgram::String::FromFloat(m_value.load(std::memory_order_relaxed), 6));
 			result.Append(u"\n");
 			return result;
 		}
@@ -70,7 +70,7 @@ namespace LikesProgram {
 			json.Append(u"},");
 
 			json.Append(u"\"value\":");
-			json.Append(LikesProgram::String::FromInt(m_value.load(std::memory_order_relaxed)));
+			json.Append(LikesProgram::String::FromFloat(m_value.load(std::memory_order_relaxed), 6));
 			json.Append(u"}");
 
 			return json;

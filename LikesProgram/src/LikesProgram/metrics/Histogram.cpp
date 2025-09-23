@@ -1,16 +1,16 @@
-#include "../../../include/LikesProgram/metrics/Histogram.hpp"
+Ôªø#include "../../../include/LikesProgram/metrics/Histogram.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
 #include <algorithm>
 #include <sstream>
 
 namespace LikesProgram {
 	namespace Metrics {
-        Histogram::Histogram(const LikesProgram::String& name, const std::vector<int64_t>& buckets,
-            const LikesProgram::String& help,
+        Histogram::Histogram(const LikesProgram::String& name, const std::vector<double>& buckets,
+            double alpha, const LikesProgram::String& help,
             const std::unordered_map<LikesProgram::String, LikesProgram::String>& labels)
-            : MetricsObject(name, help, labels) {
+            : MetricsObject(name, help, labels), m_alpha(alpha) {
 
-            m_buckets = std::vector<int64_t>(buckets.begin(), buckets.end());
+            m_buckets = std::vector<double>(buckets.begin(), buckets.end());
             std::sort(m_buckets.begin(), m_buckets.end());
 
             m_counts.reserve(m_buckets.size());
@@ -19,12 +19,12 @@ namespace LikesProgram {
             }
         }
 
-        void Histogram::Observe(int64_t value) {
-            // ∏¸–¬◊‹ ˝
+        void Histogram::Observe(double value) {
+            // Êõ¥Êñ∞ÊÄªÊï∞
             m_count.fetch_add(1, std::memory_order_relaxed);
             m_sum.fetch_add(value, std::memory_order_relaxed);
 
-            // ’“µΩ∫œ  µƒÕ∞≤¢‘ˆº”º∆ ˝
+            // ÊâæÂà∞ÂêàÈÄÇÁöÑÊ°∂Âπ∂Â¢ûÂä†ËÆ°Êï∞
             for (size_t i = 0; i < m_buckets.size(); ++i) {
                 if (value <= m_buckets[i]) {
                     m_counts[i]->fetch_add(1, std::memory_order_relaxed);
@@ -43,10 +43,6 @@ namespace LikesProgram {
             Math::UpdateMax(m_max, value);
         }
 
-        void Histogram::SetEmaAlpha(double alpha) {
-            m_alpha = alpha;
-        }
-
 
         double Histogram::EMA() const {
             return m_ema.load(std::memory_order_relaxed);
@@ -57,16 +53,16 @@ namespace LikesProgram {
                 m_count.load(std::memory_order_relaxed));
         }
 
-        int64_t Histogram::Max() const {
+        double Histogram::Max() const {
             return m_max.load(std::memory_order_relaxed);
         }
 
-        int64_t Histogram::Min() const {
+        double Histogram::Min() const {
             return m_min.load(std::memory_order_relaxed);
         }
 
         void Histogram::ObserveDuration(const Timer& timer) {
-            Observe(timer.GetLastElapsed().count());
+            Observe(static_cast<double>(timer.GetLastElapsed().count()));
         }
 
         LikesProgram::String Histogram::Name() const {
@@ -87,11 +83,9 @@ namespace LikesProgram {
             result.Append(u"# TYPE ").Append(m_name).Append(u" histogram\n");
 
             LikesProgram::String base = m_name;
-
-            // buckets
             for (size_t i = 0; i < m_buckets.size(); ++i) {
                 result.Append(base).Append(u"{le=\"")
-                    .Append(LikesProgram::String::FromInt(m_buckets[i]))
+                    .Append(LikesProgram::String::FromFloat(m_buckets[i], 6))
                     .Append(u"\"} ")
                     .Append(LikesProgram::String::FromInt(m_counts[i]->load(std::memory_order_relaxed)))
                     .Append(u"\n");
@@ -101,7 +95,7 @@ namespace LikesProgram {
                 .Append(LikesProgram::String::FromInt(m_count.load(std::memory_order_relaxed))).Append(u"\n");
 
             result.Append(base).Append(u"_sum ")
-                .Append(LikesProgram::String::FromInt(m_sum.load(std::memory_order_relaxed))).Append(u"\n");
+                .Append(LikesProgram::String::FromFloat(m_sum.load(std::memory_order_relaxed), 6)).Append(u"\n");
 
             result.Append(base).Append(u"_count ")
                 .Append(LikesProgram::String::FromInt(m_count.load(std::memory_order_relaxed))).Append(u"\n");
@@ -110,12 +104,12 @@ namespace LikesProgram {
                 .Append(LikesProgram::String::FromFloat(m_ema.load(std::memory_order_relaxed), 6)).Append(u"\n");
 
             result.Append(base).Append(u"_min ")
-                .Append(LikesProgram::String::FromInt(m_min.load(std::memory_order_relaxed))).Append(u"\n");
+                .Append(LikesProgram::String::FromFloat(m_min.load(std::memory_order_relaxed), 6)).Append(u"\n");
 
             result.Append(base).Append(u"_max ")
-                .Append(LikesProgram::String::FromInt(m_max.load(std::memory_order_relaxed))).Append(u"\n");
+                .Append(LikesProgram::String::FromFloat(m_max.load(std::memory_order_relaxed), 6)).Append(u"\n");
 
-            result.Append(base).Append(u"_avg ").Append(LikesProgram::String::FromFloat(Average())).Append(u"\n");
+            result.Append(base).Append(u"_avg ").Append(LikesProgram::String::FromFloat(Average(), 6)).Append(u"\n");
 
             return result;
         }
@@ -128,7 +122,6 @@ namespace LikesProgram {
             json.Append(u"\"help\":\"").Append(LikesProgram::String::EscapeJson(m_help)).Append(u"\",");
             json.Append(u"\"type\":\"").Append(Type()).Append(u"\",");
 
-            // labels
             json.Append(u"\"labels\":{");
             bool first = true;
             for (const auto& [k, v] : m_labels) {
@@ -139,22 +132,20 @@ namespace LikesProgram {
             }
             json.Append(u"},");
 
-            // buckets
             json.Append(u"\"buckets\":{");
             for (size_t i = 0; i < m_buckets.size(); ++i) {
                 if (i > 0) json.Append(u",");
-                json.Append(u"\"").Append(LikesProgram::String::FromInt(m_buckets[i])).Append(u"\":")
+                json.Append(u"\"").Append(LikesProgram::String::FromFloat(m_buckets[i], 6)).Append(u"\":")
                     .Append(LikesProgram::String::FromInt(m_counts[i]->load(std::memory_order_relaxed)));
             }
             json.Append(u"},");
 
-            // stats
-            json.Append(u"\"sum\":").Append(LikesProgram::String::FromInt(m_sum.load(std::memory_order_relaxed))).Append(u",");
+            json.Append(u"\"sum\":").Append(LikesProgram::String::FromFloat(m_sum.load(std::memory_order_relaxed), 6)).Append(u",");
             json.Append(u"\"count\":").Append(LikesProgram::String::FromInt(m_count.load(std::memory_order_relaxed))).Append(u",");
             json.Append(u"\"ema\":").Append(LikesProgram::String::FromFloat(m_ema.load(std::memory_order_relaxed), 6)).Append(u",");
-            json.Append(u"\"min\":").Append(LikesProgram::String::FromInt(m_min.load(std::memory_order_relaxed))).Append(u",");
-            json.Append(u"\"max\":").Append(LikesProgram::String::FromInt(m_max.load(std::memory_order_relaxed))).Append(u",");
-            json.Append(u"\"average\":").Append(LikesProgram::String::FromFloat(Average()));
+            json.Append(u"\"min\":").Append(LikesProgram::String::FromFloat(m_min.load(std::memory_order_relaxed), 6)).Append(u",");
+            json.Append(u"\"max\":").Append(LikesProgram::String::FromFloat(m_max.load(std::memory_order_relaxed), 6)).Append(u",");
+            json.Append(u"\"average\":").Append(LikesProgram::String::FromFloat(Average(), 6));
             json.Append(u"}");
 
             return json;
