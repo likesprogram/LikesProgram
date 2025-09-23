@@ -20,7 +20,7 @@ project(LikesProgram
 # 配置选项
 # =========================
 option(BUILD_SHARED_LIBS "Build LikesProgram as shared library" ON)
-option(ENABLE_EXAMPLES   "Build example/demo programs"           OFF)
+option(ENABLE_EXAMPLES   "Build example/demo programs"         OFF)
 option(ENABLE_STRICT_WARNINGS "Enable strict compiler warnings" ON)
 
 # =========================
