@@ -5,7 +5,12 @@
 
 namespace ThreadPoolTest {
 	void Test() {        // 初始化日志
+#ifdef _DEBUG
+        auto& logger = LikesProgram::Logger::Instance(true);
+#else
         auto& logger = LikesProgram::Logger::Instance();
+#endif
+
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif

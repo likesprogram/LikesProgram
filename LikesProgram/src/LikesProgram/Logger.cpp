@@ -36,7 +36,9 @@ namespace LikesProgram {
         std::thread worker;
         String::Encoding encoding = String::Encoding::UTF8;
 
-        LoggerImpl() {
+        bool m_debug;
+
+        LoggerImpl(bool debug): m_debug(debug) {
             worker = std::thread([this]() { ProcessLoop(); });
         }
 
@@ -56,9 +58,9 @@ namespace LikesProgram {
 
                     // 多个 sink 并发读
                     {
-                        std::shared_lock<std::shared_mutex> sinkLock(sinkMtx);
+                        std::shared_lock sinkLock(sinkMtx); // 共享锁
                         for (auto& sink : sinks) {
-                            sink->Write(msg, minLevel, encoding);
+                            sink->Write(msg);
                         }
                     }
 
@@ -75,17 +77,17 @@ namespace LikesProgram {
     };
 
     // Logger API
-    Logger& Logger::Instance() {
-        static Logger inst;
+    Logger& Logger::Instance(bool debug) {
+        static Logger inst(debug);
         if (inst.m_impl == nullptr || inst.m_impl->stop) {
             if (inst.m_impl) delete inst.m_impl;
-            inst.m_impl = new LoggerImpl();
+            inst.m_impl = new LoggerImpl(debug);
         }
         return inst;
     }
 
-    Logger::Logger() {
-        m_impl = new LoggerImpl();
+    Logger::Logger(bool debug) {
+        m_impl = new LoggerImpl(debug);
     }
 
     Logger::~Logger() {
@@ -107,7 +109,7 @@ namespace LikesProgram {
     }
 
     void Logger::AddSink(std::shared_ptr<ILogSink> sink) {
-        std::unique_lock<std::shared_mutex> lock(m_impl->sinkMtx);
+        std::unique_lock lock(m_impl->sinkMtx); // 独占锁
         m_impl->sinks.push_back(sink);
     }
 
@@ -121,11 +123,13 @@ namespace LikesProgram {
         m.msg = msg;
         m.file = String(file);
         m.line = line;
-        m.func = String(func);
         m.tid = std::this_thread::get_id();
         m.threadName = CoreUtils::GetCurrentThreadName();
         m.timestamp = std::chrono::system_clock::now();
-
+        m.func = String(func);
+        m.debug = m_impl->m_debug;
+        m.minLevel = m_impl->minLevel;
+        m.encoding = m_impl->encoding;
         {
             std::lock_guard<std::mutex> lock(m_impl->queueMtx);
             m_impl->queue.push(m);
@@ -138,7 +142,7 @@ namespace LikesProgram {
     }
 
     // 实现 ILogSink
-    String Logger::ILogSink::FormatLogMessage(const LogMessage& message, LogLevel minLevel) {
+    String Logger::ILogSink::FormatLogMessage(const LogMessage& message) {
         auto t_c = std::chrono::system_clock::to_time_t(message.timestamp);
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             message.timestamp.time_since_epoch()) % 1000;
@@ -148,16 +152,24 @@ namespace LikesProgram {
         woss << L"[" << std::put_time(std::localtime(&t_c), L"%F %T")
             << L"." << std::setw(3) << std::setfill(L'0') << ms.count() << L"] ";
 
-        // 线程信息
-        woss << L"[T:";
-        if (!message.threadName.Empty()) woss << message.threadName.ToWString();
-        else woss << message.tid;
-        woss << L"] ";
-
         // 日志级别
         woss << L"[" << LevelToString(message.level).ToWString() << L"] ";
-        // 是否输出文件信息
-        if (minLevel <= LogLevel::Debug) woss << L"(" << message.file << L":" << message.line << L") ";
+
+        // 是否输出 调试信息
+        if (message.debug) {
+            // 线程信息
+            woss << L"[T:";
+            if (!message.threadName.Empty()) woss << message.threadName.ToWString();
+            else woss << message.tid;
+            woss << L"] ";
+            
+            // 函数信息
+            woss << L"[Function:" << message.func << L"] ";
+
+            // 文件信息
+            woss << L"(" << message.file << L":" << message.line << L") ";
+        }
+
         // 日志消息
         woss << message.msg.ToWString();
 
@@ -179,8 +191,8 @@ namespace LikesProgram {
     // ConsoleSink
     class ConsoleSink : public Logger::ILogSink {
     public:
-        void Write(const Logger::LogMessage& message, Logger::LogLevel minLevel, String::Encoding encoding) override {
-            String formatted = FormatLogMessage(message, minLevel);
+        void Write(const Logger::LogMessage& message) override {
+            String formatted = FormatLogMessage(message);
 
 #ifdef _WIN32
             HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -197,7 +209,7 @@ namespace LikesProgram {
             case Logger::LogLevel::Trace: color = FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
             }
             SetConsoleTextAttribute(hConsole, color);
-            std::cout << formatted.ToStdString(encoding) << ' ';
+            std::cout << formatted.ToStdString(message.encoding) << ' ';
             SetConsoleTextAttribute(hConsole, info.wAttributes);
             std::cout << "\b" << std::endl;
 #else
@@ -221,12 +233,12 @@ namespace LikesProgram {
         explicit FileSink(const String& filename) {
             file.open(filename.ToStdString(), std::ios::out | std::ios::app);
         }
-        void Write(const Logger::LogMessage& message, Logger::LogLevel minLevel, String::Encoding encoding) override {
+        void Write(const Logger::LogMessage& message) override {
             if (!file.is_open()) return;
 
-            LikesProgram::String formatted = FormatLogMessage(message, minLevel);
+            LikesProgram::String formatted = FormatLogMessage(message);
 
-            file << formatted.ToStdString(encoding) << std::endl;
+            file << formatted.ToStdString(message.encoding) << std::endl;
         }
     private:
         std::ofstream file;

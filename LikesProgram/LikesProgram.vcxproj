@@ -172,6 +172,7 @@
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
     <ClInclude Include="include\test\ConfigurationTest.hpp" />
     <ClInclude Include="include\test\LoggerTest.hpp" />
+    <ClInclude Include="include\test\PercentileSketchTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\ThreadPoolTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />

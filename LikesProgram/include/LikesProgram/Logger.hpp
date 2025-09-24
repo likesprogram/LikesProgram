@@ -22,10 +22,13 @@ namespace LikesProgram {
             String msg;
             String file;
             int line = 0;
-            String func;
             std::thread::id tid;
             String threadName;
             std::chrono::system_clock::time_point timestamp;
+            String func;
+            LogLevel minLevel;
+            String::Encoding encoding;
+            bool debug;
         };
 
         // ILogSink 抽象接口
@@ -34,17 +37,17 @@ namespace LikesProgram {
             virtual ~ILogSink() = default;
 
             // 写日志接口（由具体子类实现）
-            virtual void Write(const LogMessage& message, LogLevel minLevel, String::Encoding encoding) = 0;
+            virtual void Write(const LogMessage& message) = 0;
             // 对子类开放
         protected:
             // 辅助函数：格式化日志内容（给子类调用）
-            String FormatLogMessage(const LogMessage& message, LogLevel minLevel);
+            String FormatLogMessage(const LogMessage& message);
             // 辅助函数：日志级别转字符串（给子类调用）
             const String LevelToString(LogLevel lvl);
         };
 
         // 获取全局唯一实例
-        static Logger& Instance();
+        static Logger& Instance(bool debug = false);
 
         // 设置全局日志级别
         // 低于该级别的日志将被过滤掉
@@ -65,7 +68,7 @@ namespace LikesProgram {
 
     private:
         // 构造 / 析构（私有化，保证单例）
-        Logger();
+        Logger(bool debug);
         ~Logger();
 
         // 禁止拷贝和赋值

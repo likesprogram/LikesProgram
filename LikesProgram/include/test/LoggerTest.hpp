@@ -8,11 +8,9 @@ namespace LoggerTest {
     public:
         NetworkSink(const std::string& serverAddress) : server(serverAddress) {}
 
-        void Write(const LikesProgram::Logger::LogMessage& message,
-            LikesProgram::Logger::LogLevel minLevel,
-            LikesProgram::String::Encoding encoding) override {
-            LikesProgram::String formatted = FormatLogMessage(message, minLevel);
-            SendToServer(formatted.ToStdString(encoding));
+        void Write(const LikesProgram::Logger::LogMessage& message) override {
+            LikesProgram::String formatted = FormatLogMessage(message);
+            SendToServer(formatted.ToStdString(message.encoding));
         }
 
     private:
@@ -32,7 +30,12 @@ namespace LoggerTest {
 
 	void Test() {
         // 初始化日志
+#ifdef _DEBUG
+        auto& logger = LikesProgram::Logger::Instance(true);
+#else
         auto& logger = LikesProgram::Logger::Instance();
+#endif
+
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif

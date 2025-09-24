@@ -155,6 +155,9 @@
     <ClInclude Include="include\LikesProgram\math\PercentileSketch.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="include\test\PercentileSketchTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
