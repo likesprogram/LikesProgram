@@ -10,6 +10,7 @@ LikesProgram
 ├─ Math（数学工具）
 │  ├─ 常量：PI、EPSILON、INF
 │  ├─ 函数：UpdateMax、EMA、NsToMs、NsToS、MsToNs、SToNs
+│  ├─ PercentileSketch（高效分布式百分位估算）
 │  ├─ Vector（二位向量）
 │  ├─ Vector3（三维向量）
 │  └─ Vector4（四维向量）
