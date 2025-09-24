@@ -175,7 +175,116 @@ int main() {
 }
 ```
 
-### 1.2、Vector：二维向量类
+### 1.2、`PercentileSketch` — 高效分布式百分位估算
+
+`PercentileSketch` 是一个用于高效估算数据分布百分位的工具，基于 t-digest 原理，支持多线程写入和分片并行操作。它适合大规模数据流的统计分析、性能监控和延迟分布计算，同时提供二进制序列化接口以便跨进程或跨语言传输。
+
+#### 构造与生命周期
+
+* `PercentileSketch(size_t compression = 100, size_t shards = 8)`
+  创建百分位估算器，`compression` 控制精度（值越大精度越高，内存占用越大），`shards` 控制分片数量以提高并发性能。
+
+* 拷贝与移动：
+
+  * `PercentileSketch(const PercentileSketch& other)` 拷贝构造
+  * `PercentileSketch& operator=(const PercentileSketch& other)` 拷贝赋值
+  * `PercentileSketch(PercentileSketch&& other) noexcept` 移动构造
+  * `PercentileSketch& operator=(PercentileSketch&& other) noexcept` 移动赋值
+  * `~PercentileSketch()` 析构
+
+#### 基本操作
+
+* `void Add(double x)` 添加单个数据点。
+* `void AddBatch(const std::vector<double>& xs)` 批量添加数据。
+* `double Quantile(double q) const` 获取 q 分位值（`q` 范围 `[0,1]`）。
+* `void Compress()` 对当前缓存和质心进行压缩以减少内存并提高查询效率。
+
+#### 分布式与并行支持
+
+* `void Merge(const PercentileSketch& other)` 合并另一个 PercentileSketch 的数据，用于分布式统计或多线程结果汇总。
+
+#### 序列化
+
+* `void Serialize(std::ostream& os) const` 将 PercentileSketch 序列化为二进制流（小端格式）。
+* `static PercentileSketch Deserialize(std::istream& is)` 从二进制流反序列化。
+
+#### 调试与监控
+
+* `std::vector<std::pair<double, int>> GetCentroids() const` 获取当前质心列表及各自的计数，便于调试和可视化分析。
+
+#### 内部结构
+
+* `struct Centroid` 表示质心，包含 `mean` 和 `count`。
+* `struct Shard` 分片结构，包含独立锁、质心、缓存和总计数，用于减少多线程竞争。
+* `PercentileSketchImpl* m_impl` 隐藏实现指针，存储分片数组和内部状态。
+
+#### 使用示例
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <fstream>
+#include <LikesProgram/Math/PercentileSketch.hpp>
+
+namespace PercentileSketchTest {
+    void Test() {
+        // 创建百分位估算器
+        LikesProgram::Math::PercentileSketch sketch1(1200, 2);
+    
+        // 单个数据添加
+        for (double x = 0; x < 500; x += 1.0) {
+            sketch1.Add(x);
+        }
+    
+        // 批量添加数据
+        std::vector<double> batchData;
+        for (double x = 500; x < 1000; x += 1.0) batchData.push_back(x);
+        sketch1.AddBatch(batchData);
+    
+        // 压缩以优化查询和内存
+        sketch1.Compress();
+    
+        // 查询百分位
+        std::cout << "50th percentile: " << sketch1.Quantile(0.5) << std::endl;
+        std::cout << "90th percentile: " << sketch1.Quantile(0.9) << std::endl;
+        std::cout << "99th percentile: " << sketch1.Quantile(0.99) << std::endl;
+    
+        // 获取质心信息
+        auto centroids = sketch1.GetCentroids();
+        std::cout << "Centroid count: " << centroids.size() << std::endl;
+        for (size_t i = 0; i < std::min((size_t)5, centroids.size()); ++i) {
+            std::cout << "Mean: " << centroids[i].first << ", Count: " << centroids[i].second << std::endl;
+        }
+    
+        // 创建另一个 sketch 并添加数据
+        LikesProgram::Math::PercentileSketch sketch2(800, 2);
+        for (double x = 1000; x < 1500; x += 1.0) sketch2.Add(x);
+        sketch2.Compress();  // 压缩后再 merge，提高精度
+    
+        // 合并另一个 PercentileSketch
+        sketch1.Merge(sketch2);
+    
+        // 再次压缩 merge 后的 sketch，提高尾部分位精度
+        sketch1.Compress();
+    
+        std::cout << "After merge, 95th percentile: " << sketch1.Quantile(0.95) << std::endl;
+    
+        // 序列化
+        std::ofstream ofs("sketch.bin", std::ios::binary);
+        sketch1.Serialize(ofs);
+        ofs.close();
+    
+        // 反序列化
+        std::ifstream ifs("sketch.bin", std::ios::binary);
+        auto loadedSketch = LikesProgram::Math::PercentileSketch::Deserialize(ifs);
+        ifs.close();
+    
+        std::cout << "Deserialized 50th percentile: " << loadedSketch.Quantile(0.5) << std::endl;
+    }
+}
+```
+
+### 1.3、Vector：二维向量类
 
 `Vector` 类提供二维向量运算的支持，适用于几何计算、物理模拟和游戏开发等场景。
 
@@ -393,8 +502,8 @@ namespace VectorTest {
 }
 ```
 
-#### 1.3、Vector3：三维向量类 (未完成)
-#### 1.4、Vector4：4维向量类 (未完成)
+#### 1.4、Vector3：三维向量类 (未完成)
+#### 1.5、Vector4：4维向量类 (未完成)
 
 ### 2、`Timer` — 高精度计时器
 
@@ -435,69 +544,69 @@ namespace VectorTest {
 #include <LikesProgram/Timer.hpp>
 
 namespace TimerTest {
-	struct ThreadData {
+    struct ThreadData {
         LikesProgram::Timer* timer = nullptr;
-		size_t index = 0;
-	};
+    	  size_t index = 0;
+    };
 
-	void WorkLoad(ThreadData* data) {
-		LikesProgram::Timer threadTimer(true, data->timer); // 创建线程计时器
+    void WorkLoad(ThreadData* data) {
+        LikesProgram::Timer threadTimer(true, data->timer); // 创建线程计时器
 
-		// 模拟耗时操作
-		std::this_thread::sleep_for(std::chrono::milliseconds(100 + data->index * 20));
+        // 模拟耗时操作
+        std::this_thread::sleep_for(std::chrono::milliseconds(100 + data->index * 20));
 
-		auto elapsed = threadTimer.Stop(); // 停止并获取耗时
+        auto elapsed = threadTimer.Stop(); // 停止并获取耗时
         std::cout << "Thread 【" << data->index << "】：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
 
-		delete data;
-	}
+        delete data;
+    }
 
     void Test() {
-		LikesProgram::Timer timer; // 全局计时器
-
-		std::cout << "===== 单线程示例 =====" << std::endl;
-		{
-			timer.Start(); // 开始计时
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-			//std::cout << "是否运行：" << timer.IsRunning() << std::endl;
-			auto elapsed = timer.Stop();
-            std::cout << "单线程：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
-
-			std::cout << "是否运行：" << timer.IsRunning() << std::endl;
-			std::cout << "最近一次耗时：" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
-		}
-
-		std::cout << std::endl << "===== 多线程示例 =====" << std::endl;
-		{
-			const int threadCount = 4;
-            std::vector<std::thread> threads;
-
-			// 创建多个线程
-			for (size_t i = 0; i < threadCount; i++) {
-				ThreadData* data = new ThreadData();
-				data->index = i;
-                data->timer = &timer;
-				threads.emplace_back(WorkLoad, data);
-			}
-
-			for (auto& thread : threads) thread.join();
-			std::cout << std::endl << "===== 测试结果 =====" << std::endl;
-			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
-		}
-
-		std::cout << std::endl << "===== 重置示例 =====" << std::endl;
-		{
-			timer.Reset();
-
-			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
-		}
+        LikesProgram::Timer timer; // 全局计时器
+  
+        std::cout << "===== 单线程示例 =====" << std::endl;
+        {
+        	timer.Start(); // 开始计时
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  
+        	//std::cout << "是否运行：" << timer.IsRunning() << std::endl;
+        	auto elapsed = timer.Stop();
+                std::cout << "单线程：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+  
+        	std::cout << "是否运行：" << timer.IsRunning() << std::endl;
+        	std::cout << "最近一次耗时：" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
+        }
+  
+        std::cout << std::endl << "===== 多线程示例 =====" << std::endl;
+        {
+        	const int threadCount = 4;
+                std::vector<std::thread> threads;
+  
+        	// 创建多个线程
+        	for (size_t i = 0; i < threadCount; i++) {
+        		ThreadData* data = new ThreadData();
+        		data->index = i;
+                    data->timer = &timer;
+        		threads.emplace_back(WorkLoad, data);
+        	}
+  
+        	for (auto& thread : threads) thread.join();
+        	std::cout << std::endl << "===== 测试结果 =====" << std::endl;
+        	std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+        	std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+        	std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+        	std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+        }
+  
+        std::cout << std::endl << "===== 重置示例 =====" << std::endl;
+        {
+        	timer.Reset();
+  
+        	std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
+        	std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
+        	std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
+        	std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+        }
     }
 }
 ```
@@ -958,6 +1067,9 @@ int main() {
   * `tid` 线程 ID
   * `threadName` 线程名称
   * `timestamp` 日志时间
+  * `minLevel` 最低日志级别
+  * `encoding` 日志输出编码
+  * `debug` 是否为调试模式 (若为 true，则将日志输出会携带调试信息[调用文件名、行号、线程名称/ID])
 
 * `Logger::ILogSink`
   日志输出接口（抽象类），子类实现 `Write()` 方法完成日志写入。
@@ -1020,11 +1132,9 @@ namespace LoggerTest {
     public:
         NetworkSink(const std::string& serverAddress) : server(serverAddress) {}
 
-        void Write(const LikesProgram::Logger::LogMessage& message,
-            LikesProgram::Logger::LogLevel minLevel,
-            LikesProgram::String::Encoding encoding) override {
-            LikesProgram::String formatted = FormatLogMessage(message, minLevel);
-            SendToServer(formatted.ToStdString(encoding));
+        void Write(const LikesProgram::Logger::LogMessage& message) override {
+            LikesProgram::String formatted = FormatLogMessage(message);
+            SendToServer(formatted.ToStdString(message.encoding));
         }
 
     private:
@@ -1044,7 +1154,12 @@ namespace LoggerTest {
 
 	void Test() {
         // 初始化日志
+#ifdef _DEBUG
+        auto& logger = LikesProgram::Logger::Instance(true);
+#else
         auto& logger = LikesProgram::Logger::Instance();
+#endif
+
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
@@ -1196,7 +1311,12 @@ namespace LoggerTest {
 
 namespace ThreadPoolTest {
 	void Test() {        // 初始化日志
+#ifdef _DEBUG
+        auto& logger = LikesProgram::Logger::Instance(true);
+#else
         auto& logger = LikesProgram::Logger::Instance();
+#endif
+
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
@@ -1472,7 +1592,12 @@ namespace LikesProgram {
 
 namespace ConfigurationTest {
 	void Test() {
+#ifdef _DEBUG
+        auto& logger = LikesProgram::Logger::Instance(true);
+#else
         auto& logger = LikesProgram::Logger::Instance();
+#endif
+
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
