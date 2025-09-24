@@ -185,14 +185,6 @@ int main() {
 * `PercentileSketch(size_t compression = 100, size_t shards = 8)`
   创建百分位估算器，`compression` 控制精度（值越大精度越高，内存占用越大），`shards` 控制分片数量以提高并发性能。
 
-* 拷贝与移动：
-
-  * `PercentileSketch(const PercentileSketch& other)` 拷贝构造
-  * `PercentileSketch& operator=(const PercentileSketch& other)` 拷贝赋值
-  * `PercentileSketch(PercentileSketch&& other) noexcept` 移动构造
-  * `PercentileSketch& operator=(PercentileSketch&& other) noexcept` 移动赋值
-  * `~PercentileSketch()` 析构
-
 #### 基本操作
 
 * `void Add(double x)` 添加单个数据点。
