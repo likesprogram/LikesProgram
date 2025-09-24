@@ -205,12 +205,6 @@ int main() {
 
 * `std::vector<std::pair<double, int>> GetCentroids() const` 获取当前质心列表及各自的计数，便于调试和可视化分析。
 
-#### 内部结构
-
-* `struct Centroid` 表示质心，包含 `mean` 和 `count`。
-* `struct Shard` 分片结构，包含独立锁、质心、缓存和总计数，用于减少多线程竞争。
-* `PercentileSketchImpl* m_impl` 隐藏实现指针，存储分片数组和内部状态。
-
 #### 使用示例
 
 ```cpp
