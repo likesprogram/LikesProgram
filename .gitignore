@@ -20,6 +20,7 @@
 *.aps
 *.sbr
 *.log
+*.bin
 *.tlog/
 *.lastbuildstate
 

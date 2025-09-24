@@ -3,6 +3,13 @@
 #include <stdexcept>
 #include <cmath>
 #include <cstring>
+#include <mutex>
+#include <atomic>
+#include <ostream>
+#include <istream>
+#include <cstdint>
+#include <utility>
+#include <memory>
 
 namespace LikesProgram {
     namespace Math {

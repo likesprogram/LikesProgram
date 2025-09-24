@@ -1,14 +1,7 @@
 ﻿#pragma once
 #include "../LikesProgramLibExport.hpp"
 #include <vector>
-#include <mutex>
 #include <shared_mutex>
-#include <atomic>
-#include <ostream>
-#include <istream>
-#include <cstdint>
-#include <utility>
-#include <memory>
 
 namespace LikesProgram {
     namespace Math {
