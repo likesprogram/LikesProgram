@@ -143,11 +143,12 @@
     <ClCompile Include="src\LikesProgram\metrics\Registry.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Summary.cpp" />
     <ClCompile Include="src\LikesProgram\ThreadPool.cpp" />
+    <ClCompile Include="src\LikesProgram\time\Time.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseBMP.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseSMP.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\Convert.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\LikesProgram\Timer.cpp" />
+    <ClCompile Include="src\LikesProgram\time\Timer.cpp" />
     <ClCompile Include="src\LikesProgram\math\Vector.cpp" />
     <ClCompile Include="src\LikesProgram\String.cpp" />
   </ItemGroup>
@@ -164,7 +165,8 @@
     <ClInclude Include="include\LikesProgram\metrics\Registry.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Summary.hpp" />
     <ClInclude Include="include\LikesProgram\ThreadPool.hpp" />
-    <ClInclude Include="include\LikesProgram\Timer.hpp" />
+    <ClInclude Include="include\LikesProgram\time\Time.hpp" />
+    <ClInclude Include="include\LikesProgram\time\Timer.hpp" />
     <ClInclude Include="include\LikesProgram\math\Math.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector.hpp" />
     <ClInclude Include="include\LikesProgram\unicode\Case.hpp" />
@@ -172,8 +174,10 @@
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp" />
     <ClInclude Include="include\test\ConfigurationTest.hpp" />
     <ClInclude Include="include\test\LoggerTest.hpp" />
+    <ClInclude Include="include\test\MetricsTest.hpp" />
     <ClInclude Include="include\test\PercentileSketchTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
+    <ClInclude Include="include\test\Test.hpp" />
     <ClInclude Include="include\test\ThreadPoolTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />
     <ClInclude Include="include\test\UnicodeTest.hpp" />

@@ -2,7 +2,7 @@
 #include <iostream>
 #include "../LikesProgram/math/Vector.hpp"
 #include "../LikesProgram/math/Math.hpp"
-#include "../LikesProgram/Timer.hpp"
+#include "../LikesProgram/time/Timer.hpp"
 #include <random>
 
 namespace VectorTest {
@@ -12,7 +12,7 @@ namespace VectorTest {
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
 
-        LikesProgram::Timer timer(true);
+        LikesProgram::Time::Timer timer(true);
 
         LikesProgram::Math::Vector acc(0.0, 0.0);
         for (size_t i = 0; i < count; i++) {
@@ -30,7 +30,7 @@ namespace VectorTest {
 
         std::cout << "Stress Test 完成\n";
         std::cout << "最终累积结果: " << acc << "\n";
-        std::cout << "耗时: " << LikesProgram::Timer::ToString(timer.Stop()) << "\n";
+        std::cout << "耗时: " << LikesProgram::Time::Convert::NsToMs(timer.Stop().count()) << "ms" << std::endl;
     }
 
     void BasicOps() {

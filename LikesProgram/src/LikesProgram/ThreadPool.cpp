@@ -1,5 +1,5 @@
 ﻿#include "../../include/LikesProgram/ThreadPool.hpp"
-#include "../../include/LikesProgram/Timer.hpp"
+#include "../../include/LikesProgram/time/Timer.hpp"
 #include "../../include/LikesProgram/CoreUtils.hpp"
 #include "../../include/LikesProgram/math/Math.hpp"
 #include <sstream>
@@ -33,7 +33,7 @@ namespace LikesProgram {
         std::atomic<size_t> aliveThreads_{ 0 };    // 存活线程数
         std::atomic<size_t> largestPoolSize_{ 0 }; // 历史最大线程数
         std::atomic<size_t> peakQueueSize_{ 0 };   // 队列峰值
-        Timer timer_;
+        Time::Timer timer_;
 
         // 时间点（纳秒）
         std::atomic<long long> lastSubmitNs_{ 0 };   // steady_clock::now().time_since_epoch() 的纳秒数
@@ -45,21 +45,21 @@ namespace LikesProgram {
     };
 
     String ThreadPool::Statistics::ToString() const {
-        LikesProgram::String statsStr;
+        String statsStr;
         statsStr.Append(u"成功入队的任务数：")
-            .Append(LikesProgram::String(std::to_string(submitted))).Append(u"\r\n");
+            .Append(String(std::to_string(submitted))).Append(u"\r\n");
         statsStr.Append(u"被拒绝的任务数：")
-            .Append(LikesProgram::String(std::to_string(rejected))).Append(u"\r\n");
+            .Append(String(std::to_string(rejected))).Append(u"\r\n");
         statsStr.Append(u"执行完成的任务数：")
-            .Append(LikesProgram::String(std::to_string(completed))).Append(u"\r\n");
+            .Append(String(std::to_string(completed))).Append(u"\r\n");
         statsStr.Append(u"正在执行的任务数：")
-            .Append(LikesProgram::String(std::to_string(active))).Append(u"\r\n");
+            .Append(String(std::to_string(active))).Append(u"\r\n");
         statsStr.Append(u"存活工作线程数：")
-            .Append(LikesProgram::String(std::to_string(aliveThreads))).Append(u"\r\n");
+            .Append(String(std::to_string(aliveThreads))).Append(u"\r\n");
         statsStr.Append(u"历史最大线程数：")
-            .Append(LikesProgram::String(std::to_string(largestPoolSize))).Append(u"\r\n");
+            .Append(String(std::to_string(largestPoolSize))).Append(u"\r\n");
         statsStr.Append(u"队列峰值：")
-            .Append(LikesProgram::String(std::to_string(peakQueueSize))).Append(u"\r\n");
+            .Append(String(std::to_string(peakQueueSize))).Append(u"\r\n");
 
         if (lastSubmitTime.time_since_epoch().count() != 0) {
             auto tt = std::chrono::system_clock::to_time_t(
@@ -75,7 +75,7 @@ namespace LikesProgram {
             std::wostringstream oss;
             oss << std::put_time(&tm, L"%F %T");
             statsStr.Append(u"最后一次提交时间：")
-                .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
+                .Append(String(oss.str())).Append(u"\r\n");
         }
 
         if (lastFinishTime.time_since_epoch().count() != 0) {
@@ -92,15 +92,15 @@ namespace LikesProgram {
             std::wostringstream oss;
             oss << std::put_time(&tm, L"%F %T");
             statsStr.Append(u"最后一次完成时间：")
-                .Append(LikesProgram::String(oss.str())).Append(u"\r\n");
+                .Append(String(oss.str())).Append(u"\r\n");
         }
 
         statsStr.Append(u"最长任务耗时：")
-            .Append(LikesProgram::Timer::ToString(longestTaskTime)).Append(u"\r\n");
+            .Append(String(std::to_string(Time::Convert::NsToS(longestTaskTime.count())))).Append(u"\r\n");
         statsStr.Append(u"算术平均任务耗时：")
-            .Append(LikesProgram::Timer::ToString(arithmeticAverageTaskTime)).Append(u"\r\n");
+            .Append(String(std::to_string(Time::Convert::NsToS((int64_t)arithmeticAverageTaskTime)))).Append(u"\r\n");
         statsStr.Append(u"指数移动平均任务耗时：")
-            .Append(LikesProgram::Timer::ToString(averageTaskTime)).Append(u"\r\n");
+            .Append(String(std::to_string(Time::Convert::NsToS((int64_t)averageTaskTime)))).Append(u"\r\n");
 
         return statsStr;
     }
@@ -108,7 +108,7 @@ namespace LikesProgram {
     ThreadPool::ThreadPool(Options opts): m_impl(new ThreadPoolImpl) {
         m_impl->opts_ = std::move(opts);
         m_impl->queueCapacity_ = opts.queueCapacity;
-        m_impl->timer_ = Timer();
+        m_impl->timer_ = Time::Timer();
         m_impl->opts_.threadNamePrefix = m_impl->opts_.threadNamePrefix.SubString(0, 15 - 5);
     }
 
@@ -237,13 +237,13 @@ namespace LikesProgram {
         long long lastSubmitNs = m_impl->lastSubmitNs_.load();
         long long lastFinishNs = m_impl->lastFinishNs_.load();
         if (lastSubmitNs > 0)
-            s.lastSubmitTime = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(lastSubmitNs));
+            s.lastSubmitTime = std::chrono::steady_clock::time_point(Time::Nanoseconds(lastSubmitNs));
         if (lastFinishNs > 0)
-            s.lastFinishTime = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(lastFinishNs));
+            s.lastFinishTime = std::chrono::steady_clock::time_point(Time::Nanoseconds(lastFinishNs));
 
-        s.longestTaskTime = m_impl->timer_.GetLongestElapsed();
-        s.averageTaskTime = m_impl->timer_.GetEMAAverageElapsed();
-        s.arithmeticAverageTaskTime = m_impl->timer_.GetArithmeticAverageElapsed();
+        //s.longestTaskTime = m_impl->timer_.GetLongestElapsed();
+        //s.averageTaskTime = m_impl->timer_.GetEMAverageElapsed();
+        //s.arithmeticAverageTaskTime = m_impl->timer_.GetArithmeticAverageElapsed();
         return s;
     }
 
@@ -289,7 +289,7 @@ namespace LikesProgram {
         m_impl->submittedCount_.fetch_add(1, std::memory_order_relaxed);
 
         // 记录最近一次提交时间（统一使用纳秒）
-        auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        auto now_ns = std::chrono::duration_cast<Time::Nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         m_impl->lastSubmitNs_.store(now_ns, std::memory_order_relaxed);
 
         // 峰值队列
@@ -378,7 +378,7 @@ namespace LikesProgram {
 
             if (task) {
                 m_impl->activeCount_.fetch_add(1, std::memory_order_relaxed);
-                Timer timer(true, &m_impl->timer_);
+                Time::Timer timer(true, &m_impl->timer_);
                 try {
                     task();
                 }
@@ -392,7 +392,7 @@ namespace LikesProgram {
                 m_impl->completedCount_.fetch_add(1, std::memory_order_relaxed);
                 m_impl->activeCount_.fetch_sub(1, std::memory_order_relaxed);
                 m_impl->lastFinishNs_.store(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::duration_cast<Time::Nanoseconds>(
                         std::chrono::steady_clock::now().time_since_epoch()
                     ).count(), std::memory_order_relaxed
                 );

@@ -43,27 +43,6 @@ namespace LikesProgram {
 				"EMA requires integral or floating type");
             return static_cast<T1>(previous * alpha + static_cast<T1>(value) * (1.0 - alpha));
 		}
-
-		// 时间转换，纳秒/毫秒/秒
-		inline long long NsToMs(long long ns) {
-			return ns / 1'000'000;
-		}
-        inline long long NsToS(long long ns) {
-			return ns / 1'000'000'000;
-		}
-        inline long long MsToNs(long long ms) {
-			return ms * 1'000'000;
-		}
-        inline long long MsToS(long long ms) {
-			return ms / 1'000;
-		}
-        inline long long SToNs(long long s) {
-			return s * 1'000'000'000;
-		}
-        inline long long SToMs(long long s) {
-			return s * 1'000;
-		}
-
     }
 }
 

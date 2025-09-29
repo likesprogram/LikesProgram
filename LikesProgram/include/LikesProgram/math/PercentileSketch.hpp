@@ -7,7 +7,7 @@ namespace LikesProgram {
     namespace Math {
         class LIKESPROGRAM_API PercentileSketch {
         public:
-            explicit PercentileSketch(size_t compression = 100, size_t shards = 8);
+            explicit PercentileSketch(size_t compression = 400, size_t shards = 8);
             // 拷贝构造 & 拷贝赋值
             PercentileSketch(const PercentileSketch& other);
             PercentileSketch& operator=(const PercentileSketch& other);
@@ -31,6 +31,8 @@ namespace LikesProgram {
 
             // 调试/监控
             std::vector<std::pair<double, int>> GetCentroids() const;
+
+            void Reset();
         private:
             struct Centroid {
                 double mean;

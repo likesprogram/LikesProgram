@@ -1,13 +1,73 @@
 ﻿#include "../../../include/LikesProgram/metrics/Summary.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
+#include <cmath>
 
 namespace LikesProgram {
 	namespace Metrics {
+        struct Summary::SummaryImpl {
+            std::atomic<int64_t> m_count{ 0 };
+            std::atomic<double> m_sum{ 0.0 };
+            std::atomic<double> m_emAverage{ 0.0 };
+            std::atomic<double> m_min{ std::numeric_limits<double>::infinity() };
+            std::atomic<double> m_max{ -std::numeric_limits<double>::infinity() };
+        };
         Summary::Summary(const LikesProgram::String& name,
-            size_t maxWindow, double alpha, const LikesProgram::String& help,
-            const std::unordered_map<LikesProgram::String, LikesProgram::String>& labels)
-        : MetricsObject(name, help, labels), m_maxWindow(maxWindow), m_alpha(alpha) { }
-        
+            size_t maxWindow, const LikesProgram::String& help,
+            const std::map<LikesProgram::String, LikesProgram::String>& labels)
+            : MetricsObject(name, help, labels), m_maxWindow(maxWindow), m_impl(new SummaryImpl{}) {
+        }
+        Summary::Summary(const Summary& other) : MetricsObject(other),
+        m_maxWindow(other.m_maxWindow), m_alpha(other.m_alpha), m_sketch(other.m_sketch), m_impl(other.m_impl ? new SummaryImpl{} : nullptr) {
+            if (other.m_impl) {
+                m_impl->m_count.store(other.m_impl->m_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                m_impl->m_sum.store(other.m_impl->m_sum.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                m_impl->m_emAverage.store(other.m_impl->m_emAverage.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                m_impl->m_min.store(other.m_impl->m_min.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                m_impl->m_max.store(other.m_impl->m_max.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            }
+        }
+        Summary& Summary::operator=(const Summary& other) {
+            if (this != &other) {
+                MetricsObject::operator=(other);
+                m_maxWindow = other.m_maxWindow;
+                m_alpha = other.m_alpha;
+                m_sketch = other.m_sketch;
+                if (other.m_impl) {
+                    if (!m_impl) m_impl = new SummaryImpl{};
+                    m_impl->m_count.store(other.m_impl->m_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                    m_impl->m_sum.store(other.m_impl->m_sum.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                    m_impl->m_emAverage.store(other.m_impl->m_emAverage.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                    m_impl->m_min.store(other.m_impl->m_min.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                    m_impl->m_max.store(other.m_impl->m_max.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                }
+                else {
+                    delete m_impl;
+                    m_impl = nullptr;
+                }
+            }
+            return *this;
+        }
+        Summary::Summary(Summary&& other) noexcept : MetricsObject(std::move(other)),
+        m_maxWindow(other.m_maxWindow), m_alpha(other.m_alpha), m_sketch(other.m_sketch), m_impl(other.m_impl) {
+            other.m_impl = nullptr;
+        }
+        Summary& Summary::operator=(Summary&& other) noexcept {
+            if (this != &other) {
+                MetricsObject::operator=(std::move(other));
+                m_maxWindow = other.m_maxWindow;
+                m_sketch = other.m_sketch;
+                m_alpha = other.m_alpha;
+                delete m_impl;
+                m_impl = other.m_impl;
+                other.m_impl = nullptr;
+            }
+            return *this;
+        }
+        Summary::~Summary() {
+            if (m_impl) delete m_impl;
+            m_impl = nullptr;
+        }
+
         void Summary::Observe(double value) {
             UpdateStats(value);
 
@@ -18,48 +78,70 @@ namespace LikesProgram {
             if (q < 0.0 || q > 1.0) {
                 throw std::invalid_argument("Quantile q must be between 0 and 1");
             }
-            return m_sketch.Quantile(q);
+            // 确保 centroids 包含最新数据
+            const_cast<Math::PercentileSketch&>(m_sketch).Compress();
+            double val = m_sketch.Quantile(q);
+            if (std::isnan(val)) return Math::Average(m_impl->m_sum.load(std::memory_order_relaxed),
+                m_impl->m_count.load(std::memory_order_relaxed));
+            return val;
         }
 
-        void Summary::UpdateStats(double value) {
-            m_count.fetch_add(1, std::memory_order_relaxed);
-            m_sum.fetch_add(value, std::memory_order_relaxed);
+        int64_t Summary::Count() const {
+            return m_impl->m_count.load(std::memory_order_relaxed);
+        }
 
-            // EMA
-            double prev = m_ema.load(std::memory_order_relaxed);
-            double next = Math::EMA(prev, value, m_alpha);
-            while (!m_ema.compare_exchange_weak(prev, next, std::memory_order_relaxed)) {
-                next = Math::EMA(prev, value, m_alpha);
-            }
+        double Summary::Sum() const {
+            return m_impl->m_sum.load(std::memory_order_relaxed);
+        }
 
-            // Min / Max
-            Math::UpdateMin(m_min, value);
-            Math::UpdateMax(m_max, value);
+        void Summary::Reset() {
+            m_impl->m_count.store(0, std::memory_order_relaxed);
+            m_impl->m_sum.store(0, std::memory_order_relaxed);
+            m_impl->m_emAverage.store(0.0, std::memory_order_relaxed);
+            m_impl->m_min.store(std::numeric_limits<double>::infinity(), std::memory_order_relaxed);
+            m_impl->m_max.store(-std::numeric_limits<double>::infinity(), std::memory_order_relaxed);
+            m_sketch.Reset();
+        }
+
+        void Summary::SetEMAAlpha(double alpha) {
+            m_alpha = alpha;
         }
 
         double Summary::EMA() const {
-            return m_ema.load(std::memory_order_relaxed);
-        }
-
-        double Summary::Average() const {
-            return Math::Average(m_sum.load(std::memory_order_relaxed),
-                m_count.load(std::memory_order_relaxed));
-        }
-
-        double Summary::Max() const {
-            return m_max.load(std::memory_order_relaxed);
+            return m_impl->m_emAverage.load(std::memory_order_relaxed);
         }
 
         double Summary::Min() const {
-            return m_min.load(std::memory_order_relaxed);
+            return Count() ? m_impl->m_min.load(std::memory_order_relaxed) : std::numeric_limits<double>::max();
+        }
+
+        double Summary::Max() const {
+            return Count() ? m_impl->m_max.load(std::memory_order_relaxed) : std::numeric_limits<double>::lowest();
+        }
+
+        void Summary::UpdateStats(double value) {
+            m_impl->m_count.fetch_add(1, std::memory_order_relaxed);
+            m_impl->m_sum.fetch_add(value, std::memory_order_relaxed);
+
+            if (m_alpha > 0 && m_alpha < 1) { // EMA
+                double prev = m_impl->m_emAverage.load(std::memory_order_relaxed);
+                double next = Math::EMA(prev, value, m_alpha);
+                while (!m_impl->m_emAverage.compare_exchange_weak(prev, next, std::memory_order_relaxed)) {
+                    next = Math::EMA(prev, value, m_alpha);
+                }
+            }
+
+            // Min / Max
+            Math::UpdateMin(m_impl->m_min, value);
+            Math::UpdateMax(m_impl->m_max, value);
         }
 
         LikesProgram::String Summary::Name() const {
             return m_name;
         }
 
-        std::unordered_map<LikesProgram::String, LikesProgram::String> Summary::Labels() const {
-            return m_labels;
+        std::map<LikesProgram::String, LikesProgram::String> Summary::Labels() const {
+            return GetLabels();
         }
 
         LikesProgram::String Summary::Help() const {
@@ -71,14 +153,18 @@ namespace LikesProgram {
         }
 
         LikesProgram::String Summary::ToPrometheus() const {
-            LikesProgram::String result;
+            LikesProgram::String result = u"# HELP ";
+            result.Append(m_name).Append(u" ").Append(m_help).Append(u"\n");
+            result.Append(u"# TYPE ").Append(m_name).Append(u" ");
+            result.Append(Type()).Append(u"\n");
+
             auto appendMetric = [&](const LikesProgram::String& suffix, const LikesProgram::String& value) {
                 result.Append(m_name);
                 if (!suffix.Empty()) result.Append(suffix);
-                if (!m_labels.empty()) {
+                if (!GetLabels().empty()) {
                     result.Append(u"{");
                     bool first = true;
-                    for (const auto& [k, v] : m_labels) {
+                    for (const auto& [k, v] : GetLabels()) {
                         if (!first) result.Append(u",");
                         result.Append(k).Append(u"=\"").Append(v).Append(u"\"");
                         first = false;
@@ -90,10 +176,10 @@ namespace LikesProgram {
 
             auto appendQuantile = [&](double q, double val) {
                 result.Append(m_name);
-                if (!m_labels.empty() || true) { // 强制有 quantile 标签
+                if (!GetLabels().empty() || true) { // 强制有 quantile 标签
                     result.Append(u"{");
                     bool first = true;
-                    for (const auto& [k, v] : m_labels) {
+                    for (const auto& [k, v] : GetLabels()) {
                         if (!first) result.Append(u",");
                         result.Append(k).Append(u"=\"").Append(v).Append(u"\"");
                         first = false;
@@ -104,17 +190,19 @@ namespace LikesProgram {
                 }
                 result.Append(u" ").Append(LikesProgram::String::FromFloat(val, 6)).Append(u"\n");
             };
-
-            appendMetric(u"_count", LikesProgram::String::FromInt(m_count.load()));
-            appendMetric(u"_sum", LikesProgram::String::FromFloat(m_sum.load(), 6));
+            appendMetric(u"_count", LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed)));
+            appendMetric(u"_sum", LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6));
 
             appendQuantile(0.5, Quantile(0.5));
             appendQuantile(0.9, Quantile(0.9));
             appendQuantile(0.99, Quantile(0.99));
 
-            appendMetric(u"_ema", LikesProgram::String::FromFloat(m_ema.load(), 6));
-            appendMetric(u"_min", LikesProgram::String::FromFloat(m_min.load(), 6));
-            appendMetric(u"_max", LikesProgram::String::FromFloat(m_max.load(), 6));
+            // 扩展字段
+            if (Count() > 0) {
+                if (m_alpha > 0 && m_alpha < 1) appendMetric(u"_ema", LikesProgram::String::FromFloat(m_impl->m_emAverage.load(std::memory_order_relaxed), 6));
+                appendMetric(u"_min", LikesProgram::String::FromFloat(Min(), 6));
+                appendMetric(u"_max", LikesProgram::String::FromFloat(Max(), 6));
+            }
 
             return result;
         }
@@ -128,7 +216,7 @@ namespace LikesProgram {
 
             json.Append(u"\"labels\":{");
             bool first = true;
-            for (const auto& [k, v] : m_labels) {
+            for (const auto& [k, v] : GetLabels()) {
                 if (!first) json.Append(u",");
                 json.Append(u"\"").Append(LikesProgram::String::EscapeJson(k))
                     .Append(u"\":\"").Append(LikesProgram::String::EscapeJson(v)).Append(u"\"");
@@ -136,16 +224,25 @@ namespace LikesProgram {
             }
             json.Append(u"},");
 
-            json.Append(u"\"count\":").Append(LikesProgram::String::FromInt(m_count.load())).Append(u",");
-            json.Append(u"\"sum\":").Append(LikesProgram::String::FromFloat(m_sum.load(), 6)).Append(u",");
+            json.Append(u"\"count\":").Append(LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed))).Append(u",");
+            json.Append(u"\"sum\":").Append(LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6)).Append(u",");
 
-            json.Append(u"\"p50\":").Append(LikesProgram::String::FromFloat(Quantile(0.5), 6)).Append(u",");
-            json.Append(u"\"p90\":").Append(LikesProgram::String::FromFloat(Quantile(0.9), 6)).Append(u",");
-            json.Append(u"\"p99\":").Append(LikesProgram::String::FromFloat(Quantile(0.99), 6)).Append(u",");
+            json.Append(u"\"0.50\":").Append(LikesProgram::String::FromFloat(Quantile(0.5), 6)).Append(u",");
+            json.Append(u"\"0.90\":").Append(LikesProgram::String::FromFloat(Quantile(0.9), 6)).Append(u",");
+            json.Append(u"\"0.99\":").Append(LikesProgram::String::FromFloat(Quantile(0.99), 6));
 
-            json.Append(u"\"ema\":").Append(LikesProgram::String::FromFloat(m_ema.load(), 6)).Append(u",");
-            json.Append(u"\"min\":").Append(LikesProgram::String::FromFloat(m_min.load(), 6)).Append(u",");
-            json.Append(u"\"max\":").Append(LikesProgram::String::FromFloat(m_max.load(), 6));
+            // 扩展字段
+            if (Count() > 0) {
+                std::vector<LikesProgram::String> fields;
+                if (m_alpha > 0 && m_alpha < 1) fields.push_back(u"\"ema\":" + LikesProgram::String::FromFloat(m_impl->m_emAverage.load(std::memory_order_relaxed), 6));
+                fields.push_back(u"\"min\":" + LikesProgram::String::FromFloat(Min(), 6));
+                fields.push_back(u"\"max\":" + LikesProgram::String::FromFloat(Max(), 6));
+                for (size_t i = 0; i < fields.size(); ++i) {
+                    json.Append(u",");
+                    json.Append(fields[i]);
+                }
+            }
+
             json.Append(u"}");
 
             return json;

@@ -22,7 +22,7 @@ namespace StringTest {
     }
 
     void Test() {
-        OutAndIn();
+        //OutAndIn();
         std::cout << "===== 其他示例 =====" << std::endl;
         // 构造测试
         LikesProgram::String s1(u"Hello 世界");      // UTF-16

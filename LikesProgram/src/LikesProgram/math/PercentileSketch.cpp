@@ -28,7 +28,7 @@ namespace LikesProgram {
         }
         PercentileSketch::PercentileSketch(const PercentileSketch& other)
             : m_compression(other.m_compression), m_shards(other.m_shards) {
-            m_impl = new PercentileSketchImpl;
+            m_impl = new PercentileSketchImpl{};
             m_impl->m_shardData.reserve(m_shards);
             for (const auto& shardPtr : other.m_impl->m_shardData) {
                 auto newShard = std::make_unique<Shard>();
@@ -45,7 +45,7 @@ namespace LikesProgram {
             m_compression = other.m_compression;
             m_shards = other.m_shards;
 
-            PercentileSketchImpl* newImpl = new PercentileSketchImpl;
+            PercentileSketchImpl* newImpl = new PercentileSketchImpl{};
             newImpl->m_shardData.reserve(m_shards);
             for (const auto& shardPtr : other.m_impl->m_shardData) {
                 auto newShard = std::make_unique<Shard>();
@@ -244,6 +244,16 @@ namespace LikesProgram {
                 }
             }
             return res;
+        }
+
+        void PercentileSketch::Reset() {
+            for (auto& shardPtr : m_impl->m_shardData) {
+                std::unique_lock lock(shardPtr->mtx);
+                shardPtr->buffer.clear();
+                shardPtr->centroids.clear();
+                shardPtr->totalCount = 0;
+            }
+            Compress();
         }
     }
 }

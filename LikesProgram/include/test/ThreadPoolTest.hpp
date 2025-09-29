@@ -6,9 +6,9 @@
 namespace ThreadPoolTest {
 	void Test() {        // 初始化日志
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance();
+        auto& logger = LikesProgram::Logger::Instance(true);
 #endif
 
 #ifdef _WIN32
@@ -37,6 +37,7 @@ namespace ThreadPoolTest {
             // 提交无返回值无参数的任务
             pool.PostNoArg([i]() {
                 LOG_DEBUG(u"PostNoArg：Hello from worker");
+                std::cout << "PostNoArg：Hello from worker" << std::endl;
             });
 
             // 提交无返回值有参数的任务
@@ -46,12 +47,14 @@ namespace ThreadPoolTest {
                 out.Append(message);
                 out.Append(u"：Hello from worker");
                 LOG_DEBUG(out);
+                std::cout << "Post：Hello from worker" << std::endl;
             }, u"Post");
 
             // 提交有返回值有参数的任务
             auto poolOut = pool.Submit([i](LikesProgram::String message) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 LOG_DEBUG(message);
+                std::cout << "Submit：Hello from worker" << std::endl;
                 LikesProgram::String out;
                 out.Append(message);
                 out.Append(u"：[");
@@ -84,7 +87,6 @@ namespace ThreadPoolTest {
         LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
         LOG_WARN(stats.ToString());
 
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
         logger.Shutdown();
 	}
 }

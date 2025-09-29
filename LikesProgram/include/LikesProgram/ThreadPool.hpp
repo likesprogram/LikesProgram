@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include "String.hpp"
+#include "time/Time.hpp"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -16,7 +17,6 @@
 #include <tuple>
 #include <utility>
 #include <type_traits>
-#include "Timer.hpp"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -78,9 +78,9 @@ namespace LikesProgram {
             size_t peakQueueSize = 0;   // 队列峰值
             std::chrono::steady_clock::time_point lastSubmitTime{}; // 最后一次提交时间
             std::chrono::steady_clock::time_point lastFinishTime{}; // 最后一次完成时间
-            std::chrono::nanoseconds longestTaskTime{ 0 }; // 最长任务耗时
-            std::chrono::nanoseconds arithmeticAverageTaskTime{ 0 }; // 算术平均任务耗时
-            std::chrono::nanoseconds averageTaskTime{ 0 }; // 指数移动平均任务耗时
+            Time::Nanoseconds longestTaskTime{ 0 }; // 最长任务耗时
+            double arithmeticAverageTaskTime{ 0 }; // 算术平均任务耗时
+            double averageTaskTime{ 0 }; // 指数移动平均任务耗时
 
             String ToString() const;
         };

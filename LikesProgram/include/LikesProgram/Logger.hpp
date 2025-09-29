@@ -47,7 +47,9 @@ namespace LikesProgram {
         };
 
         // 获取全局唯一实例
-        static Logger& Instance(bool debug = false);
+        static Logger& Instance();
+        static Logger& Instance(bool autoStart);
+        static Logger& Instance(bool autoStart, bool debug);
 
         // 设置全局日志级别
         // 低于该级别的日志将被过滤掉
@@ -63,22 +65,27 @@ namespace LikesProgram {
         void Log(LogLevel level, const String& msg,
             const char* file, int line, const char* func);
 
-        // 停止日志系统（结束后台线程，清理资源）
-        void Shutdown();
+        bool Start();
 
-    private:
-        // 构造 / 析构（私有化，保证单例）
-        Logger(bool debug);
+        // 停止日志系统（结束后台线程，清理资源）
+        void Shutdown(bool clearSink = true);
+
         ~Logger();
+    private:
+        // 单例
+        Logger(bool autoStart, bool debug);
 
         // 禁止拷贝和赋值
         Logger(const Logger&) = delete;
         Logger& operator=(const Logger&) = delete;
 
+        // 禁止移动和赋值（防止用户误操作破坏单例）
+        Logger(Logger&&) noexcept = delete;
+        Logger& operator=(Logger&&) noexcept = delete;
+
         // 日志处理循环（后台线程执行）
         void ProcessLoop();
 
-        // 内部实现细节（PImpl 隐藏）
         struct LoggerImpl;
         LoggerImpl* m_impl; // 指针方式隐藏具体实现，减少编译依赖
         

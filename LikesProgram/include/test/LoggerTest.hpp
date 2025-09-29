@@ -31,9 +31,9 @@ namespace LoggerTest {
 	void Test() {
         // 初始化日志
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance();
+        auto& logger = LikesProgram::Logger::Instance(true);
 #endif
 
 #ifdef _WIN32
@@ -83,7 +83,6 @@ namespace LoggerTest {
         LOG_ERROR(u"error message 日志输出");   // 会输出
         LOG_FATAL(u"fatal message 日志输出");   // 会输出
 #endif
-        std::this_thread::sleep_for(std::chrono::seconds(1)); // 给后台线程一点时间输出
         logger.Shutdown();
 	}
 }

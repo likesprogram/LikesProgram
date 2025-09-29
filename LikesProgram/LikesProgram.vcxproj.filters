@@ -18,7 +18,7 @@
     <ClCompile Include="src\main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\LikesProgram\Timer.cpp">
+    <ClCompile Include="src\LikesProgram\time\Timer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\LikesProgram\math\Math.cpp">
@@ -72,12 +72,15 @@
     <ClCompile Include="src\LikesProgram\math\PercentileSketch.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\time\Time.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\Timer.hpp">
+    <ClInclude Include="include\LikesProgram\time\Timer.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\math\Math.hpp">
@@ -156,6 +159,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\test\PercentileSketchTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\MetricsTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\time\Time.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\Test.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

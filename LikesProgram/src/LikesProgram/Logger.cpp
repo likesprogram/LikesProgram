@@ -36,68 +36,70 @@ namespace LikesProgram {
         std::thread worker;
         String::Encoding encoding = String::Encoding::UTF8;
 
-        bool m_debug;
-
-        LoggerImpl(bool debug): m_debug(debug) {
-            worker = std::thread([this]() { ProcessLoop(); });
-        }
-
-        ~LoggerImpl() {
-            Shutdown();
-        }
-
-        void ProcessLoop() {
-            while (!stop) {
-                std::unique_lock<std::mutex> lock(queueMtx);
-                cv.wait(lock, [this]() { return !queue.empty() || stop; });
-
-                while (!queue.empty()) {
-                    auto msg = queue.front();
-                    queue.pop();
-                    lock.unlock();
-
-                    // 多个 sink 并发读
-                    {
-                        std::shared_lock sinkLock(sinkMtx); // 共享锁
-                        for (auto& sink : sinks) {
-                            sink->Write(msg);
-                        }
-                    }
-
-                    lock.lock();
-                }
-            }
-        }
-
-        void Shutdown() {
-            stop = true;
-            cv.notify_all();
-            if (worker.joinable()) worker.join();
-        }
+        bool m_debug = false;
     };
 
+    Logger& Logger::Instance() {
+        return Instance(false, false);
+    }
+
+    Logger& Logger::Instance(bool autoStart) {
+        return Instance(autoStart, false);
+    }
+
     // Logger API
-    Logger& Logger::Instance(bool debug) {
-        static Logger inst(debug);
-        if (inst.m_impl == nullptr || inst.m_impl->stop) {
-            if (inst.m_impl) delete inst.m_impl;
-            inst.m_impl = new LoggerImpl(debug);
-        }
+    Logger& Logger::Instance(bool autoStart, bool debug) {
+        static Logger inst(autoStart, debug);
+        if (inst.m_impl->stop.load(std::memory_order_acquire) && autoStart)
+            inst.Start();
         return inst;
     }
 
-    Logger::Logger(bool debug) {
-        m_impl = new LoggerImpl(debug);
+    Logger::Logger(bool autoStart, bool debug) {
+        m_impl = new LoggerImpl{};
+        m_impl->m_debug = debug;
+        m_impl->stop.store(true, std::memory_order_release); // 第一时间打 stop 标记
+        if (autoStart) Start();
     }
 
     Logger::~Logger() {
-        if (m_impl) delete m_impl;
-        m_impl = nullptr;
+        if (m_impl) {
+            m_impl->stop.store(true, std::memory_order_release); // 第一时间打 stop 标记
+            m_impl->cv.notify_all(); // 唤醒阻塞的 worker
+
+            if (m_impl->worker.joinable()) m_impl->worker.join(); // 等待线程退出
+
+            while (!m_impl->queue.empty()) m_impl->queue.pop();
+            m_impl->sinks.clear();
+
+            delete m_impl;
+            m_impl = nullptr;
+        }
     }
 
-    void Logger::ProcessLoop()
-    {
-        m_impl->ProcessLoop();
+    void Logger::ProcessLoop() {
+        while (!m_impl->stop) {
+            std::unique_lock<std::mutex> lock(m_impl->queueMtx);
+            m_impl->cv.wait(lock, [this]() { return !m_impl->queue.empty() || m_impl->stop; });
+
+            if (m_impl->stop && m_impl->queue.empty()) break;
+
+            while (!m_impl->queue.empty()) {
+                auto msg = m_impl->queue.front();
+                m_impl->queue.pop();
+                lock.unlock();
+
+                // 多个 sink 并发读
+                {
+                    std::shared_lock sinkLock(m_impl->sinkMtx); // 共享锁
+                    for (auto& sink : m_impl->sinks) {
+                        sink->Write(msg);
+                    }
+                }
+
+                lock.lock();
+            }
+        }
     }
 
     void Logger::SetLevel(LogLevel level) {
@@ -116,29 +118,59 @@ namespace LikesProgram {
     void Logger::Log(LogLevel level, const String& msg,
         const char* file, int line, const char* func)
     {
+        if (!m_impl) return;
+        if (m_impl->stop.load(std::memory_order_acquire)) return;
         if (level < m_impl->minLevel) return;
 
-        LogMessage m;
-        m.level = level;
-        m.msg = msg;
-        m.file = String(file);
-        m.line = line;
-        m.tid = std::this_thread::get_id();
-        m.threadName = CoreUtils::GetCurrentThreadName();
-        m.timestamp = std::chrono::system_clock::now();
-        m.func = String(func);
-        m.debug = m_impl->m_debug;
-        m.minLevel = m_impl->minLevel;
-        m.encoding = m_impl->encoding;
-        {
-            std::lock_guard<std::mutex> lock(m_impl->queueMtx);
-            m_impl->queue.push(m);
+        try {
+            LogMessage m;
+            m.level = level;
+            m.msg = String(msg);
+            m.file = (file != nullptr) ? String(file) : String();
+            m.line = line;
+            m.tid = std::this_thread::get_id();
+            m.threadName = CoreUtils::GetCurrentThreadName();
+            m.timestamp = std::chrono::system_clock::now();
+            m.func = (func != nullptr) ? String(func) : String();
+            m.debug = m_impl->m_debug;
+            m.minLevel = m_impl->minLevel;
+            m.encoding = m_impl->encoding;
+            // 使用 queueMtx 同步 stop 和 queue push
+            {
+                std::lock_guard<std::mutex> lock(m_impl->queueMtx);
+                if (m_impl->stop.load(std::memory_order_acquire)) return;
+                m_impl->queue.push(std::move(m));
+            }
+            m_impl->cv.notify_one();
+        } catch (const std::exception& e) {
+            std::cerr << "[Logger Error] Failed to log message: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "[Logger Error] Failed to log message: Unknown exception" << std::endl;
         }
-        m_impl->cv.notify_one();
     }
 
-    void Logger::Shutdown() {
-        m_impl->Shutdown();
+    bool Logger::Start() {
+        m_impl->stop.store(false, std::memory_order_release); // 设置停止标志
+        if (!m_impl->worker.joinable())
+            m_impl->worker = std::thread([this]() { ProcessLoop(); });
+        return m_impl->worker.joinable();
+    }
+
+    void Logger::Shutdown(bool clearSink) {
+        if (!m_impl) return;
+
+        m_impl->stop.store(true, std::memory_order_release);
+
+        m_impl->cv.notify_all(); // 唤醒 worker
+
+        if (m_impl->worker.joinable()) {
+            m_impl->worker.join();
+        }
+
+        if (clearSink) {
+            std::unique_lock lock(m_impl->sinkMtx);
+            m_impl->sinks.clear();
+        }
     }
 
     // 实现 ILogSink

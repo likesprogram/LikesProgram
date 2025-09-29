@@ -117,18 +117,19 @@ namespace LikesProgram {
     }
 
     String::String(const String& other): m_impl(new StringImpl{}) {
-        m_impl->m_size = other.m_impl->m_size;
-        m_impl->encoding = other.m_impl->encoding;
-        m_impl->cp_offsets = other.m_impl->cp_offsets;
-        m_impl->cp_cache_valid = other.m_impl->cp_cache_valid;
 
         if (other.m_impl->m_data) {
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), other.m_impl->m_data.get(), (m_impl->m_size + 1) * sizeof(char16_t));
+            m_impl->m_data = std::make_unique<char16_t[]>(other.m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), other.m_impl->m_data.get(), (other.m_impl->m_size + 1) * sizeof(char16_t));
         } else {
             m_impl->m_data = std::make_unique<char16_t[]>(1);
             m_impl->m_data[0] = u'\0';
         }
+
+        m_impl->m_size = other.m_impl->m_size;
+        m_impl->encoding = other.m_impl->encoding;
+        m_impl->cp_offsets = other.m_impl->cp_offsets;
+        m_impl->cp_cache_valid = other.m_impl->cp_cache_valid;
     }
 
     String::String(String&& other) noexcept : m_impl(other.m_impl) {

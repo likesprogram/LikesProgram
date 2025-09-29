@@ -2,28 +2,41 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include "../LikesProgram/Timer.hpp"
+#include "../LikesProgram/time/Timer.hpp"
+#include "../LikesProgram/time/Time.hpp"
+#include "../LikesProgram/metrics/Summary.hpp"
+
+using namespace LikesProgram;
+using namespace LikesProgram::Time;
+using namespace LikesProgram::Time::Convert;
 
 namespace TimerTest {
 	struct ThreadData {
-        LikesProgram::Timer* timer = nullptr;
+        Timer* timer = nullptr;
 		size_t index = 0;
 	};
 
 	void WorkLoad(ThreadData* data) {
-		LikesProgram::Timer threadTimer(true, data->timer); // 创建线程计时器
+		Timer threadTimer(true, data->timer); // 创建线程计时器
 
 		// 模拟耗时操作
 		std::this_thread::sleep_for(std::chrono::milliseconds(100 + data->index * 20));
 
 		auto elapsed = threadTimer.Stop(); // 停止并获取耗时
-        std::cout << "Thread 【" << data->index << "】：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+		std::cout << "Thread 【" << data->index << "】：" << NsToMs(elapsed.count()) << "ms" << std::endl;
 
 		delete data;
 	}
 
     void Test() {
-		LikesProgram::Timer timer; // 全局计时器
+		// 创建 Summary 统计对象（可选）
+		auto latencySummary = std::make_shared<LikesProgram::Metrics::Summary>(
+			u"timer_duration_seconds",
+			1024,
+			u"Timer duration in seconds"
+		);
+		latencySummary->SetEMAAlpha(0.5);
+		Timer timer(latencySummary); // 全局计时器
 
 		std::cout << "===== 单线程示例 =====" << std::endl;
 		{
@@ -32,10 +45,10 @@ namespace TimerTest {
 
 			//std::cout << "是否运行：" << timer.IsRunning() << std::endl;
 			auto elapsed = timer.Stop();
-            std::cout << "单线程：" << LikesProgram::Timer::ToString(elapsed) << std::endl;
+            std::cout << "单线程：" << NsToMs(elapsed.count()) << "ms" << std::endl;
 
 			std::cout << "是否运行：" << timer.IsRunning() << std::endl;
-			std::cout << "最近一次耗时：" << LikesProgram::Timer::ToString(timer.GetLastElapsed()) << std::endl;
+			std::cout << "最近一次耗时：" << NsToMs(elapsed.count()) << "ms" << std::endl;
 		}
 
 		std::cout << std::endl << "===== 多线程示例 =====" << std::endl;
@@ -53,20 +66,26 @@ namespace TimerTest {
 
 			for (auto& thread : threads) thread.join();
 			std::cout << std::endl << "===== 测试结果 =====" << std::endl;
-			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+
+			// 获取 Summary 统计对象
+			const LikesProgram::Metrics::Summary summary = timer.GetSummary();
+            std::cout << "Summary 统计结果：" << " 计时次数：" << summary.Count() << " ，总耗时：" << SToMs(summary.Sum()) << "ms" << std::endl;
+			std::cout << "Prometheus：" << std::endl;
+			std::wcout << summary.ToPrometheus() << std::endl;
+			std::cout << "Json：" << std::endl;
+			std::wcout << summary.ToJson() << std::endl;
 		}
 
 		std::cout << std::endl << "===== 重置示例 =====" << std::endl;
 		{
 			timer.Reset();
 
-			std::cout << "线程总时间：" << LikesProgram::Timer::ToString(timer.GetTotalElapsed()) << std::endl;
-			std::cout << "最长时间：" << LikesProgram::Timer::ToString(timer.GetLongestElapsed()) << std::endl;
-			std::cout << "EMA平均时间：" << LikesProgram::Timer::ToString(timer.GetEMAAverageElapsed()) << std::endl;
-			std::cout << "线程算数平均时间：" << LikesProgram::Timer::ToString(timer.GetArithmeticAverageElapsed()) << std::endl;
+			const LikesProgram::Metrics::Summary summary = timer.GetSummary();
+			std::cout << "Summary 统计结果：" << " 计时次数：" << summary.Count() << " ，总耗时：" << SToMs(summary.Sum()) << "ms" << std::endl;
+			std::cout << "Prometheus：" << std::endl;
+			std::wcout << summary.ToPrometheus() << std::endl;
+			std::cout << "Json：" << std::endl;
+			std::wcout << summary.ToJson() << std::endl;
 		}
     }
 }
