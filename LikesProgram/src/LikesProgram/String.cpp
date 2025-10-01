@@ -885,7 +885,7 @@ namespace LikesProgram {
     String String::FromFloat(double value, size_t precision) {
         std::wostringstream woss;
         if (precision > 0) {
-            woss << std::fixed << std::setprecision(precision);
+            woss << std::fixed << std::setprecision((int)precision);
         }
         woss << value;
         return String(woss.str());

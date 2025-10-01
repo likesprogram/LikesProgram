@@ -45,12 +45,12 @@ namespace LikesProgram {
         private:
             size_t m_maxWindow;
 
-            struct SummaryImpl;
-            SummaryImpl* m_impl;
-
             double m_alpha = -1;
 
             Math::PercentileSketch m_sketch;
+
+            struct SummaryImpl;
+            SummaryImpl* m_impl;
 
             void UpdateStats(double value);
         };

@@ -78,6 +78,12 @@
     <ClCompile Include="src\LikesProgram\threading\IThreadPoolObserver.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\math\Vector3.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\math\Vector4.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
@@ -95,7 +101,7 @@
     <ClInclude Include="include\test\TimerTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\test\VectorTest .hpp">
+    <ClInclude Include="include\test\VectorTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\String.hpp">
@@ -174,6 +180,18 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\threading\IThreadPoolObserver.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\math\Vector3.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\math\Vector4.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\Vector3Test.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\Vector4Test.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

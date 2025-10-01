@@ -77,11 +77,11 @@ namespace LikesProgram {
                 std::string head = path.substr(0, dotPos);
                 std::string tail = path.substr(dotPos + 1);
                 // 判断是否数组索引
-                bool isArray = !tail.empty() && std::all_of(tail.begin(), tail.end(), [](char c) { return std::isdigit(c) || c == '.'; });
+                [[maybe_unused]] bool isArray = !tail.empty() && std::all_of(tail.begin(), tail.end(), [](char c) { return std::isdigit(c) || c == '.'; });
                 if (std::isdigit(tail[0])) { // 数组
                     int idx = std::stoi(tail.substr(0, tail.find('.')));
                     Configuration& arr = cfg[String(head)];
-                    while (arr.Size() <= idx) arr.Push_back(Configuration());
+                    while (arr.Size() <= (size_t)idx) arr.Push_back(Configuration());
                     SetValueByPath(arr[idx], tail.substr(tail.find('.') + 1), value);
                 }
                 else { // 对象
@@ -98,7 +98,7 @@ namespace LikesProgram {
 
 
 namespace ConfigurationTest {
-	void Test() {
+    void Test() {
 #ifdef _DEBUG
         auto& logger = LikesProgram::Logger::Instance(true, true);
 #else
@@ -162,7 +162,7 @@ namespace ConfigurationTest {
             int64_t userId = cfg[u"user_id"].AsInt64();
             LikesProgram::String street = cfg[u"address"][u"street"].AsString();
             bool active = cfg[u"is_active"].AsBool();
-            
+
             LikesProgram::String out = u"User ID: ";
             out += LikesProgram::String(std::to_string(userId));
             out += u", Street: "; out += street;
@@ -251,6 +251,7 @@ namespace ConfigurationTest {
         // 异常捕获示例
         try {
             int invalid = loadedCfg[u"nonexistent"].AsInt(); // key 不存在
+            (void)invalid; // 避免 unused warning
         }
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (key missing): ";
@@ -260,6 +261,7 @@ namespace ConfigurationTest {
 
         try {
             double invalidType = loadedCfg[u"user_name"].AsDouble(); // 类型不匹配
+            (void)invalidType; // 避免 unused warning
         }
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (type mismatch): ";
@@ -269,6 +271,7 @@ namespace ConfigurationTest {
 
         try {
             auto hobby = loadedCfg[u"hobbies"].At(10); // 越界
+            (void)hobby; // 避免 unused warning
         }
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (array out-of-range): ";
@@ -294,5 +297,5 @@ namespace ConfigurationTest {
         LOG_DEBUG(loadedOut1);
 
         logger.Shutdown();
-	}
+    }
 }

@@ -1,9 +1,9 @@
 #pragma once
-#include "../LikesProgram/Metrics/Counter.hpp"
-#include "../LikesProgram/Metrics/Gauge.hpp"
-#include "../LikesProgram/Metrics/Histogram.hpp"
-#include "../LikesProgram/Metrics/Summary.hpp"
-#include "../LikesProgram/Metrics/Registry.hpp"
+#include "../LikesProgram/metrics/Counter.hpp"
+#include "../LikesProgram/metrics/Gauge.hpp"
+#include "../LikesProgram/metrics/Histogram.hpp"
+#include "../LikesProgram/metrics/Summary.hpp"
+#include "../LikesProgram/metrics/Registry.hpp"
 #include "../LikesProgram/time/Timer.hpp"
 #include <iostream>
 #include <thread>

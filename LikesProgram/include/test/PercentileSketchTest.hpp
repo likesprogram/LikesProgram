@@ -2,7 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include "../LikesProgram/Math/PercentileSketch.hpp"
+#include "../LikesProgram/math/PercentileSketch.hpp"
 
 namespace PercentileSketchTest {
 	void Test() {

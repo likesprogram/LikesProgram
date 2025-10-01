@@ -1,9 +1,10 @@
 ﻿#include "../../../include/LikesProgram/metrics/Gauge.hpp"
+#include <atomic>
 
 namespace LikesProgram {
 	namespace Metrics {
         struct Gauge::GaugeImpl {
-            std::atomic<double> m_value{ 0 };
+            std::atomic<double> m_value{ 0.0 };
         };
 
 		Gauge::Gauge(const LikesProgram::String& name, const LikesProgram::String& help,

@@ -247,14 +247,14 @@ namespace LikesProgram {
 #else
             const char* colorCode = "";
             switch (message.level) {
-            case LogLevel::Info:  colorCode = "\033[0m"; break;
-            case LogLevel::Warn:  colorCode = "\033[33m"; break;
-            case LogLevel::Error: colorCode = "\033[31m"; break;
-            case LogLevel::Fatal: colorCode = "\033[41;97m"; break;
-            case LogLevel::Debug: colorCode = "\033[32m"; break;
-            case LogLevel::Trace: colorCode = "\033[34m"; break;
+            case Logger::LogLevel::Info:  colorCode = "\033[0m"; break;
+            case Logger::LogLevel::Warn:  colorCode = "\033[33m"; break;
+            case Logger::LogLevel::Error: colorCode = "\033[31m"; break;
+            case Logger::LogLevel::Fatal: colorCode = "\033[41;97m"; break;
+            case Logger::LogLevel::Debug: colorCode = "\033[32m"; break;
+            case Logger::LogLevel::Trace: colorCode = "\033[34m"; break;
             }
-            std::cout << colorCode << formatted.ToStdString(encoding) << "\033[0m" << std::endl;
+            std::cout << colorCode << formatted.ToStdString(message.encoding) << "\033[0m" << std::endl;
 #endif
         }
     };

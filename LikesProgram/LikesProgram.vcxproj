@@ -132,6 +132,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\LikesProgram\math\PercentileSketch.cpp" />
+    <ClCompile Include="src\LikesProgram\math\Vector3.cpp" />
+    <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
     <ClCompile Include="src\LikesProgram\CoreUtils.cpp" />
@@ -159,6 +161,8 @@
     <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />
     <ClInclude Include="include\LikesProgram\math\PercentileSketch.hpp" />
+    <ClInclude Include="include\LikesProgram\math\Vector3.hpp" />
+    <ClInclude Include="include\LikesProgram\math\Vector4.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Counter.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Gauge.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Histogram.hpp" />
@@ -183,7 +187,9 @@
     <ClInclude Include="include\test\ThreadPoolTest.hpp" />
     <ClInclude Include="include\test\TimerTest.hpp" />
     <ClInclude Include="include\test\UnicodeTest.hpp" />
-    <ClInclude Include="include\test\VectorTest .hpp" />
+    <ClInclude Include="include\test\Vector3Test.hpp" />
+    <ClInclude Include="include\test\Vector4Test.hpp" />
+    <ClInclude Include="include\test\VectorTest.hpp" />
     <ClInclude Include="include\LikesProgram\String.hpp" />
   </ItemGroup>
   <ItemGroup>

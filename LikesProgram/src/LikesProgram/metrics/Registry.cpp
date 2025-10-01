@@ -21,8 +21,10 @@ namespace LikesProgram {
 
 		Registry::Registry() :m_impl(new RegistryImpl{}) { }
 		Registry::~Registry() {
-            if (m_impl) delete m_impl;
-			m_impl = nullptr;
+			if (m_impl) {
+				delete m_impl;
+				m_impl = nullptr;
+			}
 		}
 
 		void Registry::Register(const std::shared_ptr<MetricsObject>& m) {

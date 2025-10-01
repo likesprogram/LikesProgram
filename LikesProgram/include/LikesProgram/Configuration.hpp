@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include "String.hpp"
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <variant>
 #include <memory>
@@ -10,7 +10,7 @@
 namespace LikesProgram {
     class LIKESPROGRAM_API Configuration {
     public:
-        using ObjectMap = std::unordered_map<String, Configuration>;
+        using ObjectMap = std::map<String, Configuration>;
         using Array = std::vector<Configuration>;
         using Value = std::variant<std::monostate, int, int64_t, double, bool, String, Array, ObjectMap>;
 

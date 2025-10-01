@@ -1,9 +1,10 @@
 ﻿#include "../../../include/LikesProgram/metrics/Counter.hpp"
+#include <atomic>
 
 namespace LikesProgram {
 	namespace Metrics {
 		struct Counter::CounterImpl {
-			std::atomic<double> m_value{ 0 };
+			std::atomic<double> m_value{ 0.0 };
 		};
 
 		Counter::Counter(const LikesProgram::String& name, const LikesProgram::String& help,

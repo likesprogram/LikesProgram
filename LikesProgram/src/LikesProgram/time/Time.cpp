@@ -1,4 +1,7 @@
 ﻿#include "../../../include/LikesProgram/time/Time.hpp"
+#include <sstream>
+#include <iomanip>
+#include <cmath>
 
 namespace LikesProgram {
     namespace Time {

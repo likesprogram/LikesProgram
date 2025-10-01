@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <utility>
 #include <memory>
+#include <thread>
 
 namespace LikesProgram {
     namespace Math {
@@ -166,7 +167,7 @@ namespace LikesProgram {
             Centroid cur = centroids[0];
             for (size_t i = 1; i < centroids.size(); i++) {
                 double q = cumCount / totalCount;
-                double k = 4 * totalCount * q * (1 - q) / compression; // 论文近似公式
+                double k = 4 * totalCount * q * (1 - q) / (double)compression; // 论文近似公式
 
                 if (cur.count + centroids[i].count <= k) {
                     double newCount = cur.count + centroids[i].count;
