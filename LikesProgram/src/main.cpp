@@ -56,6 +56,6 @@ int main()
         ConfigurationTest::Test();
 
         i++;
-    } while (true);
+    } while (false);
     return 0;
 }
