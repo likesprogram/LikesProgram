@@ -1,10 +1,10 @@
-#include "../../../include/LikesProgram/time/Time.hpp"
+Ôªø#include "../../../include/LikesProgram/time/Time.hpp"
 
 namespace LikesProgram {
     namespace Time {
         LikesProgram::String FormatTime(const TimePoint& tp, const LikesProgram::String& fmt)
         {
-            // √Îº∂ ±º‰¥¡
+            // ÁßíÁ∫ßÊó∂Èó¥Êà≥
             std::time_t t = std::chrono::system_clock::to_time_t(tp);
 
             std::tm tm{};
@@ -14,7 +14,7 @@ namespace LikesProgram {
             localtime_r(&t, &tm);
 #endif
 
-            // ƒ…√Î≤ø∑÷
+            // Á∫≥ÁßíÈÉ®ÂàÜ
             auto ns = duration_cast<Nanoseconds>(tp.time_since_epoch()) % Seconds(1);
             int64_t ns_val = ns.count();
 
@@ -27,9 +27,9 @@ namespace LikesProgram {
                     if (i + 1 >= fmt.Length()) break;
                     wchar_t code = (wchar_t)fmt.At(i + 1);
 
-                    // ==== ƒ…√Î¿©’π ====
+                    // ==== Á∫≥ÁßíÊâ©Â±ï ====
                     if (code == L'f') {
-                        // ƒ¨»œ 9 Œª
+                        // ÈªòËÆ§ 9 ‰Ωç
                         std::wostringstream oss;
                         oss << std::setw(9) << std::setfill(L'0') << ns_val;
                         result += oss.str();
@@ -37,7 +37,7 @@ namespace LikesProgram {
                         continue;
                     }
                     else if (iswdigit(code) && i + 2 < fmt.Length() && fmt.At(i + 2) == u'f') {
-                        int width = code - L'0'; // ÷ß≥÷ %3f / %6f / %9f
+                        int width = code - L'0'; // ÊîØÊåÅ %3f / %6f / %9f
                         if (width > 9) width = 9;
                         std::wostringstream oss;
                         oss << std::setw(width) << std::setfill(L'0') << (ns_val / static_cast<int>(std::pow(10, 9 - width)));
@@ -48,7 +48,7 @@ namespace LikesProgram {
 
                     buf[0] = L'\0';
                     switch (code) {
-                        // »’∆⁄
+                        // Êó•Êúü
                     case L'a': wcsftime(buf, 128, L"%a", &tm); break;
                     case L'A': wcsftime(buf, 128, L"%A", &tm); break;
                     case L'b': wcsftime(buf, 128, L"%b", &tm); break;

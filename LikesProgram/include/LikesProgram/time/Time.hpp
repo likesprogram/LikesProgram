@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../String.hpp"
 #include <chrono>
 
@@ -14,90 +14,88 @@ namespace LikesProgram {
         using Hours = std::chrono::hours;
         using Days = std::chrono::duration<int64_t, std::ratio<86400>>;
 
-        // ¸ñÊ½»¯Ê±¼ä
+        // æ ¼å¼åŒ–æ—¶é—´
 		LikesProgram::String FormatTime(const TimePoint& tp, const LikesProgram::String& fmt = u"%Y-%m-%d %H:%M:%S");
         
-        namespace Convert {
-            // ÄÉÃë ¡ú system_clock::time_point
-            inline TimePoint NsToSystemClock(Nanoseconds ns) {
-                return TimePoint{ std::chrono::duration_cast<TimePoint::duration>(ns) };
-            }
-
-            // ÄÉÃë ¡ú system_clock::time_point
-            inline TimePoint NsToSystemClock(int64_t ns) {
-                return NsToSystemClock(Nanoseconds{ ns });
-            }
-
-            // system_clock::time_point ¡ú ÄÉÃë
-            inline Nanoseconds SystemClockToDuration(const TimePoint& tp) {
-                return std::chrono::duration_cast<Nanoseconds>(tp.time_since_epoch());
-            }
-
-            // ÄÉÃë ¡ú Î¢Ãë
-            inline double NsToUs(int64_t ns) { return static_cast<double>(ns) / 1'000.0; }
-            // ÄÉÃë ¡ú ºÁÃë
-            inline double NsToMs(int64_t ns) { return static_cast<double>(ns) / 1'000'000.0; }
-            // ÄÉÃë ¡ú Ãë
-            inline double NsToS(int64_t ns) { return static_cast<double>(ns) / 1'000'000'000.0; }
-            // ÄÉÃë ¡ú ·ÖÖÓ
-            inline double NsToMin(int64_t ns) { return static_cast<double>(ns) / 60'000'000'000.0; }
-            // ÄÉÃë ¡ú Ğ¡Ê±
-            inline double NsToH(int64_t ns) { return static_cast<double>(ns) / 3'600'000'000'000.0; }
-
-            // Î¢Ãë ¡ú ÄÉÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline int64_t UsToNs(double us) { return static_cast<int64_t>(us * 1'000.0); }
-            // Î¢Ãë ¡ú ºÁÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double UsToMs(double us) { return us / 1'000.0; }
-            // Î¢Ãë ¡ú Ãë
-            inline double UsToS(double us) { return us / 1'000'000.0; }
-            // Î¢Ãë ¡ú ·ÖÖÓ
-            inline double UsToMin(double us) { return us / 60'000'000.0; }
-            // Î¢Ãë ¡ú Ğ¡Ê±
-            inline double UsToH(double us) { return us / 3'600'000'000.0; }
-
-            // ºÁÃë ¡ú ÄÉÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline int64_t MsToNs(double ms) { return static_cast<int64_t>(ms * 1'000'000.0); }
-            // ºÁÃë ¡ú Î¢Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double MsToUs(double ms) { return ms * 1'000.0; }
-            // ºÁÃë ¡ú Ãë
-            inline double MsToS(double ms) { return ms / 1'000.0; }
-            // ºÁÃë ¡ú ·ÖÖÓ
-            inline double MsToMin(double ms) { return ms / 60'000.0; }
-            // ºÁÃë ¡ú Ğ¡Ê±
-            inline double MsToH(double ms) { return ms / 3'600'000.0; }
-
-            // Ãë ¡ú ÄÉÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline int64_t SToNs(double s) { return static_cast<int64_t>(s * 1'000'000'000.0); }
-            // Ãë ¡ú Î¢Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double SToUs(double s) { return s * 1'000'000.0; }
-            // Ãë ¡ú ºÁÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double SToMs(double s) { return s * 1'000.0; }
-            // Ãë ¡ú ·ÖÖÓ
-            inline double SToMin(double s) { return s / 60.0; }
-            // Ãë ¡ú Ğ¡Ê±
-            inline double SToH(double s) { return s / 3'600.0; }
-
-            // ·ÖÖÓ ¡ú ÄÉÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline int64_t MinToNs(double min) { return static_cast<int64_t>(min * 60.0 * 1'000'000'000.0); }
-            // ·ÖÖÓ ¡ú Î¢Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double MinToUs(double min) { return min * 60.0 * 1'000'000.0; }
-            // ·ÖÖÓ ¡ú ºÁÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double MinToMs(double min) { return min * 60.0 * 1'000.0; }
-            // ·ÖÖÓ ¡ú Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double MinToS(double min) { return min * 60.0; }
-            // ·ÖÖÓ ¡ú Ğ¡Ê±
-            inline double MinToH(double min) { return min / 60.0; }
-
-            // Ğ¡Ê± ¡ú ÄÉÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline int64_t HToNs(double h) { return static_cast<int64_t>(h * 3'600.0 * 1'000'000'000.0); }
-            // Ğ¡Ê± ¡ú Î¢Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double HToUs(double h) { return h * 3'600.0 * 1'000'000.0; }
-            // Ğ¡Ê± ¡ú ºÁÃë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double HToMs(double h) { return h * 3'600.0 * 1'000.0; }
-            // Ğ¡Ê± ¡ú Ãë£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double HToS(double h) { return h * 3'600.0; }
-            // Ğ¡Ê± ¡ú ·ÖÖÓ£¨¿ÉÄÜÒç³ö£¬×¢Òâ·¶Î§£©
-            inline double HToMin(double h) { return h * 60.0; }
+        // çº³ç§’ â†’ system_clock::time_point
+        inline TimePoint NsToSystemClock(Nanoseconds ns) {
+            return TimePoint{ std::chrono::duration_cast<TimePoint::duration>(ns) };
         }
+
+        // çº³ç§’ â†’ system_clock::time_point
+        inline TimePoint NsToSystemClock(int64_t ns) {
+            return NsToSystemClock(Nanoseconds{ ns });
+        }
+
+        // system_clock::time_point â†’ çº³ç§’
+        inline Nanoseconds SystemClockToDuration(const TimePoint& tp) {
+            return std::chrono::duration_cast<Nanoseconds>(tp.time_since_epoch());
+        }
+
+        // çº³ç§’ â†’ å¾®ç§’
+        inline double NsToUs(int64_t ns) { return static_cast<double>(ns) / 1'000.0; }
+        // çº³ç§’ â†’ æ¯«ç§’
+        inline double NsToMs(int64_t ns) { return static_cast<double>(ns) / 1'000'000.0; }
+        // çº³ç§’ â†’ ç§’
+        inline double NsToS(int64_t ns) { return static_cast<double>(ns) / 1'000'000'000.0; }
+        // çº³ç§’ â†’ åˆ†é’Ÿ
+        inline double NsToMin(int64_t ns) { return static_cast<double>(ns) / 60'000'000'000.0; }
+        // çº³ç§’ â†’ å°æ—¶
+        inline double NsToH(int64_t ns) { return static_cast<double>(ns) / 3'600'000'000'000.0; }
+
+        // å¾®ç§’ â†’ çº³ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline int64_t UsToNs(double us) { return static_cast<int64_t>(us * 1'000.0); }
+        // å¾®ç§’ â†’ æ¯«ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double UsToMs(double us) { return us / 1'000.0; }
+        // å¾®ç§’ â†’ ç§’
+        inline double UsToS(double us) { return us / 1'000'000.0; }
+        // å¾®ç§’ â†’ åˆ†é’Ÿ
+        inline double UsToMin(double us) { return us / 60'000'000.0; }
+        // å¾®ç§’ â†’ å°æ—¶
+        inline double UsToH(double us) { return us / 3'600'000'000.0; }
+
+        // æ¯«ç§’ â†’ çº³ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline int64_t MsToNs(double ms) { return static_cast<int64_t>(ms * 1'000'000.0); }
+        // æ¯«ç§’ â†’ å¾®ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double MsToUs(double ms) { return ms * 1'000.0; }
+        // æ¯«ç§’ â†’ ç§’
+        inline double MsToS(double ms) { return ms / 1'000.0; }
+        // æ¯«ç§’ â†’ åˆ†é’Ÿ
+        inline double MsToMin(double ms) { return ms / 60'000.0; }
+        // æ¯«ç§’ â†’ å°æ—¶
+        inline double MsToH(double ms) { return ms / 3'600'000.0; }
+
+        // ç§’ â†’ çº³ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline int64_t SToNs(double s) { return static_cast<int64_t>(s * 1'000'000'000.0); }
+        // ç§’ â†’ å¾®ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double SToUs(double s) { return s * 1'000'000.0; }
+        // ç§’ â†’ æ¯«ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double SToMs(double s) { return s * 1'000.0; }
+        // ç§’ â†’ åˆ†é’Ÿ
+        inline double SToMin(double s) { return s / 60.0; }
+        // ç§’ â†’ å°æ—¶
+        inline double SToH(double s) { return s / 3'600.0; }
+
+        // åˆ†é’Ÿ â†’ çº³ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline int64_t MinToNs(double min) { return static_cast<int64_t>(min * 60.0 * 1'000'000'000.0); }
+        // åˆ†é’Ÿ â†’ å¾®ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double MinToUs(double min) { return min * 60.0 * 1'000'000.0; }
+        // åˆ†é’Ÿ â†’ æ¯«ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double MinToMs(double min) { return min * 60.0 * 1'000.0; }
+        // åˆ†é’Ÿ â†’ ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double MinToS(double min) { return min * 60.0; }
+        // åˆ†é’Ÿ â†’ å°æ—¶
+        inline double MinToH(double min) { return min / 60.0; }
+
+        // å°æ—¶ â†’ çº³ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline int64_t HToNs(double h) { return static_cast<int64_t>(h * 3'600.0 * 1'000'000'000.0); }
+        // å°æ—¶ â†’ å¾®ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double HToUs(double h) { return h * 3'600.0 * 1'000'000.0; }
+        // å°æ—¶ â†’ æ¯«ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double HToMs(double h) { return h * 3'600.0 * 1'000.0; }
+        // å°æ—¶ â†’ ç§’ï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double HToS(double h) { return h * 3'600.0; }
+        // å°æ—¶ â†’ åˆ†é’Ÿï¼ˆå¯èƒ½æº¢å‡ºï¼Œæ³¨æ„èŒƒå›´ï¼‰
+        inline double HToMin(double h) { return h * 60.0; }
 	}
 }

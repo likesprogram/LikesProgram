@@ -48,11 +48,13 @@ namespace LikesProgram {
         struct Timer::TimerImpl {
             std::atomic<uint64_t> m_startNs = 0;
             std::atomic<uint64_t> m_lastNs = 0;
+            std::shared_ptr<LikesProgram::Metrics::Summary> m_summary = nullptr;
             std::atomic<bool> m_running = false;
             mutable std::shared_mutex m_mutex;
         };
 
-        Timer::Timer(std::shared_ptr<LikesProgram::Metrics::Summary> summary, bool autoStart, Timer* parent) : m_impl(new TimerImpl{}), m_summary(summary), m_parent(parent) {
+        Timer::Timer(std::shared_ptr<LikesProgram::Metrics::Summary> summary, bool autoStart, Timer* parent) : m_impl(new TimerImpl{}), m_parent(parent) {
+            m_impl->m_summary = summary;
             if (autoStart) Start();
         }
 
@@ -68,11 +70,12 @@ namespace LikesProgram {
             }
         }
 
-        Timer::Timer(const Timer& other) : m_summary(other.m_summary), m_parent(other.m_parent) {
+        Timer::Timer(const Timer& other) : m_parent(other.m_parent) {
             m_impl = new TimerImpl{};
             if (other.m_impl) {
                 m_impl->m_startNs.store(other.m_impl->m_startNs.load());
                 m_impl->m_lastNs.store(other.m_impl->m_lastNs.load());
+                m_impl->m_summary = other.m_impl->m_summary;
                 m_impl->m_running.store(other.m_impl->m_running.load());
             }
         }
@@ -84,17 +87,17 @@ namespace LikesProgram {
                 if (other.m_impl) {
                     newImpl->m_startNs.store(other.m_impl->m_startNs.load());
                     newImpl->m_lastNs.store(other.m_impl->m_lastNs.load());
+                    newImpl->m_summary = other.m_impl->m_summary;
                     newImpl->m_running.store(other.m_impl->m_running.load());
                 }
                 delete m_impl;
                 m_impl = newImpl;
-                m_summary = other.m_summary;
                 m_parent = other.m_parent;
             }
             return *this;
         }
 
-        Timer::Timer(Timer&& other) noexcept : m_impl(other.m_impl), m_summary(other.m_summary), m_parent(other.m_parent) {
+        Timer::Timer(Timer&& other) noexcept : m_impl(other.m_impl), m_parent(other.m_parent) {
             other.m_impl = nullptr;
             other.m_parent = nullptr;
         }
@@ -103,10 +106,8 @@ namespace LikesProgram {
             if (this != &other) {
                 delete m_impl;
                 m_impl = other.m_impl;
-                m_summary = other.m_summary;
                 m_parent = other.m_parent;
                 other.m_impl = nullptr;
-                other.m_summary = nullptr;
                 other.m_parent = nullptr;
             }
             return *this;
@@ -117,16 +118,16 @@ namespace LikesProgram {
             m_impl->m_running.store(true, std::memory_order_relaxed);
         }
 
-        Time::Duration Timer::Stop(double alpha) {
+        Time::Duration Timer::Stop() {
             std::shared_lock lk(m_impl->m_mutex); // 共享锁
             if (!m_impl->m_running.load(std::memory_order_relaxed)) return Duration(0);
             uint64_t elapsedNs = NowNs() - m_impl->m_startNs.load(std::memory_order_relaxed);
             m_impl->m_lastNs.store(elapsedNs, std::memory_order_relaxed);
 
-            if (m_summary) m_summary->Observe(Convert::NsToS(elapsedNs));
+            if (m_impl->m_summary) m_impl->m_summary->Observe(NsToS(elapsedNs));
 
-            if (m_parent && m_parent->m_summary && m_parent->m_summary != m_summary)
-                m_parent->m_summary->Observe(Convert::NsToS(elapsedNs));
+            if (m_parent && m_parent->m_impl->m_summary && m_parent->m_impl->m_summary != m_impl->m_summary)
+                m_parent->m_impl->m_summary->Observe(NsToS(elapsedNs));
 
             m_impl->m_running.store(false, std::memory_order_relaxed);
             return Duration(elapsedNs);
@@ -136,7 +137,7 @@ namespace LikesProgram {
             std::unique_lock lk(m_impl->m_mutex); // 独享锁
             m_impl->m_startNs.store(0, std::memory_order_relaxed);
             m_impl->m_lastNs.store(0, std::memory_order_relaxed);
-            if (m_summary) m_summary->Reset();
+            if (m_impl->m_summary) m_impl->m_summary->Reset();
         }
 
         Time::Duration Timer::GetLastElapsed() const {
@@ -145,7 +146,7 @@ namespace LikesProgram {
 
         const LikesProgram::Metrics::Summary& Timer::GetSummary() const {
             static const LikesProgram::Metrics::Summary empty(u"");
-            return m_summary ? *m_summary : empty;
+            return m_impl->m_summary ? *(m_impl->m_summary) : empty;
         }
 
         bool Timer::IsRunning() const {

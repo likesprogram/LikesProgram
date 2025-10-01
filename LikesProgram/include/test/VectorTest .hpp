@@ -30,7 +30,7 @@ namespace VectorTest {
 
         std::cout << "Stress Test 完成\n";
         std::cout << "最终累积结果: " << acc << "\n";
-        std::cout << "耗时: " << LikesProgram::Time::Convert::NsToMs(timer.Stop().count()) << "ms" << std::endl;
+        std::cout << "耗时: " << LikesProgram::Time::NsToMs(timer.Stop().count()) << "ms" << std::endl;
     }
 
     void BasicOps() {

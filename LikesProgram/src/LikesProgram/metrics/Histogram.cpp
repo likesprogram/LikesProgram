@@ -93,7 +93,7 @@ namespace LikesProgram {
         }
 
         void Histogram::ObserveDuration(const LikesProgram::Time::Timer& timer) {
-            double value_s = LikesProgram::Time::Convert::NsToS(timer.GetLastElapsed().count());
+            double value_s = LikesProgram::Time::NsToS(timer.GetLastElapsed().count());
             Observe(value_s);
         }
 

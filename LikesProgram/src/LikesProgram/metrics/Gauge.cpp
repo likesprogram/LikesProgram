@@ -50,11 +50,11 @@ namespace LikesProgram {
 		}
 
 		void Gauge::Increment(double value) {
-            double newVal = m_impl->m_value.fetch_add(value, std::memory_order_relaxed) + value;
+            m_impl->m_value.fetch_add(value, std::memory_order_relaxed);
 		}
 
 		void Gauge::Decrement(double value) {
-            double newVal = m_impl->m_value.fetch_sub(value, std::memory_order_relaxed) - value;
+            m_impl->m_value.fetch_sub(value, std::memory_order_relaxed);
 		}
 
         double Gauge::Value() const {

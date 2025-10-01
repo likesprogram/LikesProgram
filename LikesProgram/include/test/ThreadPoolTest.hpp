@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "../LikesProgram/ThreadPool.hpp"
+#include "../LikesProgram/threading/ThreadPool.hpp"
 #include "../LikesProgram/Logger.hpp"
 #include "../LikesProgram/String.hpp"
 
@@ -29,9 +29,13 @@ namespace ThreadPoolTest {
 
         // 创建线程池
         // LikesProgram::ThreadPool pool(optins); // 使用自定义参数创建线程池
-        LikesProgram::ThreadPool pool; // 使用默认参数创建线程池
+        std::shared_ptr<LikesProgram::Metrics::Registry> registry = std::make_shared<Metrics::Registry>(); // 创建一个临时的注册器
+        LikesProgram::ThreadPool pool(LikesProgram::ThreadPool::CreateDefaultThreadPoolMetrics(u"tp_name", registry)); // 添加 记录器
+        //LikesProgram::ThreadPool pool; // 使用默认参数创建线程池，无记录器，不注册
         pool.Start();
 
+        // 输出 注册器 中的 Metrics 内容
+        LOG_WARN(registry->ExportPrometheus());
         // 提交一些任务
         for (int i = 0; i < 30; i++) {
             // 提交无返回值无参数的任务
@@ -69,6 +73,9 @@ namespace ThreadPoolTest {
             if (i % 10 == 0) {
                 LOG_WARN(poolOut.get()); // 每隔10次输出一次 Submit 的运行结果
 
+                // 输出 注册器 中的 Metrics 内容
+                LOG_WARN(registry->ExportPrometheus());
+
                 // 获取快照统计信息
                 LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
                 LOG_WARN(stats.ToString());
@@ -86,6 +93,9 @@ namespace ThreadPoolTest {
         // 获取快照统计信息
         LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
         LOG_WARN(stats.ToString());
+
+        // 输出 注册器 中的 Metrics 内容
+        LOG_WARN(registry->ExportPrometheus());
 
         logger.Shutdown();
 	}

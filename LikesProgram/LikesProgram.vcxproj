@@ -142,7 +142,8 @@
     <ClCompile Include="src\LikesProgram\metrics\Metrics.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Registry.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Summary.cpp" />
-    <ClCompile Include="src\LikesProgram\ThreadPool.cpp" />
+    <ClCompile Include="src\LikesProgram\threading\IThreadPoolObserver.cpp" />
+    <ClCompile Include="src\LikesProgram\threading\ThreadPool.cpp" />
     <ClCompile Include="src\LikesProgram\time\Time.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseBMP.cpp" />
     <ClCompile Include="src\LikesProgram\unicode\CaseSMP.cpp" />
@@ -164,7 +165,8 @@
     <ClInclude Include="include\LikesProgram\metrics\Metrics.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Registry.hpp" />
     <ClInclude Include="include\LikesProgram\metrics\Summary.hpp" />
-    <ClInclude Include="include\LikesProgram\ThreadPool.hpp" />
+    <ClInclude Include="include\LikesProgram\threading\IThreadPoolObserver.hpp" />
+    <ClInclude Include="include\LikesProgram\threading\ThreadPool.hpp" />
     <ClInclude Include="include\LikesProgram\time\Time.hpp" />
     <ClInclude Include="include\LikesProgram\time\Timer.hpp" />
     <ClInclude Include="include\LikesProgram\math\Math.hpp" />

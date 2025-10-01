@@ -101,7 +101,7 @@ int main()
             // 可选：调试输出（只在你想看的时候开启）
             std::cout << "iter=" << i << " pb=" << pb << " (" << HumanReadable(pb) << ")\n";
         }
-    } while (true);
+    } while (false);
 
     memlog.close();
     return 0;

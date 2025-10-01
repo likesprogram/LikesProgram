@@ -2,6 +2,7 @@
 #include "../LikesProgramLibExport.hpp"
 #include "../String.hpp"
 #include "../metrics/Summary.hpp"
+#include "../metrics/Registry.hpp"
 #include "Time.hpp"
 #include <atomic>
 #include <shared_mutex>
@@ -35,7 +36,7 @@ namespace LikesProgram {
             void Start();
 
             // 停止计时
-            Duration Stop(double alpha = 0.9);
+            Duration Stop();
 
             // 重置计时器
             void Reset();
@@ -48,12 +49,11 @@ namespace LikesProgram {
 
             // 当前是否在计时
             bool IsRunning() const;
-        private:
+
             // 获取高精度纳秒时间
             static uint64_t NowNs();
-
+        private:
             Timer* m_parent = nullptr;
-            std::shared_ptr<LikesProgram::Metrics::Summary> m_summary = nullptr;
 
             struct TimerImpl;
             TimerImpl* m_impl = nullptr;

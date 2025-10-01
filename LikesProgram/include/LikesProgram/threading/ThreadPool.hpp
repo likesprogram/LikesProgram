@@ -1,7 +1,8 @@
 ﻿#pragma once
-#include "LikesProgramLibExport.hpp"
-#include "String.hpp"
-#include "time/Time.hpp"
+#include "../LikesProgramLibExport.hpp"
+#include "../String.hpp"
+#include "../time/Time.hpp"
+#include "IThreadPoolObserver.hpp"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -44,6 +45,7 @@ namespace LikesProgram {
             Drain,      // 立刻拒绝新任务；执行队列里已有任务；尽快退出（不清队列）
             CancelNow   // 立刻拒绝新任务；丢弃队列；尽快退出
         };
+
         // 配置选项
         struct Options {
             size_t coreThreads = std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 1; // 最少线程
@@ -76,16 +78,15 @@ namespace LikesProgram {
             size_t aliveThreads = 0;    // 存活工作线程数
             size_t largestPoolSize = 0; // 历史最大线程数
             size_t peakQueueSize = 0;   // 队列峰值
-            std::chrono::steady_clock::time_point lastSubmitTime{}; // 最后一次提交时间
-            std::chrono::steady_clock::time_point lastFinishTime{}; // 最后一次完成时间
-            Time::Nanoseconds longestTaskTime{ 0 }; // 最长任务耗时
-            double arithmeticAverageTaskTime{ 0 }; // 算术平均任务耗时
-            double averageTaskTime{ 0 }; // 指数移动平均任务耗时
-
+            Time::TimePoint lastSubmitTime{}; // 最后一次提交时间
+            Time::TimePoint lastFinishTime{}; // 最后一次完成时间
             String ToString() const;
         };
 
-        explicit ThreadPool(Options opts = Options());
+        explicit ThreadPool(std::shared_ptr<IThreadPoolObserver> observer, Options opts);
+        explicit ThreadPool(Options opts) : ThreadPool(nullptr, std::move(opts)) { }
+        explicit ThreadPool(std::shared_ptr<IThreadPoolObserver> observer) : ThreadPool(observer, Options()) { }
+        explicit ThreadPool() : ThreadPool(nullptr, Options()) { }
 
         ~ThreadPool();
 
@@ -207,5 +208,8 @@ namespace LikesProgram {
 
         struct ThreadPoolImpl;
         ThreadPoolImpl* m_impl = nullptr;
+
+    public:
+        static std::shared_ptr<IThreadPoolObserver> CreateDefaultThreadPoolMetrics(const String& poolName, std::shared_ptr<Metrics::Registry> registry);
     };
 }
