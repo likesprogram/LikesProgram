@@ -53,6 +53,10 @@ target_include_directories(LikesProgram
         $<INSTALL_INTERFACE:include>
 )
 
+# ---- 添加线程支持 ----
+find_package(Threads REQUIRED)
+target_link_libraries(LikesProgram PRIVATE Threads::Threads)
+
 # ---------- 输出名和目录 ----------
 if (BUILD_SHARED_LIBS)
     # 动态库
