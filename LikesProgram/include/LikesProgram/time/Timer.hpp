@@ -53,10 +53,9 @@ namespace LikesProgram {
             // 获取高精度纳秒时间
             static uint64_t NowNs();
         private:
-            Timer* m_parent = nullptr;
-
             struct TimerImpl;
             TimerImpl* m_impl = nullptr;
+            Timer* m_parent = nullptr;
         };
 	}
 }
