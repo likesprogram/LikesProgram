@@ -55,7 +55,7 @@ target_include_directories(LikesProgram
 
 # ---- 添加线程支持 ----
 find_package(Threads REQUIRED)
-target_link_libraries(LikesProgram PRIVATE Threads::Threads)
+target_link_libraries(LikesProgram INTERFACE Threads::Threads)
 
 # ---------- 输出名和目录 ----------
 if (BUILD_SHARED_LIBS)
@@ -127,6 +127,8 @@ if (ENABLE_EXAMPLES)
         ${LP_SOURCES}
         ${TEST_HEADERS}
     )
+    # 仅示例程序链接线程库
+    target_link_libraries(LikesProgramDemo PRIVATE Threads::Threads)
 
     # 头文件搜索路径
     target_include_directories(LikesProgramDemo PRIVATE
