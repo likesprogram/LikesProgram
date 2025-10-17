@@ -1,4 +1,5 @@
 ﻿#include "../../../include/LikesProgram/math/Math.hpp"
+#include <cmath>
 
 namespace LikesProgram {
 	namespace Math {
