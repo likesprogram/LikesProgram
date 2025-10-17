@@ -13,6 +13,7 @@
 #include <thread>
 #include <condition_variable>
 #include <queue>
+#include <atomic>
 
 #ifdef _WIN32
 #include <windows.h>
