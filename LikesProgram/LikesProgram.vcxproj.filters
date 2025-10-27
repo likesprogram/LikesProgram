@@ -39,7 +39,7 @@
     <ClCompile Include="src\LikesProgram\unicode\Convert.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\LikesProgram\CoreUtils.cpp">
+    <ClCompile Include="src\LikesProgram\system\CoreUtils.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\LikesProgram\threading\ThreadPool.cpp">
@@ -84,9 +84,12 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\system\ErrorDomainRegistry.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp">
+    <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\time\Timer.hpp">
@@ -122,7 +125,7 @@
     <ClInclude Include="include\LikesProgram\unicode\Unicode.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\CoreUtils.hpp">
+    <ClInclude Include="include\LikesProgram\system\CoreUtils.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\threading\ThreadPool.hpp">
@@ -192,6 +195,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\test\Vector4Test.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\system\LikesProgramError.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\system\ErrorCategory.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\system\ErrorDomainRegistry.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

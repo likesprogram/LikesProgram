@@ -2,7 +2,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 #include "../../include/LikesProgram/Logger.hpp"
-#include "../../include/LikesProgram/CoreUtils.hpp"
+#include "../../include/LikesProgram/system/CoreUtils.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -32,6 +32,7 @@ namespace LikesProgram {
         std::vector<std::shared_ptr<ILogSink>> sinks;
 
         std::mutex queueMtx;
+        std::mutex startMutex;
         std::condition_variable cv;
         std::queue<LogMessage> queue;
         std::thread worker;
@@ -50,10 +51,25 @@ namespace LikesProgram {
 
     // Logger API
     Logger& Logger::Instance(bool autoStart, bool debug) {
-        static Logger inst(autoStart, debug);
-        if (inst.m_impl->stop.load(std::memory_order_acquire) && autoStart)
-            inst.Start();
-        return inst;
+        static std::atomic<Logger*> instance{ nullptr };
+        static std::mutex mutex;
+
+        // 获取实例，若没有则创建
+        Logger* inst = instance.load(std::memory_order_acquire);
+        if (!inst) {
+            std::lock_guard lock(mutex);
+            inst = instance.load(std::memory_order_relaxed);
+            if (!inst) {
+                inst = new Logger(autoStart, debug);
+                instance.store(inst, std::memory_order_release);
+            }
+        }
+
+        // 启动控制
+        if (inst->m_impl->stop.load(std::memory_order_acquire) && autoStart)
+            inst->Start();
+
+        return *inst;
     }
 
     Logger::Logger(bool autoStart, bool debug) {
@@ -151,21 +167,48 @@ namespace LikesProgram {
     }
 
     bool Logger::Start() {
-        m_impl->stop.store(false, std::memory_order_release); // 设置停止标志
-        if (!m_impl->worker.joinable())
-            m_impl->worker = std::thread([this]() { ProcessLoop(); });
+        bool expected = true;  // true 表示“停止状态”
+        // CAS 检查并更新为 false（启动状态）
+        if (!m_impl->stop.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+            // compare_exchange_strong 失败说明已经是 false（即已启动）
+            return true;
+        }
+
+        std::lock_guard<std::mutex> lock(m_impl->startMutex); // 保护线程创建
+        if (!m_impl->worker.joinable()) {
+            try {
+                m_impl->worker = std::thread([this]() { ProcessLoop(); });
+            }
+            catch (...) {
+                m_impl->stop.store(true, std::memory_order_release); // 启动失败恢复状态
+                throw;
+            }
+        }
+        // 返回 线程 joinable 状态
         return m_impl->worker.joinable();
     }
 
     void Logger::Shutdown(bool clearSink) {
         if (!m_impl) return;
 
-        m_impl->stop.store(true, std::memory_order_release);
+        // 原子检查：只允许一次关闭
+        bool expected = false;
+        if (!m_impl->stop.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            // stop 已经是 true，说明已经关闭过
+            return;
+        }
 
-        m_impl->cv.notify_all(); // 唤醒 worker
+        // 通知所有等待线程
+        m_impl->cv.notify_all();
 
+        // 等待 worker 线程退出
         if (m_impl->worker.joinable()) {
-            m_impl->worker.join();
+            try {
+                m_impl->worker.join();
+            }
+            catch (...) {
+                // 极端情况下 swallow 异常，保证 Shutdown 不抛出
+            }
         }
 
         if (clearSink) {

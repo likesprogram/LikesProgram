@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "LikesProgramLibExport.hpp"
+#include "system/LikesProgramLibExport.hpp"
 #include <string>
 #include <memory>
 #include "String.hpp"
@@ -27,8 +27,8 @@ namespace LikesProgram {
             std::chrono::system_clock::time_point timestamp;
             String func;
             LogLevel minLevel;
-            String::Encoding encoding;
-            bool debug;
+            String::Encoding encoding = String::Encoding::UTF8;
+            bool debug = true;
         };
 
         // ILogSink 抽象接口

@@ -7,7 +7,7 @@
 #include "../include/test/UnicodeTest.hpp"
 #include "../include/test/StringTest.hpp"
 #include "../include/test/MetricsTest.hpp"
-#include "../include/LikesProgram/CoreUtils.hpp"
+#include "../include/LikesProgram/system/CoreUtils.hpp"
 #include "../include/test/LoggerTest.hpp"
 #include "../include/test/ThreadPoolTest.hpp"
 #include "../include/test/ConfigurationTest.hpp"

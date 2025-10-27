@@ -13,9 +13,20 @@ namespace LikesProgram {
 		};
 
 		Registry& Registry::Global() {
-			static std::unique_ptr<Registry> inst;
+			static std::atomic<Registry*> instance{ nullptr };
+			static std::mutex mutex;
+
 			// 检查实例是否需要重新创建
-			if (!inst || inst->m_impl == nullptr) inst = std::unique_ptr<Registry>(new Registry());
+			Registry* inst = instance.load(std::memory_order_acquire);
+			if (!inst) {
+				std::lock_guard lock(mutex);
+				inst = instance.load(std::memory_order_relaxed);
+				if (!inst) {
+					inst = new Registry(); // 构造函数为私有或受限时，这里也可以访问
+					instance.store(inst, std::memory_order_release);
+				}
+			}
+
 			return *inst;
 		}
 

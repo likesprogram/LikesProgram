@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "LikesProgramLibExport.hpp"
-#include "String.hpp"
+#include "../String.hpp"
 
 namespace LikesProgram {
 	namespace CoreUtils {

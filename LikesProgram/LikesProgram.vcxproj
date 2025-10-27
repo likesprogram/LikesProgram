@@ -136,7 +136,7 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
-    <ClCompile Include="src\LikesProgram\CoreUtils.cpp" />
+    <ClCompile Include="src\LikesProgram\system\CoreUtils.cpp" />
     <ClCompile Include="src\LikesProgram\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Counter.cpp" />
@@ -144,6 +144,7 @@
     <ClCompile Include="src\LikesProgram\metrics\Metrics.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Registry.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Summary.cpp" />
+    <ClCompile Include="src\LikesProgram\system\ErrorDomainRegistry.cpp" />
     <ClCompile Include="src\LikesProgram\threading\IThreadPoolObserver.cpp" />
     <ClCompile Include="src\LikesProgram\threading\ThreadPool.cpp" />
     <ClCompile Include="src\LikesProgram\time\Time.cpp" />
@@ -157,8 +158,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
-    <ClInclude Include="include\LikesProgram\CoreUtils.hpp" />
-    <ClInclude Include="include\LikesProgram\LikesProgramLibExport.hpp" />
+    <ClInclude Include="include\LikesProgram\system\CoreUtils.hpp" />
+    <ClInclude Include="include\LikesProgram\system\ErrorCategory.hpp" />
+    <ClInclude Include="include\LikesProgram\system\ErrorDomainRegistry.hpp" />
+    <ClInclude Include="include\LikesProgram\system\LikesProgramError.hpp" />
+    <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />
     <ClInclude Include="include\LikesProgram\math\PercentileSketch.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector3.hpp" />

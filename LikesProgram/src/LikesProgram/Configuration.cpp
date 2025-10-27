@@ -1,6 +1,7 @@
 ﻿#include "../../include/LikesProgram/Configuration.hpp"
 #include <stdexcept>
 #include <mutex>
+#include <shared_mutex>
 #include <limits>
 #include <sstream>
 #include <iomanip>

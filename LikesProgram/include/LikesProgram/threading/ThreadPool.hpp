@@ -1,33 +1,14 @@
 ﻿#pragma once
-#include "../LikesProgramLibExport.hpp"
+#include "../system/LikesProgramLibExport.hpp"
 #include "../String.hpp"
 #include "../time/Time.hpp"
 #include "IThreadPoolObserver.hpp"
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstddef>
-#include <deque>
 #include <functional>
 #include <future>
-#include <mutex>
-#include <stdexcept>
-#include <string>
-#include <thread>
-#include <vector>
-#include <tuple>
+#include <chrono>
+#include <memory>
 #include <utility>
 #include <type_traits>
-
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <stringapiset.h>
-#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
-#include <pthread.h>
-#endif
 
 namespace LikesProgram {
     class LIKESPROGRAM_API ThreadPool { 

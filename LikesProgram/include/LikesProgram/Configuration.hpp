@@ -1,11 +1,10 @@
 ﻿#pragma once
-#include "LikesProgramLibExport.hpp"
+#include "system/LikesProgramLibExport.hpp"
 #include "String.hpp"
 #include <map>
 #include <vector>
 #include <variant>
 #include <memory>
-#include <shared_mutex>
 
 namespace LikesProgram {
     class LIKESPROGRAM_API Configuration {

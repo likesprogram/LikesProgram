@@ -1,13 +1,38 @@
 ﻿#include "../../../include/LikesProgram/threading/ThreadPool.hpp"
 #include "../../../include/LikesProgram/time/Timer.hpp"
 #include "../../../include/LikesProgram/time/Time.hpp"
-#include "../../../include/LikesProgram/CoreUtils.hpp"
+#include "../../../include/LikesProgram/system/CoreUtils.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
 #include "../../../include/LikesProgram/metrics/Counter.hpp"
 #include "../../../include/LikesProgram/metrics/Gauge.hpp"
+#include "../../../include/LikesProgram/threading/IThreadPoolObserver.hpp"
 #include <sstream>
 #include <iomanip>
-#include "../../../include/LikesProgram/threading/IThreadPoolObserver.hpp"
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstddef>
+#include <deque>
+#include <functional>
+#include <future>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+#include <tuple>
+#include <utility>
+#include <type_traits>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <stringapiset.h>
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#include <pthread.h>
+#endif
 
 namespace LikesProgram {
     struct ThreadPool::ThreadPoolImpl {

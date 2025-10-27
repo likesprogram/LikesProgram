@@ -1,5 +1,5 @@
 #pragma once
-#include "../LikesProgramLibExport.hpp"
+#include "../system/LikesProgramLibExport.hpp"
 #include <ostream>
 
 namespace LikesProgram { 
