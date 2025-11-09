@@ -12,6 +12,7 @@
 #include "../include/test/ThreadPoolTest.hpp"
 #include "../include/test/ConfigurationTest.hpp"
 #include "../include/test/Test.hpp"
+#include "../include/test/StringFormatTest.hpp"
 
 int main()
 {
@@ -55,6 +56,8 @@ int main()
         std::cout << std::endl << std::endl << "===== ConfigurationTest =====" << std::endl << std::endl;
         ConfigurationTest::Test();
 
+        std::cout << std::endl << std::endl << "===== StringFormatTest =====" << std::endl << std::endl;
+        StringFormatTest::Test();
         i++;
     } while (false);
     return 0;

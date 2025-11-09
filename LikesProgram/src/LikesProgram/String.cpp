@@ -1,5 +1,6 @@
 ﻿#include "../../include/LikesProgram/String.hpp"
 #include "../../include/LikesProgram/unicode/Unicode.hpp"
+#include "../../include/LikesProgram/StringFormat/FormatInternal.hpp"
 #include <stdexcept>
 #include <cwchar>
 #include <atomic>
@@ -9,6 +10,11 @@
 #include <iostream>
 #include <sstream>
 #include <locale>
+#include <iomanip>
+#include <cwctype>
+#include <cctype>
+#include <regex>
+#include <optional>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -25,6 +31,50 @@ namespace LikesProgram {
         mutable std::vector<size_t> cp_offsets; // 每个 Unicode code point 在 UTF-16 中的偏移
         mutable bool cp_cache_valid = false;   // 是否缓存有效
     };
+
+    bool String::FromAny(const std::any& a, String& outContent) {
+        if (!a.has_value()) {
+            outContent = String();
+            return false;
+        }
+
+        const std::type_info& type = a.type();
+        try {// 整数类型
+            if (type == typeid(int)) { outContent = String(static_cast<int64_t>(std::any_cast<int>(a))); return true; }
+            if (type == typeid(long)) { outContent = String(static_cast<int64_t>(std::any_cast<long>(a))); return true; }
+            if (type == typeid(long long)) { outContent = String(static_cast<int64_t>(std::any_cast<long long>(a))); return true; }
+            if (type == typeid(unsigned int)) { outContent = String(static_cast<uint64_t>(std::any_cast<unsigned int>(a))); return true; }
+            if (type == typeid(unsigned long)) { outContent = String(static_cast<uint64_t>(std::any_cast<unsigned long>(a))); return true; }
+            if (type == typeid(unsigned long long)) { outContent = String(static_cast<uint64_t>(std::any_cast<unsigned long long>(a))); return true; }
+
+            // 浮点类型
+            if (type == typeid(float)) { outContent = String(static_cast<long double>(std::any_cast<float>(a))); return true; }
+            if (type == typeid(double)) { outContent = String(std::any_cast<long double>(std::any_cast<double>(a))); return true; }
+            if (type == typeid(long double)) { outContent = String(std::any_cast<long double>(a)); return true; }
+
+            // 布尔类型
+            if (type == typeid(bool)) { outContent = String(std::any_cast<bool>(a)); return true; }
+
+            // 字符串类型
+            if (type == typeid(std::string)) { outContent = String(std::any_cast<std::string>(a)); return true; }
+            if (type == typeid(const char*)) { outContent = String(std::any_cast<const char*>(a)); return true; }
+            if (type == typeid(std::wstring)) { outContent = String(std::any_cast<std::wstring>(a)); return true; }
+            if (type == typeid(const wchar_t*)) { outContent = String(std::any_cast<const wchar_t*>(a)); return true; }
+            if (type == typeid(std::u16string)) { outContent = String(std::any_cast<std::u16string>(a)); return true; }
+            if (type == typeid(const char16_t*)) { outContent = String(std::any_cast<const char16_t*>(a)); return true; }
+            if (type == typeid(std::u32string)) { outContent = String(std::any_cast<std::u32string>(a)); return true; }
+            if (type == typeid(const char32_t*)) { outContent = String(std::any_cast<const char32_t*>(a)); return true; }
+
+            // 单字符类型
+            if (type == typeid(char)) { outContent = String(std::any_cast<char>(a)); return true; }
+            if (type == typeid(char16_t)) { outContent = String(std::any_cast<char16_t>(a)); return true; }
+            if (type == typeid(char32_t)) { outContent = String(std::any_cast<char32_t>(a)); return true; }
+        }
+        catch (...) {
+            return false;
+        }
+        return true;
+    }
 
     String::String(): m_impl(new StringImpl{}) {
         m_impl->m_data = (std::make_unique<char16_t[]>(1));
@@ -99,6 +149,20 @@ namespace LikesProgram {
         size_t len = 0;
         while (s[len] != 0) ++len;
         m_impl->m_size = len;
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), s, m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
+    String::String(const char16_t* s, size_t length): m_impl(new StringImpl{}) {
+        m_impl->encoding = Encoding::UTF16;
+        if (!s) {
+            s = u"";
+            length = 0;
+        }
+        size_t actualLength = 0;
+        while (s[actualLength] != u'\0' && actualLength < length) ++actualLength;
+        m_impl->m_size = actualLength;
         m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
         std::memcpy(m_impl->m_data.get(), s, m_impl->m_size * sizeof(char16_t));
         m_impl->m_data[m_impl->m_size] = u'\0';
@@ -217,6 +281,21 @@ namespace LikesProgram {
         m_impl->m_data[count] = u'\0';
     }
 
+    String::String(const size_t count, const char32_t c) : m_impl(new StringImpl{}) {
+            m_impl->encoding = Encoding::UTF32;
+
+            // 构造一个只含重复字符的 UTF-32 字符串
+            std::u32string utf32(count, c);
+
+            // 转换为 UTF-16 存储
+            auto utf16 = Unicode::Convert::Utf32ToUtf16(utf32);
+
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
     String::String(const char32_t c): m_impl(new StringImpl{}) {
         m_impl->encoding = Encoding::UTF32;
         auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, c));
@@ -224,6 +303,98 @@ namespace LikesProgram {
         m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
         std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
         m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
+    String::String(const std::string& s, Encoding enc) : m_impl(new StringImpl{}) {
+        m_impl->encoding = enc;
+        switch (enc) {
+        case Encoding::UTF8: {
+            auto utf16 = Unicode::Convert::Utf8ToUtf16(
+                std::u8string(reinterpret_cast<const char8_t*>(s.data()),
+                    reinterpret_cast<const char8_t*>(s.data() + s.size()))
+            );
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            break;
+        }
+        case Encoding::GBK: {
+            auto utf16 = Unicode::Convert::GbkToUtf16(s);
+            m_impl->m_size = utf16.size();
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            break;
+        }
+        default:
+            throw std::runtime_error("Unsupported encoding for std::string");
+        }
+    }
+
+    String::String(const std::u8string& s) : m_impl(new StringImpl{}) {
+        m_impl->encoding = Encoding::UTF8;
+        auto utf16 = Unicode::Convert::Utf8ToUtf16(s);
+        m_impl->m_size = utf16.size();
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
+    String::String(const std::wstring& s) : m_impl(new StringImpl{}) {
+        m_impl->encoding = Encoding::UTF16;
+#if WCHAR_MAX == 0xFFFF  // Windows
+        m_impl->m_size = s.size();
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), s.data(), m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+#else  // Linux
+        std::u32string tmp;
+        for (wchar_t c : s) tmp.push_back(static_cast<char32_t>(c));
+        auto utf16 = Unicode::Convert::Utf32ToUtf16(tmp);
+        m_impl->m_size = utf16.size();
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+#endif
+    }
+
+    String::String(const std::u16string& s) : m_impl(new StringImpl{}) {
+        m_impl->encoding = Encoding::UTF16;
+        m_impl->m_size = s.size();
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), s.c_str(), m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
+    String::String(const std::u32string& s) : m_impl(new StringImpl{}) {
+        m_impl->encoding = Encoding::UTF32;
+        auto utf16 = Unicode::Convert::Utf32ToUtf16(s);
+        m_impl->m_size = utf16.size();
+        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+        m_impl->m_data[m_impl->m_size] = u'\0';
+    }
+
+    String::String(int64_t value) : String([&] {
+        std::wostringstream woss;
+        woss << value;
+        return woss.str();
+        }()) {
+    }
+    String::String(uint64_t value) : String([&] {
+        std::wostringstream woss;
+        woss << value;
+        return woss.str();
+        }()) {
+    }
+    String::String(long double value) : String([&] {
+        std::wostringstream woss;
+        woss << value;
+        return woss.str();
+        }()) {
+    }
+    String::String(bool value) : String(value ? u"true" : u"false") {
     }
 
     // 析构函数
@@ -297,6 +468,10 @@ namespace LikesProgram {
             return 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00);
         }
         return c;
+    }
+
+    char32_t String::operator[](size_t index) const {
+        return At(index);
     }
 
     char32_t String::Front() const {
@@ -692,77 +867,6 @@ namespace LikesProgram {
         return Unicode::Convert::Utf16ToUtf32(std::u16string(m_impl->m_data.get(), m_impl->m_size));
     }
 
-    String::String(const std::string& s, Encoding enc): m_impl(new StringImpl{}) {
-        m_impl->encoding = enc;
-        switch (enc) {
-        case Encoding::UTF8: {
-            auto utf16 = Unicode::Convert::Utf8ToUtf16(
-                std::u8string(reinterpret_cast<const char8_t*>(s.data()),
-                    reinterpret_cast<const char8_t*>(s.data() + s.size()))
-            );
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::GBK: {
-            auto utf16 = Unicode::Convert::GbkToUtf16(s);
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for std::string");
-        }
-    }
-
-    String::String(const std::u8string& s): m_impl(new StringImpl{}) {
-        m_impl->encoding = Encoding::UTF8;
-        auto utf16 = Unicode::Convert::Utf8ToUtf16(s);
-        m_impl->m_size = utf16.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-        m_impl->m_data[m_impl->m_size] = u'\0';
-    }
-
-    String::String(const std::wstring& s): m_impl(new StringImpl{}) {
-        m_impl->encoding = Encoding::UTF16;
-#if WCHAR_MAX == 0xFFFF  // Windows
-        m_impl->m_size = s.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), s.data(), m_impl->m_size * sizeof(char16_t));
-        m_impl->m_data[m_impl->m_size] = u'\0';
-#else  // Linux
-        std::u32string tmp;
-        for (wchar_t c : s) tmp.push_back(static_cast<char32_t>(c));
-        auto utf16 = Unicode::Convert::Utf32ToUtf16(tmp);
-        m_impl->m_size = utf16.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-        m_impl->m_data[m_impl->m_size] = u'\0';
-#endif
-    }
-
-    String::String(const std::u16string& s): m_impl(new StringImpl{}) {
-        m_impl->encoding = Encoding::UTF16;
-        m_impl->m_size = s.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), s.c_str(), m_impl->m_size * sizeof(char16_t));
-        m_impl->m_data[m_impl->m_size] = u'\0';
-    }
-
-    String::String(const std::u32string& s): m_impl(new StringImpl{}) {
-        m_impl->encoding = Encoding::UTF32;
-        auto utf16 = Unicode::Convert::Utf32ToUtf16(s);
-        m_impl->m_size = utf16.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-        m_impl->m_data[m_impl->m_size] = u'\0';
-    }
-
     std::vector<String> String::Split(const String& sep) const {
         std::vector<String> result;
 
@@ -874,27 +978,6 @@ namespace LikesProgram {
         return String(woss.str());
     }
 
-    String String::FromInt(int64_t value) {
-        return String(std::to_wstring(value));
-    }
-
-    String String::FromUInt(uint64_t value) {
-        return String(std::to_wstring(value));
-    }
-
-    String String::FromFloat(double value, size_t precision) {
-        std::wostringstream woss;
-        if (precision > 0) {
-            woss << std::fixed << std::setprecision((int)precision);
-        }
-        woss << value;
-        return String(woss.str());
-    }
-
-    String String::FromBool(bool value) {
-        return value ? String(L"true") : String(L"false");
-    }
-
     size_t String::CodePointOffset(size_t index) const {
         size_t i = 0;  // UTF-16 偏移
         size_t cp = 0; // Unicode code point
@@ -924,5 +1007,10 @@ namespace LikesProgram {
                 ++i;
         }
         m_impl->cp_cache_valid = true;
+    }
+
+    String String::FormatAny(const String& fmt, const std::vector<Any>& args) {
+        auto& instance = StringFormat::FormatInternal::Instance();
+        return instance.FormatAny(fmt, args);
     }
 }

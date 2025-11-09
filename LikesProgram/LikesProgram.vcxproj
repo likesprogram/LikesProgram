@@ -136,6 +136,9 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatInternal.cpp" />
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatParser.cpp" />
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatSpec.cpp" />
     <ClCompile Include="src\LikesProgram\system\CoreUtils.cpp" />
     <ClCompile Include="src\LikesProgram\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
@@ -158,8 +161,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatInternal.hpp" />
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatParser.hpp" />
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatSpec.hpp" />
     <ClInclude Include="include\LikesProgram\system\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\system\ErrorCategory.hpp" />
+    <ClInclude Include="include\LikesProgram\system\ErrorCode.hpp" />
     <ClInclude Include="include\LikesProgram\system\ErrorDomainRegistry.hpp" />
     <ClInclude Include="include\LikesProgram\system\LikesProgramError.hpp" />
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp" />
@@ -186,6 +193,7 @@
     <ClInclude Include="include\test\LoggerTest.hpp" />
     <ClInclude Include="include\test\MetricsTest.hpp" />
     <ClInclude Include="include\test\PercentileSketchTest.hpp" />
+    <ClInclude Include="include\test\StringFormatTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\Test.hpp" />
     <ClInclude Include="include\test\ThreadPoolTest.hpp" />

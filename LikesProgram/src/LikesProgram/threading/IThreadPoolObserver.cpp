@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/threading/IThreadPoolObserver.hpp"
+ï»¿#include "../../../include/LikesProgram/threading/IThreadPoolObserver.hpp"
 #include "../../../include/LikesProgram/time/Timer.hpp"
 #include "../../../include/LikesProgram/metrics/Counter.hpp"
 #include "../../../include/LikesProgram/metrics/Gauge.hpp"
@@ -7,59 +7,59 @@
 
 namespace LikesProgram {
     ThreadPoolObserverBase::ThreadPoolObserverBase(const String& poolName, std::shared_ptr<Metrics::Registry> registry) {
-        InitMetrics(poolName, registry); // ³õÊ¼»¯Ö¸±ê¶ÔÏó
-        Register(); // ×¢²áÖ¸±ê¶ÔÏó
+        InitMetrics(poolName, registry); // åˆå§‹åŒ–æŒ‡æ ‡å¯¹è±¡
+        Register(); // æ³¨å†ŒæŒ‡æ ‡å¯¹è±¡
     }
 
     ThreadPoolObserverBase::~ThreadPoolObserverBase() {
-        Unregister(); // Ğ¶ÔØÖ¸±ê¶ÔÏó
+        Unregister(); // å¸è½½æŒ‡æ ‡å¯¹è±¡
     }
 
     void ThreadPoolObserverBase::OnTaskSubmitted(double queueSize) {
-        // Ôö¼ÓÒÑÌá½»ÈÎÎñµÄ¼ÆÊı
+        // å¢åŠ å·²æäº¤ä»»åŠ¡çš„è®¡æ•°
         m_metrics.m_submittedCount->Increment();
-        // ¼ÇÂ¼×îºóÒ»´ÎÌá½»ÈÎÎñµÄÊ±¼ä
+        // è®°å½•æœ€åä¸€æ¬¡æäº¤ä»»åŠ¡çš„æ—¶é—´
         auto now_ns = std::chrono::duration_cast<Time::Nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         m_metrics.m_lastSubmitTimeGauge->Set((double)now_ns);
-        // Ìí¼Óµ±Ç°¶ÓÁĞ³¤¶È
+        // æ·»åŠ å½“å‰é˜Ÿåˆ—é•¿åº¦
         m_metrics.m_queueSizeGauge->Set(queueSize);
-        // ¸üĞÂ·åÖµ¶ÓÁĞ³¤¶È
+        // æ›´æ–°å³°å€¼é˜Ÿåˆ—é•¿åº¦
         m_metrics.m_peakQueueGauge->Set(std::max(m_metrics.m_peakQueueGauge->Value(), queueSize));
     }
 
     void ThreadPoolObserverBase::OnTaskRejected() {
-        // Ôö¼Ó±»¾Ü¾øÈÎÎñµÄ¼ÆÊı
+        // å¢åŠ è¢«æ‹’ç»ä»»åŠ¡çš„è®¡æ•°
         m_metrics.m_rejectedCount->Increment();
     }
 
     void ThreadPoolObserverBase::OnTaskStarted() {
-        // Ìí¼Óµ±Ç°»î¶¯ÈÎÎñÊı
+        // æ·»åŠ å½“å‰æ´»åŠ¨ä»»åŠ¡æ•°
         m_metrics.m_activeTasks->Increment();
     }
 
     void ThreadPoolObserverBase::OnTaskCompleted(Time::Nanoseconds duration, double queueSize) {
-        // Ôö¼ÓÒÑÍê³ÉÈÎÎñÊı
+        // å¢åŠ å·²å®Œæˆä»»åŠ¡æ•°
         m_metrics.m_completedCount->Increment();
-        // ¸üĞÂ×îºóÍê³ÉÊ±¼ä
+        // æ›´æ–°æœ€åå®Œæˆæ—¶é—´
         auto now_ns = std::chrono::duration_cast<Time::Nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         m_metrics.m_lastFinishTimeGauge->Set((double)now_ns);
-        // ½«ÈÎÎñºÄÊ± ×ª»»ÎªÃë ²¢¼ÇÂ¼
+        // å°†ä»»åŠ¡è€—æ—¶ è½¬æ¢ä¸ºç§’ å¹¶è®°å½•
         m_metrics.m_taskTimeSummary->Observe(Time::NsToS(duration.count()));
-        // ¼õÉÙµ±Ç°»î¶¯ÈÎÎñÊı
+        // å‡å°‘å½“å‰æ´»åŠ¨ä»»åŠ¡æ•°
         m_metrics.m_activeTasks->Decrement();
-        // ¼õĞ¡¶ÓÁĞ³¤¶È
+        // å‡å°é˜Ÿåˆ—é•¿åº¦
         m_metrics.m_queueSizeGauge->Set(queueSize);
     }
 
     void ThreadPoolObserverBase::OnThreadCountAdded() {
-        // ¸üĞÂ´æ»îµÄÏß³ÌÊı
+        // æ›´æ–°å­˜æ´»çš„çº¿ç¨‹æ•°
         m_metrics.m_aliveThreadsGauge->Increment();
-        // ¸üĞÂ·åÖµÏß³ÌÊı
+        // æ›´æ–°å³°å€¼çº¿ç¨‹æ•°
         m_metrics.m_largestPoolGauge->Set(std::max(m_metrics.m_largestPoolGauge->Value(), m_metrics.m_aliveThreadsGauge->Value()));
     }
 
     void ThreadPoolObserverBase::OnThreadCountRemoved() {
-        // ¸üĞÂ´æ»îµÄÏß³ÌÊı
+        // æ›´æ–°å­˜æ´»çš„çº¿ç¨‹æ•°
         m_metrics.m_aliveThreadsGauge->Decrement();
     }
 

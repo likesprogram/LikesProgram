@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/math/Vector3.hpp"
+ï»¿#include "../../../include/LikesProgram/math/Vector3.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -213,16 +213,16 @@ namespace LikesProgram {
             // q = (x, y, z, w)
             double qx = quat[0], qy = quat[1], qz = quat[2], qw = quat[3];
 
-            // ½«ÏòÁ¿v¿´×÷ËÄÔªÊıv' = (vx, vy, vz, 0)
+            // å°†å‘é‡vçœ‹ä½œå››å…ƒæ•°v' = (vx, vy, vz, 0)
             double vx = m_x, vy = m_y, vz = m_z;
 
-            // ËÄÔªÊı³Ë·¨ q * v
+            // å››å…ƒæ•°ä¹˜æ³• q * v
             double ix = qw * vx + qy * vz - qz * vy;
             double iy = qw * vy + qz * vx - qx * vz;
             double iz = qw * vz + qx * vy - qy * vx;
             double iw = -qx * vx - qy * vy - qz * vz;
 
-            // ÔÙ³Ë q^-1 (µ¥Î»ËÄÔªÊı q^-1 = q* ¹²éî)
+            // å†ä¹˜ q^-1 (å•ä½å››å…ƒæ•° q^-1 = q* å…±è½­)
             double rx = ix * qw - iw * qx - iy * qz + iz * qy;
             double ry = iy * qw - iw * qy - iz * qx + ix * qz;
             double rz = iz * qw - iw * qz - ix * qy + iy * qx;

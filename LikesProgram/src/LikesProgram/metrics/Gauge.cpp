@@ -100,7 +100,7 @@ namespace LikesProgram {
                 result.Append(u"}");
             }
 
-            result.Append(u" ").Append(LikesProgram::String::FromFloat(m_impl->m_value.load(std::memory_order_relaxed), 6));
+            result.Append(u" ").Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_value.load(std::memory_order_relaxed)));
             result.Append(u"\n");
 
             return result;
@@ -125,7 +125,7 @@ namespace LikesProgram {
             json.Append(u"},");
 
             // 只保留原始值
-            json.Append(u"\"value\":").Append(LikesProgram::String::FromFloat(m_impl->m_value.load(std::memory_order_relaxed), 6));
+            json.Append(u" ").Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_value.load(std::memory_order_relaxed)));
             json.Append(u"}");
             return json;
         }

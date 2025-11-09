@@ -3,13 +3,18 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <any>
 
 namespace LikesProgram {
+    using Any = std::any;
     class LIKESPROGRAM_API String {
     public:
         // 支持的编码类型，仅用于标识字符串来源，内部存储总是 UTF-16。
         enum class Encoding { GBK, UTF8, UTF16, UTF32 };
         static constexpr size_t npos = static_cast<size_t>(-1);
+
+        // 从 std::any 创建 String
+        static bool FromAny(const std::any& a, String& outContent);
 
         String();
         // char 未指定编码，默认为 UTF-8
@@ -18,6 +23,7 @@ namespace LikesProgram {
         String(const char8_t* s);
         // UTF-16
         String(const char16_t* s);
+        String(const char16_t* s, size_t length);
         // UTF-32
         String(const char32_t* s);
         // 拷贝构造
@@ -30,6 +36,23 @@ namespace LikesProgram {
         String(const char16_t c);
         String(const size_t count, const char16_t c);
         String(const char32_t c);
+        String(const size_t count, const char32_t c);
+
+        // string 转换为String
+        explicit String(const std::string& s, Encoding enc = Encoding::UTF8);
+        // u8string 转换为String
+        explicit String(const std::u8string& s);
+        // wstring 转换为String
+        explicit String(const std::wstring& s);
+        // u16string 转换为String
+        explicit String(const std::u16string& s);
+        // u32string 转换为String
+        explicit String(const std::u32string& s);
+
+        String(int64_t value);
+        String(uint64_t value);
+        String(long double value);
+        String(bool value);
         // 析构函数
         ~String();
 
@@ -47,6 +70,8 @@ namespace LikesProgram {
         // 清空字符串
         void Clear();
 
+        // 重载 operator[]
+        char32_t operator[](size_t index) const;
         // 安全访问字符（Unicode aware）
         char32_t At(size_t index) const;
         // 字符串第一个字符（Unicode aware）
@@ -107,16 +132,6 @@ namespace LikesProgram {
         std::u16string ToU16String() const;
         // 转换为u32string
         std::u32string ToU32String() const;
-        // string 转换为String
-        explicit String(const std::string& s, Encoding enc = Encoding::UTF8);
-        // u8string 转换为String
-        explicit String(const std::u8string& s);
-        // wstring 转换为String
-        explicit String(const std::wstring& s);
-        // u16string 转换为String
-        explicit String(const std::u16string& s);
-        // u32string 转换为String
-        explicit String(const std::u32string& s);
 
         // 分割成字符串数组
         std::vector<String> Split(const String& sep) const;
@@ -136,13 +151,48 @@ namespace LikesProgram {
         CodePointIterator begin() const { return CodePointIterator(this, 0); }
         CodePointIterator end() const { return CodePointIterator(this, Size()); }
 
-
         // JSON 转义
         static String EscapeJson(const String& str);
-        static String FromInt(int64_t value);
-        static String FromUInt(uint64_t value);
-        static String FromFloat(double value, size_t precision = 0);
-        static String FromBool(bool value);
+
+        // 格式化
+        template <typename... Args>
+        static String Format(const String& fmt, Args&&... args) {
+            // 打包参数
+            std::vector<Any> v;
+            v.reserve(sizeof...(Args));
+            // 将每个参数替换为std:：any（decaded）
+            (v.emplace_back(std::decay_t<Args>(std::forward<Args>(args))), ...);
+
+            // 调用 FormatAny
+            return FormatAny(fmt, v);
+        }
+
+        template <typename T>
+        static String ToString(const T& value) {
+            try {
+                if constexpr (std::is_convertible_v<T, String>) {
+                    // 如果类型可直接转换为 String，直接返回
+                    return String(value);
+                }
+                else if constexpr (
+                    std::is_integral_v<T> ||
+                    std::is_floating_point_v<T> ||
+                    std::is_enum_v<T> ||
+                    std::is_same_v<T, bool> ||
+                    std::is_pointer_v<T>) {
+                    return String::FromValue(value);
+                } else {
+                    // 其他类型，尝试转换为字符串
+                    std::wstringstream ss;
+                    ss << value;
+                    return String(ss.str());
+                }
+            }
+            catch (const std::exception&) {
+                // 如果所有转换方法都失败，返回空字符串
+                return String();
+            }
+        }
 
     private:
         struct StringImpl;
@@ -151,6 +201,8 @@ namespace LikesProgram {
         size_t CodePointOffset(size_t index) const;
 
         void update_cp_cache() const;
+
+        static String FormatAny(const String& fmt, const std::vector<Any>& args);
     };
 }
 

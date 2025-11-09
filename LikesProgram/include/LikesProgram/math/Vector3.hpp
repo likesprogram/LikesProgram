@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../system/LikesProgramLibExport.hpp"
 #include "Vector4.hpp"
 #include <ostream>
@@ -11,7 +11,7 @@ namespace LikesProgram {
 			constexpr Vector3(double x, double y, double z) : m_x(x), m_y(y), m_z(z) {}
 			explicit constexpr Vector3(double s) : m_x(s), m_y(s), m_z(s) {}
 
-            // ÔËËã·ûÖØÔØ
+            // è¿ç®—ç¬¦é‡è½½
             Vector3 operator+(double s) const;
             Vector3 operator-(double s) const;
             Vector3 operator*(double s) const;
@@ -32,94 +32,94 @@ namespace LikesProgram {
             Vector3& operator*=(const Vector3& v);
             Vector3& operator/=(const Vector3& v);
 
-            // Ò»ÔªÔËËã
+            // ä¸€å…ƒè¿ç®—
             Vector3 operator-() const;
             Vector3 operator+() const;
 
-            // ×ÔÔö×Ô¼õ
-            Vector3& operator++();       // Ç°ÖÃ++
-            Vector3 operator++(int);     // ºóÖÃ++
-            Vector3& operator--();       // Ç°ÖÃ--
-            Vector3 operator--(int);     // ºóÖÃ--
+            // è‡ªå¢è‡ªå‡
+            Vector3& operator++();       // å‰ç½®++
+            Vector3 operator++(int);     // åç½®++
+            Vector3& operator--();       // å‰ç½®--
+            Vector3 operator--(int);     // åç½®--
 
-            // ±È½ÏÔËËã·û
+            // æ¯”è¾ƒè¿ç®—ç¬¦
             bool operator==(const Vector3& v) const;
             bool operator!=(const Vector3& v) const;
-            bool operator<(const Vector3& v) const;  // ×ÖµäĞò±È½Ï
+            bool operator<(const Vector3& v) const;  // å­—å…¸åºæ¯”è¾ƒ
             bool operator>(const Vector3& v) const;
             bool operator<=(const Vector3& v) const;
             bool operator>=(const Vector3& v) const;
 
-            // ÏÂ±ê·ÃÎÊ
+            // ä¸‹æ ‡è®¿é—®
             double& operator[](size_t i);
             const double& operator[](size_t i) const;
 
-            // ÓÑÔª
+            // å‹å…ƒ
             friend Vector3 operator*(double s, const Vector3& v);
             friend std::ostream& operator<<(std::ostream& os, const Vector3& v);
 
-            // ÏòÁ¿³¤¶È£¨Ä££©
+            // å‘é‡é•¿åº¦ï¼ˆæ¨¡ï¼‰
             double Length() const;
-            // ÏòÁ¿³¤¶ÈÆ½·½
+            // å‘é‡é•¿åº¦å¹³æ–¹
             double LengthSquared() const;
             
-            // ÏòÁ¿¹éÒ»»¯
+            // å‘é‡å½’ä¸€åŒ–
             Vector3 Normalized() const;
-            // ¾ÍµØ¹éÒ»»¯
+            // å°±åœ°å½’ä¸€åŒ–
             void Normalize();
-            // °²È«¹éÒ»»¯
+            // å®‰å…¨å½’ä¸€åŒ–
             Vector3 SafeNormalized(double epsilon = 1e-9) const;
 
-            // µã»ı
+            // ç‚¹ç§¯
             double Dot(const Vector3& v) const;
-            // µã»ı£¨¾²Ì¬°æ±¾£©
+            // ç‚¹ç§¯ï¼ˆé™æ€ç‰ˆæœ¬ï¼‰
             static double Dot(const Vector3& a, const Vector3& b);
-            // ²æ»ı
+            // å‰ç§¯
             Vector3 Cross(const Vector3& v) const;
 
-            // ¾àÀë
+            // è·ç¦»
             double Distance(const Vector3& v) const;
-            // ¾àÀëÆ½·½
+            // è·ç¦»å¹³æ–¹
             double DistanceSquared(const Vector3& v) const;
 
-            // ÁãÏòÁ¿
+            // é›¶å‘é‡
             bool IsZero(double epsilon = 1e-9) const;
 
-            // ÅĞ¶Ïµ±Ç°ÏòÁ¿Óë v ÊÇ·ñ¡°¼¸ºõÏàµÈ¡±£¨Îó²î²»³¬¹ı epsilon£©
+            // åˆ¤æ–­å½“å‰å‘é‡ä¸ v æ˜¯å¦â€œå‡ ä¹ç›¸ç­‰â€ï¼ˆè¯¯å·®ä¸è¶…è¿‡ epsilonï¼‰
             bool NearlyEquals(const Vector3& v, double epsilon = 1e-9) const;
 
-            // ÅĞ¶ÏÏòÁ¿³¤¶ÈÊÇ·ñ½Ó½ü 1
+            // åˆ¤æ–­å‘é‡é•¿åº¦æ˜¯å¦æ¥è¿‘ 1
             bool IsNormalized(double epsilon = 1e-9) const;
 
-            // Í¶Ó°
+            // æŠ•å½±
             Vector3 Project(const Vector3& on) const;
 
-            // ¾ÜÏòÁ¿£¨È¥µôÍ¶Ó°²¿·Ö£©
+            // æ‹’å‘é‡ï¼ˆå»æ‰æŠ•å½±éƒ¨åˆ†ï¼‰
             Vector3 Reject(const Vector3& on) const;
 
-            // Ïà¶ÔÓÚµ¥Î»·¨ÏßµÄ·´Éä
+            // ç›¸å¯¹äºå•ä½æ³•çº¿çš„åå°„
             Vector3 Reflected(const Vector3& normal) const;
 
-            // ÈÆÈÎÒâµ¥Î»ÖáĞı×ª
+            // ç»•ä»»æ„å•ä½è½´æ—‹è½¬
             Vector3 RotatedAroundAxis(const Vector3& axis, double angle) const;
-            // ÈÆËÄÔªÊıĞı×ª
+            // ç»•å››å…ƒæ•°æ—‹è½¬
             Vector3 RotatedByQuaternion(const Vector4& quat) const;
 
-            // ·µ»ØÃ¿¸ö·ÖÁ¿È¡¾ø¶ÔÖµºóµÄĞÂÏòÁ¿
+            // è¿”å›æ¯ä¸ªåˆ†é‡å–ç»å¯¹å€¼åçš„æ–°å‘é‡
             Vector3 Abs() const;
             
-            // ·µ»Ø°´·ÖÁ¿È¡×îĞ¡Öµ×é³ÉµÄĞÂÏòÁ¿
+            // è¿”å›æŒ‰åˆ†é‡å–æœ€å°å€¼ç»„æˆçš„æ–°å‘é‡
             Vector3 Min(const Vector3& v) const;
             
-            // ·µ»Ø°´·ÖÁ¿È¡×î´óÖµ×é³ÉµÄĞÂÏòÁ¿
+            // è¿”å›æŒ‰åˆ†é‡å–æœ€å¤§å€¼ç»„æˆçš„æ–°å‘é‡
             Vector3 Max(const Vector3& v) const;
             
-            // ²åÖµ
+            // æ’å€¼
             static Vector3 Lerp(const Vector3& a, const Vector3& b, double t);
-            // ÇòÃæ²åÖµ
+            // çƒé¢æ’å€¼
             static Vector3 Slerp(const Vector3& a, const Vector3& b, double t);
 
-            // ¾²Ì¬ÏòÁ¿
+            // é™æ€å‘é‡
             static Vector3 Zero();
             static Vector3 One();
             static Vector3 UnitX();

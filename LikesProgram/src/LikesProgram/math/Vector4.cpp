@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/math/Vector4.hpp"
+ï»¿#include "../../../include/LikesProgram/math/Vector4.hpp"
 #include "../../../include/LikesProgram/math/Math.hpp"
 #include <cmath>
 #include <stdexcept>
@@ -6,7 +6,7 @@
 namespace LikesProgram {
     namespace Math {
 
-        // ËãÊõÔËËã
+        // ç®—æœ¯è¿ç®—
         Vector4 Vector4::operator+(double s) const {
             return { m_x + s, m_y + s, m_z + s, m_w + s };
         }
@@ -75,7 +75,7 @@ namespace LikesProgram {
             return *this;
         }
 
-        // Ò»ÔªÔËËã
+        // ä¸€å…ƒè¿ç®—
         Vector4 Vector4::operator-() const {
             return { -m_x, -m_y, -m_z, -m_w }; 
         }
@@ -83,7 +83,7 @@ namespace LikesProgram {
             return *this;
         }
 
-        // ×ÔÔö×Ô¼õ
+        // è‡ªå¢è‡ªå‡
         Vector4& Vector4::operator++() {
             ++m_x; ++m_y; ++m_z; ++m_w; return *this;
         }
@@ -97,7 +97,7 @@ namespace LikesProgram {
             Vector4 tmp = *this; --(*this); return tmp;
         }
 
-        // ±È½ÏÔËËã·û
+        // æ¯”è¾ƒè¿ç®—ç¬¦
         bool Vector4::operator==(const Vector4& v) const {
             return std::abs(m_x - v.m_x) < Math::EPSILON && std::abs(m_y - v.m_y) < Math::EPSILON && std::abs(m_z - v.m_z) < Math::EPSILON && std::abs(m_w - v.m_w) < Math::EPSILON;
         }
@@ -116,7 +116,7 @@ namespace LikesProgram {
             return !(*this < v); 
         }
 
-        // ÏÂ±ê·ÃÎÊ
+        // ä¸‹æ ‡è®¿é—®
         double& Vector4::operator[](size_t i) {
             if (i == 0) return m_x;
             if (i == 1) return m_y;
@@ -132,13 +132,13 @@ namespace LikesProgram {
             throw std::out_of_range("Vector4 index out of range");
         }
 
-        // ÓÑÔª
+        // å‹å…ƒ
         Vector4 operator*(double s, const Vector4& v) { return v * s; }
         std::ostream& operator<<(std::ostream& os, const Vector4& v) {
             return os << "(" << v[0] << "," << v[1] << "," << v[2] << "," << v[3] << ")";
         }
 
-        // ³¤¶È/¹éÒ»»¯
+        // é•¿åº¦/å½’ä¸€åŒ–
         double Vector4::Length() const { 
             return std::sqrt(LengthSquared());
         }
@@ -155,7 +155,7 @@ namespace LikesProgram {
             double len2 = LengthSquared(); if (len2 <= epsilon * epsilon) return Vector4(); return *this * (1.0 / std::sqrt(len2));
         }
 
-        // µã»ı
+        // ç‚¹ç§¯
         double Vector4::Dot(const Vector4& v) const {
             return m_x * v.m_x + m_y * v.m_y + m_z * v.m_z + m_w * v.m_w;
         }
@@ -163,7 +163,7 @@ namespace LikesProgram {
             return a.Dot(b);
         }
 
-        // ÅĞ¶Ï
+        // åˆ¤æ–­
         bool Vector4::IsZero(double epsilon) const {
             return std::abs(m_x) <= epsilon && std::abs(m_y) <= epsilon && std::abs(m_z) <= epsilon && std::abs(m_w) <= epsilon;
         }
@@ -174,7 +174,7 @@ namespace LikesProgram {
             return std::abs(Length() - 1.0) <= epsilon;
         }
 
-        // ²åÖµ
+        // æ’å€¼
         Vector4 Vector4::Lerp(const Vector4& a, const Vector4& b, double t) {
             return a + (b - a) * t;
         }
@@ -189,7 +189,7 @@ namespace LikesProgram {
             return na * (std::sin((1 - t) * theta) / sinTheta) + nb * (std::sin(t * theta) / sinTheta);
         }
 
-        // ¾²Ì¬ÏòÁ¿
+        // é™æ€å‘é‡
         Vector4 Vector4::Zero() {
             return { 0.0,0.0,0.0,0.0 };
         }

@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "LikesProgramLibExport.hpp"
 #include "../String.hpp"
 
@@ -8,10 +8,10 @@ namespace LikesProgram {
         public:
             static ErrorDomainRegistry& Instance();
 
-            // ×¢²áĞÂ´íÎóÓò£¬·µ»ØÎ¨Ò» ID
+            // æ³¨å†Œæ–°é”™è¯¯åŸŸï¼Œè¿”å›å”¯ä¸€ ID
             int Register(const String& name);
 
-            // ¸ù¾İ ID »ñÈ¡Ãû³Æ
+            // æ ¹æ® ID è·å–åç§°
             String GetName(int id) const;
 
             ~ErrorDomainRegistry();

@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../system/LikesProgramLibExport.hpp"
 #include "../String.hpp"
 #include "../time/Time.hpp"
@@ -9,48 +9,48 @@
 
 namespace LikesProgram {
     struct ThreadPoolMetrics {
-        String m_poolName; // Ö¸±êËùÊôÏß³Ì³ØÃû³ÆÇ°×º£¬ÓÃÓÚÇø·Ö²»Í¬Ïß³Ì³Ø (½¨ÒéÓë threadNamePrefix ³ÆÒ»ÖÂ)
-        std::shared_ptr<Metrics::Registry> m_registry = nullptr; // ×¢²á±íÖ¸Õë£¬ÓÃÓÚ×¢²á/×¢ÏúÖ¸±ê
+        String m_poolName; // æŒ‡æ ‡æ‰€å±çº¿ç¨‹æ± åç§°å‰ç¼€ï¼Œç”¨äºåŒºåˆ†ä¸åŒçº¿ç¨‹æ±  (å»ºè®®ä¸ threadNamePrefix ç§°ä¸€è‡´)
+        std::shared_ptr<Metrics::Registry> m_registry = nullptr; // æ³¨å†Œè¡¨æŒ‡é’ˆï¼Œç”¨äºæ³¨å†Œ/æ³¨é”€æŒ‡æ ‡
 
-        // ¼ÆÊıÆ÷ (Counter)
-        std::shared_ptr<Metrics::Counter> m_submittedCount; // ³É¹¦Ìá½»µÄÈÎÎñ×ÜÊı
-        std::shared_ptr<Metrics::Counter> m_rejectedCount;  // ±»¾Ü¾øµÄÈÎÎñ×ÜÊı
-        std::shared_ptr<Metrics::Counter> m_completedCount; // ³É¹¦Íê³ÉµÄÈÎÎñ×ÜÊı
+        // è®¡æ•°å™¨ (Counter)
+        std::shared_ptr<Metrics::Counter> m_submittedCount; // æˆåŠŸæäº¤çš„ä»»åŠ¡æ€»æ•°
+        std::shared_ptr<Metrics::Counter> m_rejectedCount;  // è¢«æ‹’ç»çš„ä»»åŠ¡æ€»æ•°
+        std::shared_ptr<Metrics::Counter> m_completedCount; // æˆåŠŸå®Œæˆçš„ä»»åŠ¡æ€»æ•°
 
-        // ¶ÓÁĞÖ¸±ê (Gauge)
-        std::shared_ptr<Metrics::Gauge> m_queueSizeGauge; // µ±Ç°ÈÎÎñ¶ÓÁĞ³¤¶È
-        std::shared_ptr<Metrics::Gauge> m_peakQueueGauge; // ÀúÊ·×î´ó¶ÓÁĞ³¤¶È£¨·åÖµ£©
+        // é˜Ÿåˆ—æŒ‡æ ‡ (Gauge)
+        std::shared_ptr<Metrics::Gauge> m_queueSizeGauge; // å½“å‰ä»»åŠ¡é˜Ÿåˆ—é•¿åº¦
+        std::shared_ptr<Metrics::Gauge> m_peakQueueGauge; // å†å²æœ€å¤§é˜Ÿåˆ—é•¿åº¦ï¼ˆå³°å€¼ï¼‰
 
-        // Ïß³ÌÓëÈÎÎñ×´Ì¬ (Gauge)
-        std::shared_ptr<Metrics::Gauge> m_activeTasks;       // µ±Ç°ÕıÔÚÖ´ĞĞµÄÈÎÎñÊı
-        std::shared_ptr<Metrics::Gauge> m_aliveThreadsGauge; // µ±Ç°´æ»îµÄ¹¤×÷Ïß³ÌÊı
-        std::shared_ptr<Metrics::Gauge> m_largestPoolGauge;  // ÀúÊ·×î´óÏß³ÌÊı
+        // çº¿ç¨‹ä¸ä»»åŠ¡çŠ¶æ€ (Gauge)
+        std::shared_ptr<Metrics::Gauge> m_activeTasks;       // å½“å‰æ­£åœ¨æ‰§è¡Œçš„ä»»åŠ¡æ•°
+        std::shared_ptr<Metrics::Gauge> m_aliveThreadsGauge; // å½“å‰å­˜æ´»çš„å·¥ä½œçº¿ç¨‹æ•°
+        std::shared_ptr<Metrics::Gauge> m_largestPoolGauge;  // å†å²æœ€å¤§çº¿ç¨‹æ•°
 
-        // Ê±¼äÖ¸±ê (Gauge)
-        std::shared_ptr<Metrics::Gauge> m_lastSubmitTimeGauge; // ×î½üÒ»´ÎÈÎÎñÌá½»µÄÊ±¼ä´Á£¨Ãë£©
-        std::shared_ptr<Metrics::Gauge> m_lastFinishTimeGauge; // ×î½üÒ»´ÎÈÎÎñÍê³ÉµÄÊ±¼ä´Á£¨Ãë£©
+        // æ—¶é—´æŒ‡æ ‡ (Gauge)
+        std::shared_ptr<Metrics::Gauge> m_lastSubmitTimeGauge; // æœ€è¿‘ä¸€æ¬¡ä»»åŠ¡æäº¤çš„æ—¶é—´æˆ³ï¼ˆç§’ï¼‰
+        std::shared_ptr<Metrics::Gauge> m_lastFinishTimeGauge; // æœ€è¿‘ä¸€æ¬¡ä»»åŠ¡å®Œæˆçš„æ—¶é—´æˆ³ï¼ˆç§’ï¼‰
 
-        // ºÄÊ±Í³¼Æ (Summary)
-        std::shared_ptr<Metrics::Summary> m_taskTimeSummary; // ÈÎÎñÖ´ĞĞºÄÊ±·Ö²¼£¨µ¥Î»£ºÃë£©£¬Ö§³ÖÆ½¾ùÖµ¡¢·ÖÎ»ÊıµÈÍ³¼Æ
+        // è€—æ—¶ç»Ÿè®¡ (Summary)
+        std::shared_ptr<Metrics::Summary> m_taskTimeSummary; // ä»»åŠ¡æ‰§è¡Œè€—æ—¶åˆ†å¸ƒï¼ˆå•ä½ï¼šç§’ï¼‰ï¼Œæ”¯æŒå¹³å‡å€¼ã€åˆ†ä½æ•°ç­‰ç»Ÿè®¡
     };
 
     class LIKESPROGRAM_API IThreadPoolObserver {
     public:
         virtual ~IThreadPoolObserver() = default;
 
-        // ÈÎÎñÌá½»Ê±µÄ»Øµ÷
+        // ä»»åŠ¡æäº¤æ—¶çš„å›è°ƒ
         virtual void OnTaskSubmitted(double queueSize) = 0;
-        // ÈÎÎñ±»¾Ü¾øÊ±µÄ»Øµ÷
+        // ä»»åŠ¡è¢«æ‹’ç»æ—¶çš„å›è°ƒ
         virtual void OnTaskRejected() = 0;
-        // ÈÎÎñ¿ªÊ¼Ö´ĞĞÊ±µÄ»Øµ÷
+        // ä»»åŠ¡å¼€å§‹æ‰§è¡Œæ—¶çš„å›è°ƒ
         virtual void OnTaskStarted() = 0;
-        // ÈÎÎñÍê³ÉÊ±µÄ»Øµ÷
+        // ä»»åŠ¡å®Œæˆæ—¶çš„å›è°ƒ
         virtual void OnTaskCompleted(Time::Nanoseconds duration, double queueSize) = 0;
-        // ĞÂÔö¹¤×÷Ïß³ÌÊ±µÄ»Øµ÷
+        // æ–°å¢å·¥ä½œçº¿ç¨‹æ—¶çš„å›è°ƒ
         virtual void OnThreadCountAdded() = 0;
-        // ¹¤×÷Ïß³Ì¼õÉÙÊ±µÄ»Øµ÷
+        // å·¥ä½œçº¿ç¨‹å‡å°‘æ—¶çš„å›è°ƒ
         virtual void OnThreadCountRemoved() = 0;
-        // »ñÈ¡×¢²áÆ÷
+        // è·å–æ³¨å†Œå™¨
         virtual const ThreadPoolMetrics& GetMetrics() const = 0;
     protected:
     };
@@ -60,19 +60,19 @@ namespace LikesProgram {
         ThreadPoolObserverBase(const String& poolName, std::shared_ptr<Metrics::Registry> registry);
         virtual ~ThreadPoolObserverBase();
 
-        // ÈÎÎñÌá½»Ê±µÄ»Øµ÷
+        // ä»»åŠ¡æäº¤æ—¶çš„å›è°ƒ
         virtual void OnTaskSubmitted(double queueSize);
-        // ÈÎÎñ±»¾Ü¾øÊ±µÄ»Øµ÷
+        // ä»»åŠ¡è¢«æ‹’ç»æ—¶çš„å›è°ƒ
         virtual void OnTaskRejected();
-        // ÈÎÎñ¿ªÊ¼Ö´ĞĞÊ±µÄ»Øµ÷
+        // ä»»åŠ¡å¼€å§‹æ‰§è¡Œæ—¶çš„å›è°ƒ
         virtual void OnTaskStarted();
-        // ÈÎÎñÍê³ÉÊ±µÄ»Øµ÷
+        // ä»»åŠ¡å®Œæˆæ—¶çš„å›è°ƒ
         virtual void OnTaskCompleted(Time::Nanoseconds duration, double queueSize);
-        // ĞÂÔö¹¤×÷Ïß³ÌÊ±µÄ»Øµ÷
+        // æ–°å¢å·¥ä½œçº¿ç¨‹æ—¶çš„å›è°ƒ
         virtual void OnThreadCountAdded();
-        // ¹¤×÷Ïß³Ì¼õÉÙÊ±µÄ»Øµ÷
+        // å·¥ä½œçº¿ç¨‹å‡å°‘æ—¶çš„å›è°ƒ
         virtual void OnThreadCountRemoved();
-        // »ñÈ¡×¢²áÆ÷
+        // è·å–æ³¨å†Œå™¨
         virtual const ThreadPoolMetrics& GetMetrics() const;
     protected:
         void InitMetrics(const String& poolName, std::shared_ptr<Metrics::Registry> registry);

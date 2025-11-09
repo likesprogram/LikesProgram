@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/system/ErrorDomainRegistry.hpp"
+ï»¿#include "../../../include/LikesProgram/system/ErrorDomainRegistry.hpp"
 #include <shared_mutex>
 #include <mutex>
 #include <unordered_map>
@@ -8,20 +8,20 @@ namespace LikesProgram {
 		struct ErrorDomainRegistry::ErrorDomainRegistryImpl {
 			mutable std::shared_mutex mutex_;
 			std::unordered_map<int, String> domains_;
-			int nextId_ = 100; // 0~99 ±£Áô¸ø¿ò¼ÜÄÚ²¿
+			int nextId_ = 100; // 0~99 ä¿ç•™ç»™æ¡†æ¶å†…éƒ¨
 		};
 
 		ErrorDomainRegistry& ErrorDomainRegistry::Instance() {
 			static std::atomic<ErrorDomainRegistry*> instance{ nullptr };
 			static std::mutex mutex;
 
-			// ¼ì²éÊµÀıÊÇ·ñĞèÒªÖØĞÂ´´½¨
+			// æ£€æŸ¥å®ä¾‹æ˜¯å¦éœ€è¦é‡æ–°åˆ›å»º
 			ErrorDomainRegistry* inst = instance.load(std::memory_order_acquire);
 			if (!inst) {
 				std::lock_guard lock(mutex);
 				inst = instance.load(std::memory_order_relaxed);
 				if (!inst) {
-					inst = new ErrorDomainRegistry(); // ¹¹Ôìº¯ÊıÎªË½ÓĞ»òÊÜÏŞÊ±£¬ÕâÀïÒ²¿ÉÒÔ·ÃÎÊ
+					inst = new ErrorDomainRegistry(); // æ„é€ å‡½æ•°ä¸ºç§æœ‰æˆ–å—é™æ—¶ï¼Œè¿™é‡Œä¹Ÿå¯ä»¥è®¿é—®
 					instance.store(inst, std::memory_order_release);
 				}
 			}
@@ -31,16 +31,22 @@ namespace LikesProgram {
 
 		int ErrorDomainRegistry::Register(const String& name)
 		{
+            std::unique_lock lock(m_impl->mutex_);
+            m_impl->domains_[m_impl->nextId_] = name;
 			return 0;
 		}
 
 		String ErrorDomainRegistry::GetName(int id) const
 		{
+            std::shared_lock lock(m_impl->mutex_);
+            auto it = m_impl->domains_.find(id);
+            if (it != m_impl->domains_.end())
+                return it->second;
 			return String();
 		}
 
 		ErrorDomainRegistry::ErrorDomainRegistry() : m_impl(new ErrorDomainRegistryImpl{}) {
-			// ³õÊ¼»¯¿ò¼ÜÄÚÖÃ´íÎóÓò
+			// åˆå§‹åŒ–æ¡†æ¶å†…ç½®é”™è¯¯åŸŸ
 			std::unique_lock lock(m_impl->mutex_);
 
 			m_impl->domains_[0] = u"None";
@@ -51,7 +57,7 @@ namespace LikesProgram {
 			m_impl->domains_[5] = u"Logger";
 			m_impl->domains_[6] = u"Reactor";
 
-			m_impl->nextId_ = 100; // ÓÃ»§×Ô¶¨ÒåÓò´Ó100¿ªÊ¼·ÖÅä
+			m_impl->nextId_ = 100; // ç”¨æˆ·è‡ªå®šä¹‰åŸŸä»100å¼€å§‹åˆ†é…
 		}
 
 		ErrorDomainRegistry::~ErrorDomainRegistry() {

@@ -87,6 +87,15 @@
     <ClCompile Include="src\LikesProgram\system\ErrorDomainRegistry.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatSpec.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatParser.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\StringFormat\FormatInternal.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp">
@@ -204,6 +213,21 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\system\ErrorDomainRegistry.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\system\ErrorCode.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatSpec.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatParser.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\StringFormat\FormatInternal.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\test\StringFormatTest.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

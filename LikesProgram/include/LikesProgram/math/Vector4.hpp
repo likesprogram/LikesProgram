@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../system/LikesProgramLibExport.hpp"
 #include <ostream>
 
@@ -10,7 +10,7 @@ namespace LikesProgram {
             constexpr Vector4(double x, double y, double z, double w) : m_x(x), m_y(y), m_z(z), m_w(w) {}
             explicit constexpr Vector4(double s) : m_x(s), m_y(s), m_z(s), m_w(s) {}
 
-            // ËãÊõÔËËã
+            // ç®—æœ¯è¿ç®—
             Vector4 operator+(double s) const;
             Vector4 operator-(double s) const;
             Vector4 operator*(double s) const;
@@ -31,17 +31,17 @@ namespace LikesProgram {
             Vector4& operator*=(const Vector4& v);
             Vector4& operator/=(const Vector4& v);
 
-            // Ò»ÔªÔËËã
+            // ä¸€å…ƒè¿ç®—
             Vector4 operator-() const;
             Vector4 operator+() const;
 
-            // ×ÔÔö×Ô¼õ
+            // è‡ªå¢è‡ªå‡
             Vector4& operator++();
             Vector4 operator++(int);
             Vector4& operator--();
             Vector4 operator--(int);
 
-            // ±È½ÏÔËËã·û
+            // æ¯”è¾ƒè¿ç®—ç¬¦
             bool operator==(const Vector4& v) const;
             bool operator!=(const Vector4& v) const;
             bool operator<(const Vector4& v) const;
@@ -49,37 +49,37 @@ namespace LikesProgram {
             bool operator<=(const Vector4& v) const;
             bool operator>=(const Vector4& v) const;
 
-            // ÏÂ±ê·ÃÎÊ
+            // ä¸‹æ ‡è®¿é—®
             double& operator[](size_t i);
             const double& operator[](size_t i) const;
 
-            // ÓÑÔª
+            // å‹å…ƒ
             friend Vector4 operator*(double s, const Vector4& v);
             friend std::ostream& operator<<(std::ostream& os, const Vector4& v);
 
-            // ³¤¶È
+            // é•¿åº¦
             double Length() const;
             double LengthSquared() const;
 
-            // ¹éÒ»»¯
+            // å½’ä¸€åŒ–
             Vector4 Normalized() const;
             void Normalize();
             Vector4 SafeNormalized(double epsilon = 1e-9) const;
 
-            // µã»ı
+            // ç‚¹ç§¯
             double Dot(const Vector4& v) const;
             static double Dot(const Vector4& a, const Vector4& b);
 
-            // ÅĞ¶Ï
+            // åˆ¤æ–­
             bool IsZero(double epsilon = 1e-9) const;
             bool NearlyEquals(const Vector4& v, double epsilon = 1e-9) const;
             bool IsNormalized(double epsilon = 1e-9) const;
 
-            // ²åÖµ
+            // æ’å€¼
             static Vector4 Lerp(const Vector4& a, const Vector4& b, double t);
             static Vector4 Slerp(const Vector4& a, const Vector4& b, double t);
 
-            // ¾²Ì¬ÏòÁ¿
+            // é™æ€å‘é‡
             static Vector4 Zero();
             static Vector4 One();
             static Vector4 UnitX();

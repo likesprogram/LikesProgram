@@ -150,20 +150,20 @@ namespace LikesProgram {
             LikesProgram::String base = m_name;
             for (size_t i = 0; i < m_impl->m_buckets.size(); ++i) {
                 result.Append(base).Append(u"{le=\"")
-                    .Append(LikesProgram::String::FromFloat(m_impl->m_buckets[i], 6))
+                    .Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_buckets[i]))
                     .Append(u"\"} ")
-                    .Append(LikesProgram::String::FromInt(m_impl->m_counts[i]->load(std::memory_order_relaxed)))
+                    .Append(LikesProgram::String::Format(u"{}", m_impl->m_counts[i]->load(std::memory_order_relaxed)))
                     .Append(u"\n");
             }
 
             result.Append(base).Append(u"{le=\"+Inf\"} ")
-                .Append(LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed))).Append(u"\n");
+                .Append(LikesProgram::String::Format(u"{}", m_impl->m_count.load(std::memory_order_relaxed))).Append(u"\n");
 
             result.Append(base).Append(u"_sum ")
-                .Append(LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6)).Append(u"\n");
+                .Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_sum.load(std::memory_order_relaxed))).Append(u"\n");
 
             result.Append(base).Append(u"_count ")
-                .Append(LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed))).Append(u"\n");
+                .Append(LikesProgram::String::Format(u"{}", m_impl->m_count.load(std::memory_order_relaxed))).Append(u"\n");
 
             return result;
         }
@@ -189,13 +189,13 @@ namespace LikesProgram {
             json.Append(u"\"buckets\":{");
             for (size_t i = 0; i < m_impl->m_buckets.size(); ++i) {
                 if (i > 0) json.Append(u",");
-                json.Append(u"\"").Append(LikesProgram::String::FromFloat(m_impl->m_buckets[i], 6)).Append(u"\":")
-                    .Append(LikesProgram::String::FromInt(m_impl->m_counts[i]->load(std::memory_order_relaxed)));
+                json.Append(u"\"").Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_buckets[i])).Append(u"\":")
+                    .Append(LikesProgram::String::Format(u"{}", m_impl->m_counts[i]->load(std::memory_order_relaxed)));
             }
             json.Append(u"},");
 
-            json.Append(u"\"sum\":").Append(LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6)).Append(u",");
-            json.Append(u"\"count\":").Append(LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed)));
+            json.Append(u"\"sum\":").Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_sum.load(std::memory_order_relaxed))).Append(u",");
+            json.Append(u"\"count\":").Append(LikesProgram::String::Format(u"{}", m_impl->m_count.load(std::memory_order_relaxed)));
             json.Append(u"}");
 
             return json;

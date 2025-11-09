@@ -32,17 +32,14 @@ namespace LoggerTest {
         // 初始化日志
 #ifdef _DEBUG
         auto& logger = LikesProgram::Logger::Instance(true, true);
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
 #else
         auto& logger = LikesProgram::Logger::Instance(true);
+        logger.SetLevel(LikesProgram::Logger::LogLevel::Info);
 #endif
 
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
-#endif
-#ifdef _DEBUG
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
-#else
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Info);
 #endif
         // 内置控制台输出 Sink
         logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
@@ -51,7 +48,7 @@ namespace LoggerTest {
         // 自定义网络输出 Sink
         logger.AddSink(CreateNetworkSink("127.0.0.1:9000")); // 自定义输出 Sink
 #ifdef _DEBUG
-        LOG_TRACE(u"trace message 日志输出");   // 不会输出
+        LOG_TRACE(u"trace message 日志输出 {}");   // 不会输出
         LOG_DEBUG(u"debug message 日志输出");   // 会输出
         LOG_INFO(u"info message 日志输出");     // 会输出
         LOG_WARN(u"warn message 日志输出");     // 会输出
@@ -66,23 +63,13 @@ namespace LoggerTest {
         LOG_FATAL(u"fatal message 日志输出");   // 会输出
 #endif
 
-        // 设置线程名
-        LikesProgram::CoreUtils::SetCurrentThreadName(u"主线程");
-#ifdef _DEBUG
-        LOG_TRACE(u"trace message 日志输出");   // 不会输出
-        LOG_DEBUG(u"debug message 日志输出");   // 会输出
-        LOG_INFO(u"info message 日志输出");     // 会输出
-        LOG_WARN(u"warn message 日志输出");     // 会输出
-        LOG_ERROR(u"error message 日志输出");   // 会输出
-        LOG_FATAL(u"fatal message 日志输出");   // 会输出
-#else
-        LOG_TRACE(u"trace message 日志输出");   // 不会输出
-        LOG_DEBUG(u"debug message 日志输出");   // 不会输出
-        LOG_INFO(u"info message 日志输出");     // 会输出
-        LOG_WARN(u"warn message 日志输出");     // 会输出
-        LOG_ERROR(u"error message 日志输出");   // 会输出
-        LOG_FATAL(u"fatal message 日志输出");   // 会输出
-#endif
+        // 格式化输出
+        LOG_TRACE(u"trace message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Trace);   // 不会输出
+        LOG_DEBUG(u"debug message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Debug);   // 会输出
+        LOG_INFO(u"info message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Info);    // 会输出
+        LOG_WARN(u"warn message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Warn);    // 会输出
+        LOG_ERROR(u"error message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Error);   // 会输出
+        LOG_FATAL(u"fatal message 格式化输出 LogLevel：{}", (int)LikesProgram::Logger::LogLevel::Fatal);   // 会输出
         logger.Shutdown();
 	}
 }

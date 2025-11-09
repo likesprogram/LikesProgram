@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "LikesProgramLibExport.hpp"
 
 namespace LikesProgram {

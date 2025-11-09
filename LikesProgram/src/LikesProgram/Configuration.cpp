@@ -616,7 +616,7 @@ namespace LikesProgram {
 
             // 处理布尔值
             if (cfg.IsBool()) {
-                woss << String::FromBool(cfg.AsBool());
+                woss << String::Format("{}", cfg.AsBool());
                 return;
             }
 

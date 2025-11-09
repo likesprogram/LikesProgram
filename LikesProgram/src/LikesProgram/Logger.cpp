@@ -62,6 +62,7 @@ namespace LikesProgram {
             if (!inst) {
                 inst = new Logger(autoStart, debug);
                 instance.store(inst, std::memory_order_release);
+                CoreUtils::SetCurrentThreadName(u"主线程"); // 默认将初始化线程名为“主线程”
             }
         }
 
@@ -132,40 +133,6 @@ namespace LikesProgram {
         m_impl->sinks.push_back(sink);
     }
 
-    void Logger::Log(LogLevel level, const String& msg,
-        const char* file, int line, const char* func)
-    {
-        if (!m_impl) return;
-        if (m_impl->stop.load(std::memory_order_acquire)) return;
-        if (level < m_impl->minLevel) return;
-
-        try {
-            LogMessage m;
-            m.level = level;
-            m.msg = String(msg);
-            m.file = (file != nullptr) ? String(file) : String();
-            m.line = line;
-            m.tid = std::this_thread::get_id();
-            m.threadName = CoreUtils::GetCurrentThreadName();
-            m.timestamp = std::chrono::system_clock::now();
-            m.func = (func != nullptr) ? String(func) : String();
-            m.debug = m_impl->m_debug;
-            m.minLevel = m_impl->minLevel;
-            m.encoding = m_impl->encoding;
-            // 使用 queueMtx 同步 stop 和 queue push
-            {
-                std::lock_guard<std::mutex> lock(m_impl->queueMtx);
-                if (m_impl->stop.load(std::memory_order_acquire)) return;
-                m_impl->queue.push(std::move(m));
-            }
-            m_impl->cv.notify_one();
-        } catch (const std::exception& e) {
-            std::cerr << "[Logger Error] Failed to log message: " << e.what() << std::endl;
-        } catch (...) {
-            std::cerr << "[Logger Error] Failed to log message: Unknown exception" << std::endl;
-        }
-    }
-
     bool Logger::Start() {
         bool expected = true;  // true 表示“停止状态”
         // CAS 检查并更新为 false（启动状态）
@@ -217,6 +184,42 @@ namespace LikesProgram {
         }
     }
 
+    void Logger::LogMessageString(LogLevel level, const String& msg,
+        const char* file, int line, const char* func)
+    {
+        if (!m_impl) return;
+        if (m_impl->stop.load(std::memory_order_acquire)) return;
+        if (level < m_impl->minLevel) return;
+
+        try {
+            LogMessage m;
+            m.level = level;
+            m.msg = String(msg);
+            m.file = (file != nullptr) ? String(file) : String();
+            m.line = line;
+            m.tid = std::this_thread::get_id();
+            m.threadName = CoreUtils::GetCurrentThreadName();
+            m.timestamp = std::chrono::system_clock::now();
+            m.func = (func != nullptr) ? String(func) : String();
+            m.debug = m_impl->m_debug;
+            m.minLevel = m_impl->minLevel;
+            m.encoding = m_impl->encoding;
+            // 使用 queueMtx 同步 stop 和 queue push
+            {
+                std::lock_guard<std::mutex> lock(m_impl->queueMtx);
+                if (m_impl->stop.load(std::memory_order_acquire)) return;
+                m_impl->queue.push(std::move(m));
+            }
+            m_impl->cv.notify_one();
+        }
+        catch (const std::exception& e) {
+            std::cerr << "[Logger Error] Failed to log message: " << e.what() << std::endl;
+        }
+        catch (...) {
+            std::cerr << "[Logger Error] Failed to log message: Unknown exception" << std::endl;
+        }
+    }
+
     // 实现 ILogSink
     String Logger::ILogSink::FormatLogMessage(const LogMessage& message) {
         auto t_c = std::chrono::system_clock::to_time_t(message.timestamp);
@@ -228,17 +231,17 @@ namespace LikesProgram {
         woss << L"[" << std::put_time(std::localtime(&t_c), L"%F %T")
             << L"." << std::setw(3) << std::setfill(L'0') << ms.count() << L"] ";
 
+        // 线程信息
+        woss << L"[T:";
+        if (!message.threadName.Empty()) woss << message.threadName.ToWString();
+        else woss << message.tid;
+        woss << L"] ";
+
         // 日志级别
         woss << L"[" << LevelToString(message.level).ToWString() << L"] ";
 
         // 是否输出 调试信息
         if (message.debug) {
-            // 线程信息
-            woss << L"[T:";
-            if (!message.threadName.Empty()) woss << message.threadName.ToWString();
-            else woss << message.tid;
-            woss << L"] ";
-            
             // 函数信息
             woss << L"[Function:" << message.func << L"] ";
 

@@ -185,13 +185,13 @@ namespace LikesProgram {
                         first = false;
                     }
                     if (!first) result.Append(u",");
-                    result.Append(u"quantile=\"").Append(LikesProgram::String::FromFloat(q, 2)).Append(u"\"");
+                    result.Append(u"quantile=\"").Append(LikesProgram::String::Format(u"{:.2f}", q)).Append(u"\"");
                     result.Append(u"}");
                 }
-                result.Append(u" ").Append(LikesProgram::String::FromFloat(val, 6)).Append(u"\n");
+                result.Append(u" ").Append(LikesProgram::String::Format(u"{:.6f}", val)).Append(u"\n");
             };
-            appendMetric(u"_count", LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed)));
-            appendMetric(u"_sum", LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6));
+            appendMetric(u"_count", LikesProgram::String::Format(u"{}", m_impl->m_count.load(std::memory_order_relaxed)));
+            appendMetric(u"_sum", LikesProgram::String::Format(u"{:.6f}", m_impl->m_sum.load(std::memory_order_relaxed)));
 
             appendQuantile(0.5, Quantile(0.5));
             appendQuantile(0.9, Quantile(0.9));
@@ -199,9 +199,9 @@ namespace LikesProgram {
 
             // 扩展字段
             if (Count() > 0) {
-                if (m_alpha > 0 && m_alpha < 1) appendMetric(u"_ema", LikesProgram::String::FromFloat(m_impl->m_emAverage.load(std::memory_order_relaxed), 6));
-                appendMetric(u"_min", LikesProgram::String::FromFloat(Min(), 6));
-                appendMetric(u"_max", LikesProgram::String::FromFloat(Max(), 6));
+                if (m_alpha > 0 && m_alpha < 1) appendMetric(u"_ema", LikesProgram::String::Format(u"{:.6f}", m_impl->m_emAverage.load(std::memory_order_relaxed)));
+                appendMetric(u"_min", LikesProgram::String::Format(u"{:.6f}", Min()));
+                appendMetric(u"_max", LikesProgram::String::Format(u"{:.6f}", Max()));
             }
 
             return result;
@@ -224,19 +224,19 @@ namespace LikesProgram {
             }
             json.Append(u"},");
 
-            json.Append(u"\"count\":").Append(LikesProgram::String::FromInt(m_impl->m_count.load(std::memory_order_relaxed))).Append(u",");
-            json.Append(u"\"sum\":").Append(LikesProgram::String::FromFloat(m_impl->m_sum.load(std::memory_order_relaxed), 6)).Append(u",");
+            json.Append(u"\"count\":").Append(LikesProgram::String::Format(u"{}", m_impl->m_count.load(std::memory_order_relaxed))).Append(u",");
+            json.Append(u"\"sum\":").Append(LikesProgram::String::Format(u"{:.6f}", m_impl->m_sum.load(std::memory_order_relaxed))).Append(u",");
 
-            json.Append(u"\"0.50\":").Append(LikesProgram::String::FromFloat(Quantile(0.5), 6)).Append(u",");
-            json.Append(u"\"0.90\":").Append(LikesProgram::String::FromFloat(Quantile(0.9), 6)).Append(u",");
-            json.Append(u"\"0.99\":").Append(LikesProgram::String::FromFloat(Quantile(0.99), 6));
+            json.Append(u"\"0.50\":").Append(LikesProgram::String::Format(u"{:.6f}", Quantile(0.5))).Append(u",");
+            json.Append(u"\"0.90\":").Append(LikesProgram::String::Format(u"{:.6f}", Quantile(0.9))).Append(u",");
+            json.Append(u"\"0.99\":").Append(LikesProgram::String::Format(u"{:.6f}", Quantile(0.99)));
 
             // 扩展字段
             if (Count() > 0) {
                 std::vector<LikesProgram::String> fields;
-                if (m_alpha > 0 && m_alpha < 1) fields.push_back(u"\"ema\":" + LikesProgram::String::FromFloat(m_impl->m_emAverage.load(std::memory_order_relaxed), 6));
-                fields.push_back(u"\"min\":" + LikesProgram::String::FromFloat(Min(), 6));
-                fields.push_back(u"\"max\":" + LikesProgram::String::FromFloat(Max(), 6));
+                if (m_alpha > 0 && m_alpha < 1) fields.push_back(u"\"ema\":" + LikesProgram::String::Format(u"{:.6f}", m_impl->m_emAverage.load(std::memory_order_relaxed)));
+                fields.push_back(u"\"min\":" + LikesProgram::String::Format(u"{:.6f}", Min()));
+                fields.push_back(u"\"max\":" + LikesProgram::String::Format(u"{:.6f}", Max()));
                 for (size_t i = 0; i < fields.size(); ++i) {
                     json.Append(u",");
                     json.Append(fields[i]);

@@ -4,6 +4,7 @@
 #include <memory>
 #include "String.hpp"
 #include <thread>
+#include <source_location>
 
 namespace LikesProgram {
     class LIKESPROGRAM_API Logger {
@@ -61,10 +62,22 @@ namespace LikesProgram {
         // 添加一个日志输出目标（Sink）
         void AddSink(std::shared_ptr<ILogSink> sink);
 
-        // 记录一条日志（供宏 FW_LOG_xxx 使用）
-        void Log(LogLevel level, const String& msg,
-            const char* file, int line, const char* func);
+        // 格式化面板
+        template <typename... Args>
+        void Log(LogLevel level, const std::source_location& loc, const String& format, Args&&... args) {
+            if constexpr (sizeof...(args) == 0) {
+                // 无参数，直接输出原始字符串
+                LogMessageString(level, format, loc.file_name(), loc.line(), loc.function_name());
+            }
+            else {
+                // 有参数，执行格式化
+                LogMessageString(level,
+                    String::Format(format, std::forward<Args>(args)...),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+        }
 
+        // 启动日志系统（创建后台线程）
         bool Start();
 
         // 停止日志系统（结束后台线程，清理资源）
@@ -83,6 +96,10 @@ namespace LikesProgram {
         Logger(Logger&&) noexcept = delete;
         Logger& operator=(Logger&&) noexcept = delete;
 
+        // 记录一条日志
+        void LogMessageString(LogLevel level, const String& msg,
+            const char* file, int line, const char* func);
+
         // 日志处理循环（后台线程执行）
         void ProcessLoop();
 
@@ -98,10 +115,10 @@ namespace LikesProgram {
     };
 
     // 宏接口
-#define LOG_TRACE(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Trace, msg, __FILE__, __LINE__, __func__)
-#define LOG_DEBUG(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Debug, msg, __FILE__, __LINE__, __func__)
-#define LOG_INFO(msg)  LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Info,  msg, __FILE__, __LINE__, __func__)
-#define LOG_WARN(msg)  LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Warn,  msg, __FILE__, __LINE__, __func__)
-#define LOG_ERROR(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Error, msg, __FILE__, __LINE__, __func__)
-#define LOG_FATAL(msg) LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Fatal, msg, __FILE__, __LINE__, __func__)
+#define LOG_TRACE(msg, ...) (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Trace, std::source_location::current(), msg, ##__VA_ARGS__))
+#define LOG_DEBUG(msg, ...) (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Debug, std::source_location::current(), msg, ##__VA_ARGS__))
+#define LOG_INFO(msg, ...)  (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Info,  std::source_location::current(), msg, ##__VA_ARGS__))
+#define LOG_WARN(msg, ...)  (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Warn,  std::source_location::current(), msg, ##__VA_ARGS__))
+#define LOG_ERROR(msg, ...) (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Error, std::source_location::current(), msg, ##__VA_ARGS__))
+#define LOG_FATAL(msg, ...) (LikesProgram::Logger::Instance().Log(LikesProgram::Logger::LogLevel::Fatal, std::source_location::current(), msg, ##__VA_ARGS__))
 }
