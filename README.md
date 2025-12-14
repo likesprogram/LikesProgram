@@ -79,7 +79,7 @@ LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标�
      ```bash
      g++ main.cpp -I/path/to/include -L/path/to/lib -lLikesProgram
      ```
-     
+
 ---
 
 ## 模块概览
@@ -121,7 +121,7 @@ String 是 LikesProgram 的核心组件之一，提供 **工程级可用的 Unic
 
 ### 2. StringFormat（类型安全的格式化系统）
 
-路径：`include/LikesProgram/StringFormat/*`
+路径：`include/LikesProgram/stringFormat/*`
 
 StringFormat 是一个 **与 LikesProgram::String 深度集成的格式化系统**，用于构建类型安全、可扩展的字符串格式化能力。
 

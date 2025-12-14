@@ -1,9 +1,9 @@
 ﻿#pragma once
 #include <iostream>
 #include "../LikesProgram/String.hpp"
-#include "../LikesProgram/StringFormat/FormatParser.hpp"
+#include "../LikesProgram/stringFormat/FormatParser.hpp"
 #include "../LikesProgram/Logger.hpp"
-#include "../LikesProgram/StringFormat/FormatInternal.hpp"
+#include "../LikesProgram/stringFormat/FormatInternal.hpp"
 #include "../LikesProgram/Time/Timer.hpp"
 using namespace LikesProgram;
 using namespace LikesProgram::Time;

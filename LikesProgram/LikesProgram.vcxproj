@@ -160,9 +160,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
-    <ClInclude Include="include\LikesProgram\StringFormat\FormatInternal.hpp" />
-    <ClInclude Include="include\LikesProgram\StringFormat\FormatParser.hpp" />
-    <ClInclude Include="include\LikesProgram\StringFormat\FormatSpec.hpp" />
+    <ClInclude Include="include\LikesProgram\stringFormat\FormatInternal.hpp" />
+    <ClInclude Include="include\LikesProgram\stringFormat\FormatParser.hpp" />
+    <ClInclude Include="include\LikesProgram\stringFormat\FormatSpec.hpp" />
     <ClInclude Include="include\LikesProgram\system\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp" />
     <ClInclude Include="include\LikesProgram\Logger.hpp" />

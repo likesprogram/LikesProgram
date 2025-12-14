@@ -1,6 +1,6 @@
 ﻿#include "../../include/LikesProgram/String.hpp"
 #include "../../include/LikesProgram/unicode/Unicode.hpp"
-#include "../../include/LikesProgram/StringFormat/FormatInternal.hpp"
+#include "../../include/LikesProgram/stringFormat/FormatInternal.hpp"
 #include <stdexcept>
 #include <cwchar>
 #include <atomic>

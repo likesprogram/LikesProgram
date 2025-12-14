@@ -1,4 +1,4 @@
-﻿#include "../../../include/LikesProgram/StringFormat/FormatSpec.hpp"
+﻿#include "../../../include/LikesProgram/stringFormat/FormatSpec.hpp"
 
 namespace LikesProgram {
 	namespace StringFormat {

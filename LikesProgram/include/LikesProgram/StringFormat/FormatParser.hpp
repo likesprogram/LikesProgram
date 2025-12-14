@@ -67,7 +67,7 @@ namespace LikesProgram {
             static bool IsTypeChar(char32_t c);
 
             // 安全取字符（避免越界）
-            static char32_t SafeChar(const String& s, size_t i);
+            // static char32_t SafeChar(const String& s, size_t i);
 
             // 抛出带上下文信息的异常
             [[noreturn]] static void ThrowFormatError(const String& msg, const String& context, size_t pos);

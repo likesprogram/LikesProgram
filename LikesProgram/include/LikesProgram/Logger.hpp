@@ -28,7 +28,7 @@ namespace LikesProgram {
             String threadName;
             std::chrono::system_clock::time_point timestamp;
             String func;
-            LogLevel minLevel;
+            LogLevel minLevel = LogLevel::Info;
             String::Encoding encoding = String::Encoding::UTF8;
             bool debug = true;
         };
