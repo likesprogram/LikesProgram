@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "system/LikesProgramLibExport.hpp"
 #include <string>
+#include <chrono>
 #include <memory>
 #include "String.hpp"
 #include <thread>
