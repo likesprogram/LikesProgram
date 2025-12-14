@@ -6,21 +6,39 @@ Author: 龙兵寅
 Website: https://likesprogram.com
 GitHub: https://github.com/likesprogram/LikesProgram
 
-This project is licensed under BSD 3-Clause License.
+This project is licensed under the BSD 3-Clause License.
+See the LICENSE file for full license text.
 
-Third-party components
+--------------------------------------------------------
+
+Third-Party Components
 ----------------------
-Currently, LikesProgram does not include any third-party libraries or resources.
-If third-party code or resources are added in the future, list them below:
 
-- UnicodeData.txt - Unicode License - https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
-  Used to generate Unicode case mapping tables in LikesProgram (BMP/SMP conversion functions).
+LikesProgram currently does not embed or redistribute any third-party
+libraries as compiled dependencies.
+
+The following third-party data or specifications may be used during
+the development or code generation process:
+
+- UnicodeData.txt
+  License: Unicode License
+  Source: https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
+
+  This data is used to generate Unicode case-mapping tables
+  (BMP / SMP conversion logic) within LikesProgram.
+  The generated tables are derived works based on the Unicode Character Database.
+
+--------------------------------------------------------
 
 Acknowledgments
 ----------------
-Any derivative work, modification, or redistribution based on this project
-must include an acknowledgment in the documentation or other prominent place:
 
-   “This project uses LikesProgram library (Author: 龙兵寅, 
-    Website: https://likesprogram.com, 
-    GitHub: https://github.com/likesprogram/LikesProgram)”
+If you use LikesProgram in your project, attribution is appreciated
+but not required.
+
+Example acknowledgment:
+
+"This project uses LikesProgram.
+ https://github.com/likesprogram/LikesProgram"
+
+--------------------------------------------------------

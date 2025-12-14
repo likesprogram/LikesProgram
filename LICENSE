@@ -1,4 +1,4 @@
-BSD 3-Clause License + Author Attribution Requirement
+BSD 3-Clause License
 
 Copyright (c) 2025, 龙兵寅
 All rights reserved.
@@ -11,39 +11,57 @@ Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 
 1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions, and the following disclaimer.
+   this list of conditions and the following disclaimer.
 
 2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions, and the following disclaimer in the documentation
+   this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder, nor the names of its contributors,
-   nor the project name may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-Additional Requirement:
------------------------
-Any derivative work, modification, or redistribution based on this project
-must include an acknowledgment in the documentation or other prominent place:
-
-   “This project uses LikesProgram library (Author: 龙兵寅, 
-    Website: https://likesprogram.com, 
-    GitHub: https://github.com/likesprogram/LikesProgram)”
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------
+
+Author Attribution (Optional)
+
+If you use LikesProgram in your project,
+the author would greatly appreciate an acknowledgment
+in your documentation or acknowledgments section, for example:
+
+"This project uses the LikesProgram library.
+ https://github.com/likesprogram/LikesProgram"
+
+--------------------------------------------------------
+
 中文说明：
-本项目使用 BSD 3-Clause License 许可，允许自由使用、复制、修改和分发，但须保留版权声明和许可条款。
-禁止用于违法、侵权或伤害他人的行为。本库不保证适用性、稳定性或安全性，使用者自行承担风险。
-在使用本库的二次开发或派生项目中，应在文档或显著位置注明：
-“本项目使用 LikesProgram 库（作者：龙兵寅，官网：https://likesprogram.com，GitHub：https://github.com/likesprogram/LikesProgram）”
+
+本项目采用 BSD 3-Clause License 进行许可。
+允许在保留版权声明和许可条款的前提下，自由使用、复制、修改和分发，
+包括用于商业和闭源项目。
+
+本软件按“现状”提供，不对其适用性、稳定性或安全性作任何保证，
+使用者需自行承担由此产生的风险。
+
+--------------------------------------------------------
+
+作者署名（非强制）：
+
+如果您在项目中使用了 LikesProgram，
+作者将非常感谢您在文档或致谢中提及本项目，例如：
+
+“本项目使用了 LikesProgram 库
+https://github.com/likesprogram/LikesProgram”
+
