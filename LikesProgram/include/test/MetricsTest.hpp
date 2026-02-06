@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "../LikesProgram/metrics/Counter.hpp"
 #include "../LikesProgram/metrics/Gauge.hpp"
 #include "../LikesProgram/metrics/Histogram.hpp"
@@ -11,14 +11,14 @@
 
 namespace MetricsTest {
     void Test() {
-        std::cout << "\n===== Counter Ê¾Àı =====\n" << std::endl;
+        std::cout << "\n===== Counter ç¤ºä¾‹ =====\n" << std::endl;
         auto httpCounter = std::make_shared<LikesProgram::Metrics::Counter>(
             u"http_requests_total",
             u"Total HTTP requests",
             std::map<LikesProgram::String, LikesProgram::String>{{u"method", u"GET"}, { u"code", u"200" }}
         );
 
-        httpCounter->Increment();       // Ä¬ÈÏ +1
+        httpCounter->Increment();       // é»˜è®¤ +1
         httpCounter->Increment(5.0);    // +5
 
         std::wcout << L"Counter Value: " << httpCounter->Value() << std::endl;
@@ -26,7 +26,7 @@ namespace MetricsTest {
         std::wcout << L"Json Counter:\n" << httpCounter->ToJson() << std::endl << std::endl;
 
 
-        std::cout << "\n===== Gauge Ê¾Àı =====\n" << std::endl;
+        std::cout << "\n===== Gauge ç¤ºä¾‹ =====\n" << std::endl;
         auto tempGauge = std::make_shared<LikesProgram::Metrics::Gauge>(
             u"temperature_celsius",
             u"Temperature in Celsius",
@@ -42,15 +42,15 @@ namespace MetricsTest {
         std::wcout << L"Json Gauge:\n" << tempGauge->ToJson() << std::endl << std::endl;
 
 
-        std::cout << "\n===== Histogram Ê¾Àı =====\n" << std::endl;
+        std::cout << "\n===== Histogram ç¤ºä¾‹ =====\n" << std::endl;
         auto hist = std::make_shared<LikesProgram::Metrics::Histogram>(
             u"db_query_duration_seconds",
-            std::vector<double>{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0}, // Í°±ß½ç: 1ms ~ 1s
+            std::vector<double>{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0}, // æ¡¶è¾¹ç•Œ: 1ms ~ 1s
             u"Database query latency",
             std::map<LikesProgram::String, LikesProgram::String>{{u"db", u"users"}}
         );
 
-        // Ä£ÄâÈı´ÎÊı¾İ¿â²éÑ¯
+        // æ¨¡æ‹Ÿä¸‰æ¬¡æ•°æ®åº“æŸ¥è¯¢
         {
             LikesProgram::Time::Timer timer(true);
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -72,15 +72,15 @@ namespace MetricsTest {
             hist->ObserveDuration(timer); // ~0.2s
         }
 
-        // ¶îÍâ¼ÇÂ¼Ò»´ÎÊÖ¶¯Öµ
+        // é¢å¤–è®°å½•ä¸€æ¬¡æ‰‹åŠ¨å€¼
         hist->Observe(0.8); // 800ms
 
-        // µ¼³ö½á¹û
+        // å¯¼å‡ºç»“æœ
         std::wcout << L"Prometheus Histogram:\n" << hist->ToPrometheus() << std::endl;
         std::wcout << L"Json Histogram:\n" << hist->ToJson() << std::endl << std::endl;
 
 
-        std::cout << "\n===== Summary Ê¾Àı =====\n" << std::endl;
+        std::cout << "\n===== Summary ç¤ºä¾‹ =====\n" << std::endl;
         auto latencySummary = std::make_shared<LikesProgram::Metrics::Summary>(
             u"http_request_latency_seconds",
             1000,
@@ -97,7 +97,7 @@ namespace MetricsTest {
         std::wcout << L"Json Summary:\n" << latencySummary->ToJson() << std::endl << std::endl;
 
 
-        std::cout << "\n===== Registry Ê¾Àı =====\n" << std::endl;
+        std::cout << "\n===== Registry ç¤ºä¾‹ =====\n" << std::endl;
         auto& reg = LikesProgram::Metrics::Registry::Global();
 
         // Register
@@ -123,17 +123,17 @@ namespace MetricsTest {
         // Unregister
         reg.Unregister(u"http_requests_total", { {u"method", u"GET"}, {u"code", u"200"} });
 
-        // ÔÙµ¼³ö¿´¿´ÊÇ·ñÒÆ³ıÁË
+        // å†å¯¼å‡ºçœ‹çœ‹æ˜¯å¦ç§»é™¤äº†
         LikesProgram::String afterUnreg = reg.ExportPrometheus();
         std::wcout << L"After Unregister:\n" << afterUnreg << std::endl;
     }
 
-    // ¿ìËÙ²âÊÔÈë¿Ú
+    // å¿«é€Ÿæµ‹è¯•å…¥å£
     inline void TestQuick() {
-        // Ä¬ÈÏ²ÎÊı
+        // é»˜è®¤å‚æ•°
         std::string mode = "leak";
         size_t iters = 100000;
-        size_t alloc_bytes = 64; // Ã¿´ÎĞ¹Â©·ÖÅä´óĞ¡
+        size_t alloc_bytes = 64; // æ¯æ¬¡æ³„æ¼åˆ†é…å¤§å°
         size_t report_interval = 10000;
 
         std::wcout << L"Mode: " << std::wstring(mode.begin(), mode.end())
@@ -141,7 +141,7 @@ namespace MetricsTest {
             << L", alloc=" << alloc_bytes
             << L", report_interval=" << report_interval << std::endl;
 
-        // ´´½¨Ò»×é metrics Ê¾Àı£¨±£ÁôÔ­Ê¾ÀıµÄ²¿·Ö£©
+        // åˆ›å»ºä¸€ç»„ metrics ç¤ºä¾‹ï¼ˆä¿ç•™åŸç¤ºä¾‹çš„éƒ¨åˆ†ï¼‰
         auto httpCounter = std::make_shared<LikesProgram::Metrics::Counter>(
             u"http_requests_total",
             u"Total HTTP requests",
@@ -181,7 +181,7 @@ namespace MetricsTest {
         latencySummary->Observe(0.10);
         latencySummary->Observe(0.20);
 
-        // ×¢²áµ½ Registry£¨±£³ÖĞĞÎª£©
+        // æ³¨å†Œåˆ° Registryï¼ˆä¿æŒè¡Œä¸ºï¼‰
         auto& reg = LikesProgram::Metrics::Registry::Global();
         reg.Register(httpCounter);
         reg.Register(tempGauge);

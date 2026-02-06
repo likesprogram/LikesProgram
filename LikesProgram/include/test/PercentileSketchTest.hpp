@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -6,53 +6,53 @@
 
 namespace PercentileSketchTest {
 	void Test() {
-        // ´´½¨°Ù·ÖÎ»¹ÀËãÆ÷
+        // åˆ›å»ºç™¾åˆ†ä½ä¼°ç®—å™¨
         LikesProgram::Math::PercentileSketch sketch1(1200, 2);
 
-        // µ¥¸öÊı¾İÌí¼Ó
+        // å•ä¸ªæ•°æ®æ·»åŠ 
         for (double x = 0; x < 500; x += 1.0) {
             sketch1.Add(x);
         }
 
-        // ÅúÁ¿Ìí¼ÓÊı¾İ
+        // æ‰¹é‡æ·»åŠ æ•°æ®
         std::vector<double> batchData;
         for (double x = 500; x < 1000; x += 1.0) batchData.push_back(x);
         sketch1.AddBatch(batchData);
 
-        // Ñ¹ËõÒÔÓÅ»¯²éÑ¯ºÍÄÚ´æ
+        // å‹ç¼©ä»¥ä¼˜åŒ–æŸ¥è¯¢å’Œå†…å­˜
         sketch1.Compress();
 
-        // ²éÑ¯°Ù·ÖÎ»
+        // æŸ¥è¯¢ç™¾åˆ†ä½
         std::cout << "50th percentile: " << sketch1.Quantile(0.5) << std::endl;
         std::cout << "90th percentile: " << sketch1.Quantile(0.9) << std::endl;
         std::cout << "99th percentile: " << sketch1.Quantile(0.99) << std::endl;
 
-        // »ñÈ¡ÖÊĞÄĞÅÏ¢
+        // è·å–è´¨å¿ƒä¿¡æ¯
         auto centroids = sketch1.GetCentroids();
         std::cout << "Centroid count: " << centroids.size() << std::endl;
         for (size_t i = 0; i < std::min((size_t)5, centroids.size()); ++i) {
             std::cout << "Mean: " << centroids[i].first << ", Count: " << centroids[i].second << std::endl;
         }
 
-        // ´´½¨ÁíÒ»¸ö sketch ²¢Ìí¼ÓÊı¾İ
+        // åˆ›å»ºå¦ä¸€ä¸ª sketch å¹¶æ·»åŠ æ•°æ®
         LikesProgram::Math::PercentileSketch sketch2(800, 2);
         for (double x = 1000; x < 1500; x += 1.0) sketch2.Add(x);
-        sketch2.Compress();  // Ñ¹ËõºóÔÙ merge£¬Ìá¸ß¾«¶È
+        sketch2.Compress();  // å‹ç¼©åå† mergeï¼Œæé«˜ç²¾åº¦
 
-        // ºÏ²¢ÁíÒ»¸ö PercentileSketch
+        // åˆå¹¶å¦ä¸€ä¸ª PercentileSketch
         sketch1.Merge(sketch2);
 
-        // ÔÙ´ÎÑ¹Ëõ merge ºóµÄ sketch£¬Ìá¸ßÎ²²¿·ÖÎ»¾«¶È
+        // å†æ¬¡å‹ç¼© merge åçš„ sketchï¼Œæé«˜å°¾éƒ¨åˆ†ä½ç²¾åº¦
         sketch1.Compress();
 
         std::cout << "After merge, 95th percentile: " << sketch1.Quantile(0.95) << std::endl;
 
-        // ĞòÁĞ»¯
+        // åºåˆ—åŒ–
         std::ofstream ofs("sketch.bin", std::ios::binary);
         sketch1.Serialize(ofs);
         ofs.close();
 
-        // ·´ĞòÁĞ»¯
+        // ååºåˆ—åŒ–
         std::ifstream ifs("sketch.bin", std::ios::binary);
         auto loadedSketch = LikesProgram::Math::PercentileSketch::Deserialize(ifs);
         ifs.close();

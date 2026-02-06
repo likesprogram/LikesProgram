@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 #include <iostream>
 #include <random>
 #include "../../include/LikesProgram/math/Math.hpp"
@@ -9,7 +9,7 @@
 namespace Vector4Test {
 
     void StressTest(size_t count = 100000) {
-        std::cout << "\n===== Vector4 Stress Test (" << count << " ¥Œ) =====\n";
+        std::cout << "\n===== Vector4 Stress Test (" << count << " Ê¨°) =====\n";
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
@@ -24,18 +24,18 @@ namespace Vector4Test {
             acc += a + b;
             acc -= a - b;
             acc *= 0.5;
-            acc += a * b; // ∑÷¡ø≥À
+            acc += a * b; // ÂàÜÈáè‰πò
             acc -= a / (b + LikesProgram::Math::Vector4(1.0, 1.0, 1.0, 1.0));
             acc += LikesProgram::Math::Vector4::Lerp(a, b, 0.5);
         }
 
-        std::cout << "Stress Test ÕÍ≥…\n";
-        std::cout << "◊Ó÷’¿€ª˝Ω·π˚: " << acc << "\n";
-        std::cout << "∫ƒ ±: " << LikesProgram::Time::NsToMs(timer.Stop().count()) << "ms" << std::endl;
+        std::cout << "Stress Test ÂÆåÊàê\n";
+        std::cout << "ÊúÄÁªàÁ¥ØÁßØÁªìÊûú: " << acc << "\n";
+        std::cout << "ËÄóÊó∂: " << LikesProgram::Time::NsToMs(timer.Stop().count()) << "ms" << std::endl;
     }
 
     void BasicOps() {
-        std::cout << "===== Vector4 ª˘±æ‘ÀÀ„∑˚≤‚ ‘ =====\n";
+        std::cout << "===== Vector4 Âü∫Êú¨ËøêÁÆóÁ¨¶ÊµãËØï =====\n";
         LikesProgram::Math::Vector4 a(1.0, 2.0, 3.0, 4.0);
         LikesProgram::Math::Vector4 b(4.0, 3.0, 2.0, 1.0);
 
@@ -45,14 +45,14 @@ namespace Vector4Test {
         std::cout << "a * 2 = " << (a * 2.0) << "\n";
         std::cout << "2 * a = " << (2.0 * a) << "\n";
         std::cout << "a / 2 = " << (a / 2.0) << "\n";
-        std::cout << "a * b (∑÷¡ø≥À) = " << (a * b) << "\n";
-        std::cout << "a / b (∑÷¡ø≥˝) = " << (a / b) << "\n";
+        std::cout << "a * b (ÂàÜÈáè‰πò) = " << (a * b) << "\n";
+        std::cout << "a / b (ÂàÜÈáèÈô§) = " << (a / b) << "\n";
         std::cout << "-a = " << (-a) << "\n";
         std::cout << "+a = " << (+a) << "\n";
     }
 
     void CompoundOps() {
-        std::cout << "\n===== Vector4 ∏¥∫œ∏≥÷µ≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector4 Â§çÂêàËµãÂÄºÊµãËØï =====\n";
         LikesProgram::Math::Vector4 v(1.0, 2.0, 3.0, 4.0);
 
         std::cout << "v = " << v << "\n";
@@ -67,7 +67,7 @@ namespace Vector4Test {
     }
 
     void MathOps() {
-        std::cout << "\n===== Vector4  ˝—ß‘ÀÀ„≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector4 Êï∞Â≠¶ËøêÁÆóÊµãËØï =====\n";
         LikesProgram::Math::Vector4 a(1.0, 2.0, 3.0, 4.0);
         LikesProgram::Math::Vector4 b(4.0, 3.0, 2.0, 1.0);
 
@@ -81,14 +81,14 @@ namespace Vector4Test {
     }
 
     void ConversionTest() {
-        std::cout << "\n===== Vector4 ”Î Vector3 ◊™ªª≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector4 ‰∏é Vector3 ËΩ¨Êç¢ÊµãËØï =====\n";
         LikesProgram::Math::Vector4 v4(1.0, 2.0, 3.0, 4.0);
         LikesProgram::Math::Vector3 v3 = LikesProgram::Math::ToVector3(v4);
         std::cout << "Vector4: " << v4 << " -> Vector3: " << v3 << "\n";
     }
 
     void InterpolationTest() {
-        std::cout << "\n===== Vector4 ≤Â÷µ≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector4 ÊèíÂÄºÊµãËØï =====\n";
         LikesProgram::Math::Vector4 a(0.0, 0.0, 0.0, 0.0);
         LikesProgram::Math::Vector4 b(1.0, 1.0, 1.0, 1.0);
 

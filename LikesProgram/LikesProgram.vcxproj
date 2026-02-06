@@ -136,9 +136,13 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
-    <ClCompile Include="src\LikesProgram\StringFormat\FormatInternal.cpp" />
-    <ClCompile Include="src\LikesProgram\StringFormat\FormatParser.cpp" />
-    <ClCompile Include="src\LikesProgram\StringFormat\FormatSpec.cpp" />
+    <ClCompile Include="src\LikesProgram\server\EventLoop.cpp" />
+    <ClCompile Include="src\LikesProgram\server\pollers\EpollPoller.cpp" />
+    <ClCompile Include="src\LikesProgram\server\pollers\WindowsSelectPoller.cpp" />
+    <ClCompile Include="src\LikesProgram\server\Server.cpp" />
+    <ClCompile Include="src\LikesProgram\stringFormat\FormatInternal.cpp" />
+    <ClCompile Include="src\LikesProgram\stringFormat\FormatParser.cpp" />
+    <ClCompile Include="src\LikesProgram\stringFormat\FormatSpec.cpp" />
     <ClCompile Include="src\LikesProgram\system\CoreUtils.cpp" />
     <ClCompile Include="src\LikesProgram\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
@@ -160,6 +164,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Buffer.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Channel.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Connection.hpp" />
+    <ClInclude Include="include\LikesProgram\server\EventLoop.hpp" />
+    <ClInclude Include="include\LikesProgram\server\IOEvent.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Poller.hpp" />
+    <ClInclude Include="include\LikesProgram\server\pollers\EpollPoller.hpp" />
+    <ClInclude Include="include\LikesProgram\server\pollers\WindowsSelectPoller.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Server.hpp" />
+    <ClInclude Include="include\LikesProgram\server\Transport.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatInternal.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatParser.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatSpec.hpp" />

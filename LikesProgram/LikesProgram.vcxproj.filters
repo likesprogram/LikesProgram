@@ -84,9 +84,6 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\LikesProgram\system\ErrorDomainRegistry.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="src\LikesProgram\StringFormat\FormatSpec.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -94,6 +91,18 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\LikesProgram\StringFormat\FormatInternal.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\server\EventLoop.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\server\pollers\EpollPoller.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\server\pollers\WindowsSelectPoller.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\server\Server.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -206,18 +215,6 @@
     <ClInclude Include="include\test\Vector4Test.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\system\LikesProgramError.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="include\LikesProgram\system\ErrorCategory.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="include\LikesProgram\system\ErrorDomainRegistry.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="include\LikesProgram\system\ErrorCode.hpp">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="include\LikesProgram\StringFormat\FormatSpec.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -228,6 +225,36 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\test\StringFormatTest.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Buffer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Channel.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Connection.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\EventLoop.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\IOEvent.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Poller.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\pollers\EpollPoller.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\pollers\WindowsSelectPoller.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Server.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\server\Transport.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

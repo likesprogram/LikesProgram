@@ -1,4 +1,4 @@
-﻿#include "../../../include/LikesProgram/StringFormat/FormatInternal.hpp"
+﻿#include "../../../include/LikesProgram/stringFormat/FormatInternal.hpp"
 #include <sstream>
 #include <iomanip>
 #include "../../../include/LikesProgram/time/Time.hpp"

@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 #include <iostream>
 #include <random>
 #include "../../include/LikesProgram/math/Math.hpp"
@@ -9,7 +9,7 @@
 namespace Vector3Test {
 
     void StressTest(size_t count = 100000) {
-        std::cout << "\n===== Vector3 Stress Test (" << count << " ¥Œ) =====\n";
+        std::cout << "\n===== Vector3 Stress Test (" << count << " Ê¨°) =====\n";
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_real_distribution<double> dist(-1000.0, 1000.0);
@@ -24,19 +24,19 @@ namespace Vector3Test {
             acc += a + b;
             acc -= a - b;
             acc *= 0.5;
-            acc += a * b; // ∑÷¡ø≥À
+            acc += a * b; // ÂàÜÈáè‰πò
             acc -= a / (b + LikesProgram::Math::Vector3(1.0, 1.0, 1.0));
             acc += LikesProgram::Math::Vector3::Lerp(a, b, 0.5);
             acc += LikesProgram::Math::Vector3::Slerp(a, b, 0.5);
         }
 
-        std::cout << "Stress Test ÕÍ≥…\n";
-        std::cout << "◊Ó÷’¿€ª˝Ω·π˚: " << acc << "\n";
-        std::cout << "∫ƒ ±: " << LikesProgram::Time::NsToMs(timer.Stop().count()) << "ms" << std::endl;
+        std::cout << "Stress Test ÂÆåÊàê\n";
+        std::cout << "ÊúÄÁªàÁ¥ØÁßØÁªìÊûú: " << acc << "\n";
+        std::cout << "ËÄóÊó∂: " << LikesProgram::Time::NsToMs(timer.Stop().count()) << "ms" << std::endl;
     }
 
     void BasicOps() {
-        std::cout << "===== Vector3 ª˘±æ‘ÀÀ„∑˚≤‚ ‘ =====\n";
+        std::cout << "===== Vector3 Âü∫Êú¨ËøêÁÆóÁ¨¶ÊµãËØï =====\n";
         LikesProgram::Math::Vector3 a(1.0, 2.0, 3.0);
         LikesProgram::Math::Vector3 b(4.0, 5.0, 6.0);
 
@@ -46,14 +46,14 @@ namespace Vector3Test {
         std::cout << "a * 2 = " << (a * 2.0) << "\n";
         std::cout << "2 * a = " << (2.0 * a) << "\n";
         std::cout << "a / 2 = " << (a / 2.0) << "\n";
-        std::cout << "a * b (∑÷¡ø≥À) = " << (a * b) << "\n";
-        std::cout << "a / b (∑÷¡ø≥˝) = " << (a / b) << "\n";
+        std::cout << "a * b (ÂàÜÈáè‰πò) = " << (a * b) << "\n";
+        std::cout << "a / b (ÂàÜÈáèÈô§) = " << (a / b) << "\n";
         std::cout << "-a = " << (-a) << "\n";
         std::cout << "+a = " << (+a) << "\n";
     }
 
     void CompoundOps() {
-        std::cout << "\n===== Vector3 ∏¥∫œ∏≥÷µ≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector3 Â§çÂêàËµãÂÄºÊµãËØï =====\n";
         LikesProgram::Math::Vector3 v(1.0, 2.0, 3.0);
 
         std::cout << "v = " << v << "\n";
@@ -68,7 +68,7 @@ namespace Vector3Test {
     }
 
     void MathOps() {
-        std::cout << "\n===== Vector3  ˝—ß‘ÀÀ„≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector3 Êï∞Â≠¶ËøêÁÆóÊµãËØï =====\n";
         LikesProgram::Math::Vector3 a(1.0, 2.0, 3.0);
         LikesProgram::Math::Vector3 b(4.0, 5.0, 6.0);
         LikesProgram::Math::Vector3 axis(0.0, 1.0, 0.0);
@@ -95,7 +95,7 @@ namespace Vector3Test {
     }
 
     void InterpolationTest() {
-        std::cout << "\n===== Vector3 ≤Â÷µ≤‚ ‘ =====\n";
+        std::cout << "\n===== Vector3 ÊèíÂÄºÊµãËØï =====\n";
         LikesProgram::Math::Vector3 a(0.0, 0.0, 0.0);
         LikesProgram::Math::Vector3 b(1.0, 1.0, 1.0);
 
