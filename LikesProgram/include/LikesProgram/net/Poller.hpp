@@ -43,9 +43,9 @@ namespace LikesProgram {
 			// 由 EventLoop 提供线程断言
 			void AssertInLoopThread() const noexcept;
 			
-			EventLoop* m_ownerLoop{ nullptr };
+			EventLoop* m_ownerLoop = nullptr;
 			std::unordered_map<FdKey, Channel*> m_channels;
-			int m_lastErr{ 0 };
+			int m_lastErr = 0;
 		};
 	}
 }

@@ -1,6 +1,7 @@
 ﻿#include "../../../include/LikesProgram/net/Connection.hpp"
 #include "../../../include/LikesProgram/net/Channel.hpp"
 #include "../../../include/LikesProgram/net/EventLoop.hpp"
+#include <iostream>
 
 namespace LikesProgram {
 	namespace Net {
@@ -16,7 +17,15 @@ namespace LikesProgram {
         }
 
         void Connection::Start() {
+            if (m_state == State::Closed) return;
+            if (!m_loop || !m_channel || !m_transport) return;
 
+            // 连接就绪
+            OnConnected();
+        }
+
+        void Connection::FailedRollback() {
+            isFailedRollback = true;
         }
 
         SocketType Connection::GetSocket() const noexcept {
@@ -44,7 +53,8 @@ namespace LikesProgram {
             if (m_state == State::Closed) return;
 
             if (m_loop && !m_loop->IsInLoopThread()) {
-                m_loop->PostTask([this] { Shutdown(); });
+                auto self = shared_from_this();
+                m_loop->PostTask([self] { self->Shutdown(); });
                 return;
             }
 
@@ -60,11 +70,12 @@ namespace LikesProgram {
             if (m_state == State::Closed) return;
 
             if (m_loop && !m_loop->IsInLoopThread()) {
-                m_loop->PostTask([this] { ForceClose(); });
+                auto self = shared_from_this();
+                m_loop->PostTask([self] { self->ForceClose(); });
                 return;
             }
 
-            DoClose(/*notify*/false);
+            DoClose(/*notifyServer*/false);
         }
 
         void Connection::HandleRead() {
@@ -236,11 +247,20 @@ namespace LikesProgram {
         }
 
         void Connection::DoClose(bool notifyServer) {
-            if (m_state == State::Closed) return;
+            if (isFailedRollback || m_state == State::Closed) return;
 
             OnClosing();
 
             m_state = State::Closed;
+
+            // 保活：避免 notifyServer 导致 Detach -> 析构在 DoClose 中途发生
+            std::shared_ptr<Connection> self;
+            try { self = shared_from_this(); }
+            catch (...) { /* 若不是 shared 管理则忽略 */ }
+
+            // 把内部回调取出来并清空，避免二次调用
+            auto onCloseInternal = std::move(m_onCloseInternal);
+            m_onCloseInternal = nullptr;
 
             // 先停事件，避免 close 后仍触发
             if (m_channel) {
@@ -253,8 +273,8 @@ namespace LikesProgram {
             }
 
             // 通知 Server 清理连接表（框架职责）
-            if (notifyServer && m_onCloseInternal) {
-                m_onCloseInternal(*this);
+            if (notifyServer && onCloseInternal) {
+                onCloseInternal(*this);
             }
 
             // 最后通知业务

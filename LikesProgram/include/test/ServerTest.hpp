@@ -23,6 +23,8 @@ public:
 protected:
     void OnConnected() override {
         // 可选：欢迎消息
+        LOG_DEBUG(u"Connected fd[{}]", (long long)GetSocket());
+        LOG_DEBUG(u"Send Hello Message [echo server: connected]");
         const char* hello = "echo server: connected\r\n";
         Buffer buffer;
         buffer.Append(hello, std::strlen(hello));
@@ -33,7 +35,7 @@ protected:
         // 最简单：把当前 buffer 全部回写，然后消费掉
         const auto n = in.ReadableBytes();
         if (n > 0) {
-            LOG_DEBUG(u"OnMessage [{}]", (char*)in.Data());
+            LOG_INFO(u"OnMessage [{}]", (char*)in.Data());
             const char* message = "Server Message";
             in.Append(message, std::strlen(message));
             Send(in);
@@ -43,7 +45,7 @@ protected:
 
     void OnClosed() override {
         // 连接关闭
-        // std::cerr << "closed fd=" << (long long)GetSocket() << "\n";
+        LOG_WARN(u"Closed fd[{}]", (long long)GetSocket());
     }
 
     void OnError(int err) override {
@@ -55,7 +57,11 @@ protected:
 namespace ServerTest {
     void Test() {
         // 初始化日志
+#ifdef _DEBUG
         auto& logger = LikesProgram::Logger::Instance(true, true);
+#else
+        auto& logger = LikesProgram::Logger::Instance(true);
+#endif
         logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
 
 #ifdef _WIN32
@@ -92,5 +98,6 @@ namespace ServerTest {
         LOG_DEBUG(u"EchoServer listening on port [{}] subLoops [{}]", (size_t)port, subLoops);
 
         server.Run(); // 阻塞
+        logger.Shutdown();
     }
 }

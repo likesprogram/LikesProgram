@@ -18,7 +18,9 @@ namespace LikesProgram {
 
         private:
             // 将 m_channels 里的 interested events 填入 fd_set（select 会修改，所以每次 Poll 都要重建）
-            void BuildFdSets(fd_set& readfds, fd_set& writefds, fd_set& exceptfds) const;
+            void BuildPollFds(std::vector<WSAPOLLFD>& fds) const;
+            // 将 WSAPoll 的 revents 映射 IOEvent
+            static IOEvent ToIOEvent(short revents);
         };
 	}
 }

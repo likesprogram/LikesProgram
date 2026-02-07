@@ -65,7 +65,7 @@ namespace LikesProgram {
             void SetIndex(Index idx) noexcept;
         private:
             EventLoop* m_loop = nullptr;                    // owner
-            SocketType m_fd = (SocketType)-1;               // 连接 fd
+            SocketType m_fd = kInvalidSocket;               // 连接 fd
             IOEvent m_events = IOEvent::None;               // 当前关注事件
             IOEvent m_revents = IOEvent::None;              // 就绪事件
             Connection* m_connection = nullptr;             // 指向 Connection

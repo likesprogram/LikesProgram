@@ -32,9 +32,9 @@ namespace LikesProgram {
 
         protected:
             std::shared_ptr<MainEventLoop> m_mainLoop; // 主事件循环对象
-            SocketType m_listenFd{ (SocketType)-1 }; // 监听 socket fd
+            SocketType m_listenFd = kInvalidSocket; // 监听 socket fd
             std::unique_ptr<Channel> m_listenChannel;
-            unsigned short m_port{ 0 };                // 监听端口号
+            unsigned short m_port = 0;                // 监听端口号
         };
     }
 }

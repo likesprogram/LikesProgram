@@ -41,9 +41,9 @@ namespace LikesProgram {
             std::vector<std::shared_ptr<EventLoop>> m_subLoops;
             std::vector<std::thread> m_subThreads;
 
-            std::atomic<size_t> m_rr{ 0 };
-            size_t m_subLoopCount{ 0 };
-            bool m_subStarted{ false };
+            std::atomic<size_t> m_rr = 0;
+            size_t m_subLoopCount = 0;
+            bool m_subStarted = false;
         };
     }
 }

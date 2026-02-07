@@ -45,8 +45,8 @@ namespace LikesProgram {
             virtual bool RemainWantRead() const { return true; }
             virtual bool RemainWantWrite() const { return false; }
         protected:
-            SocketType m_fd{ (SocketType)-1 };
-            std::atomic<bool> m_closed{ false };
+            SocketType m_fd = kInvalidSocket;
+            std::atomic<bool> m_closed = false;
         };
 
         // TCP 明文传输实现

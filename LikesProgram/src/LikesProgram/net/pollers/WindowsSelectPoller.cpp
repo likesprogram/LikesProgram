@@ -13,28 +13,61 @@ namespace LikesProgram {
             : Poller(ownerLoop) {
         }
 
-        void WindowsSelectPoller::BuildFdSets(fd_set& readfds, fd_set& writefds, fd_set& exceptfds) const {
-            FD_ZERO(&readfds);
-            FD_ZERO(&writefds);
-            FD_ZERO(&exceptfds);
+        void WindowsSelectPoller::BuildPollFds(std::vector<WSAPOLLFD>& fds) const {
+            fds.clear();
+            fds.reserve(m_channels.size());
 
-            // select 模型：每轮都从 channel map 重建 fd_set（O(n)）
             for (const auto& kv : m_channels) {
                 Channel* ch = kv.second;
                 if (!ch) continue;
 
-                const SocketType fd = ch->GetSocket();
                 const IOEvent ev = ch->Events();
-
                 if (ev == IOEvent::None) continue;
 
-                if ((ev & IOEvent::Read) != IOEvent::None) FD_SET(fd, &readfds);
+                WSAPOLLFD pfd{};
+                pfd.fd = ch->GetSocket();
+                pfd.events = 0;
+                pfd.revents = 0;
 
-                if ((ev & IOEvent::Write) != IOEvent::None) FD_SET(fd, &writefds);
+                // 映射：Read / Write
+                if ((ev & IOEvent::Read) != IOEvent::None) {
+                    // POLLRDNORM: 普通数据可读
+                    pfd.events |= POLLRDNORM;
+                    // 也可以额外订阅：POLLPRI（OOB）按需
+                }
+                if ((ev & IOEvent::Write) != IOEvent::None) {
+                    // POLLWRNORM: 普通可写
+                    pfd.events |= POLLWRNORM;
+                }
 
-                // exceptfds 用于异常/错误（连接 reset 等）
-                FD_SET(fd, &exceptfds);
+                // 错误/挂起类事件通常会在 revents 里返回，无需显式订阅
+                fds.push_back(pfd);
             }
+        }
+        IOEvent WindowsSelectPoller::ToIOEvent(short revents) {
+            IOEvent ev = IOEvent::None;
+
+            // 错误：POLLERR / POLLNVAL
+            if (revents & (POLLERR | POLLNVAL)) {
+                ev |= IOEvent::Error;
+            }
+
+            // 挂起：POLLHUP（对端关闭/半关闭等情况）
+            if (revents & POLLHUP) {
+                ev |= IOEvent::Close;
+            }
+
+            // 可读
+            if (revents & (POLLRDNORM | POLLRDBAND | POLLPRI)) {
+                ev |= IOEvent::Read;
+            }
+
+            // 可写
+            if (revents & (POLLWRNORM | POLLWRBAND)) {
+                ev |= IOEvent::Write;
+            }
+
+            return ev;
         }
 
         bool WindowsSelectPoller::AddChannel(Channel* channel) {
@@ -46,12 +79,6 @@ namespace LikesProgram {
             if (channel->Events() == IOEvent::None) {
                 channel->SetIndex(Channel::Index::Deleted);
                 return true;
-            }
-
-            // FD_SETSIZE 限制：select 可监控的 fd 数量有限
-            if (m_channels.size() >= FD_SETSIZE) {
-                SetLastError(WSAEINVAL);
-                return false;
             }
 
             m_channels[key] = channel;
@@ -85,11 +112,6 @@ namespace LikesProgram {
                     channel->SetIndex(Channel::Index::Deleted);
                     return true;
                 }
-                // 加入
-                if (m_channels.size() >= FD_SETSIZE) {
-                    SetLastError(WSAEINVAL);
-                    return false;
-                }
                 m_channels[key] = channel;
                 channel->SetIndex(Channel::Index::Added);
                 return true;
@@ -110,19 +132,24 @@ namespace LikesProgram {
         void WindowsSelectPoller::Poll(int timeoutMs, std::vector<Channel*>& active) {
             active.clear();
 
-            fd_set readfds, writefds, exceptfds;
-            BuildFdSets(readfds, writefds, exceptfds);
+            std::vector<WSAPOLLFD> fds;
+            BuildPollFds(fds);
 
-            // select 的超时
-            timeval tv;
-            tv.tv_sec = (timeoutMs < 0) ? 0 : timeoutMs / 1000;
-            tv.tv_usec = (timeoutMs < 0) ? 0 : (timeoutMs % 1000) * 1000;
+            if (fds.empty()) {
+                // 没有 fd 可等：按 timeoutMs 休眠，避免空转
+                if (timeoutMs < 0) {
+                    ::Sleep(INFINITE);
+                }
+                else if (timeoutMs > 0) {
+                    ::Sleep(static_cast<DWORD>(timeoutMs));
+                }
+                return;
+            }
 
-            // Windows 下 nfds 参数被忽略，传 0 即可
-            int n = ::select(0, &readfds, &writefds, &exceptfds, (timeoutMs < 0 ? nullptr : &tv));
+            // WSAPoll: timeoutMs < 0 表示无限等待（与 poll 类似）
+            int n = ::WSAPoll(fds.data(), static_cast<ULONG>(fds.size()), timeoutMs);
             if (n < 0) {
                 const int e = GetSockErr();
-                // WSAEINTR: 被中断，视为本轮无事件
                 if (e != WSAEINTR) SetLastError(e);
                 return;
             }
@@ -131,17 +158,18 @@ namespace LikesProgram {
                 return;
             }
 
-            // 从所有 channel 中找出命中的（O(n)）
-            for (const auto& kv : m_channels) {
-                Channel* ch = kv.second;
-                if (!ch) continue;
 
-                const SocketType fd = ch->GetSocket();
-                IOEvent re = IOEvent::None;
+            // 扫描 revents，把命中的 Channel 填回 active
+            // 这里用 socket->key 映射去找 Channel，避免额外 vector 索引维护
+            for (const auto& pfd : fds) {
+                if (pfd.revents == 0) continue;
 
-                if (FD_ISSET(fd, &exceptfds)) re |= IOEvent::Error;
-                if (FD_ISSET(fd, &readfds))   re |= IOEvent::Read;
-                if (FD_ISSET(fd, &writefds))  re |= IOEvent::Write;
+                const auto key = ToKey(pfd.fd);
+                auto it = m_channels.find(key);
+                if (it == m_channels.end() || !it->second) continue;
+
+                Channel* ch = it->second;
+                const IOEvent re = ToIOEvent(pfd.revents);
 
                 if (re != IOEvent::None) {
                     ch->SetRevents(re);

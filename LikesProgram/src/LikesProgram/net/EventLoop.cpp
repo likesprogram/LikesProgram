@@ -1,6 +1,7 @@
 ﻿#include "../../../include/LikesProgram/net/EventLoop.hpp"
 #include "../../../include/LikesProgram/net/Connection.hpp"
 #include "../../../include/LikesProgram/net/IOEvent.hpp"
+#include <iostream>
 #include <cassert>
 #include <utility>
 #ifdef _WIN32
@@ -29,22 +30,33 @@ namespace LikesProgram {
         }
 
         EventLoop::~EventLoop() {
-            // EventLoop 不拥有线程，析构前必须确保 Run 已退出
-            // 否则这里对 poller/channel/fd 的操作会与 Run 并发，产生竞态
-            assert(!m_running.load(std::memory_order_acquire) && "Destroy EventLoop only after Stop() and Run() has exited.");
+            assert(!m_running.load(std::memory_order_acquire) &&
+                "Destroy EventLoop only after Stop() and Run() has exited.");
 
-#ifndef _WIN32
+            // 先从 poller 移除 channel，再关闭句柄
             if (m_hasWakeup) {
                 if (m_wakeupChannel) {
-                    // 析构时不应再跨线程操作 poller
                     (void)m_poller->RemoveChannel(m_wakeupChannel.get());
                     m_wakeupChannel.reset();
                 }
-                if (m_wakeupReadFd != (SocketType)0)  ::close((int)m_wakeupReadFd);
-                if (m_wakeupWriteFd != (SocketType)0) ::close((int)m_wakeupWriteFd);
+
+#ifdef _WIN32
+                if (m_wakeupSock != kInvalidSocket) {
+                    ::closesocket(m_wakeupSock);
+                    m_wakeupSock = kInvalidSocket;
+                }
+#else
+                if (m_wakeupReadFd != kInvalidSocket) {
+                    ::close((int)m_wakeupReadFd);
+                    m_wakeupReadFd = kInvalidSocket;
+                }
+                if (m_wakeupWriteFd != kInvalidSocket) {
+                    ::close((int)m_wakeupWriteFd);
+                    m_wakeupWriteFd = kInvalidSocket;
+                }
+#endif
                 m_hasWakeup = false;
             }
-#endif
         }
 
         bool EventLoop::IsInLoopThread() const noexcept {
@@ -81,6 +93,12 @@ namespace LikesProgram {
 
             // 退出前清空任务（Stop 后 PostTask 可能仍进来）
             ProcessPendingTasks();
+
+            // 兜底：清空连接持有，避免任何路径漏 Detach
+            {
+                std::lock_guard<std::mutex> lk(m_connMutex);
+                m_connections.clear();
+            }
         }
 
         void EventLoop::Stop() {
@@ -98,22 +116,47 @@ namespace LikesProgram {
             }
 
             // 只有非 loop 线程才需要唤醒（loop 线程会在本轮结束时处理 tasks）
-            if (!IsInLoopThread()) {
+            if (!IsInLoopThread() || m_processingTasks.load(std::memory_order_relaxed)) {
                 Wakeup();
             }
         }
 
         void EventLoop::ProcessPendingTasks() {
+            m_processingTasks.store(true, std::memory_order_release);
+
             std::vector<Task> tasks;
             {
                 std::lock_guard<std::mutex> lk(m_tasksMutex);
-                if (m_pendingTasks.empty()) return;
+                if (m_pendingTasks.empty()) {
+                    m_processingTasks.store(false, std::memory_order_release);
+                    return;
+                }
                 tasks.swap(m_pendingTasks);
             }
 
+            // 预算，避免一轮执行太久（尤其任务爆量时）
+            constexpr size_t kMaxTasksPerTick = 1024;
+            size_t n = 0;
+
             for (auto& t : tasks) {
                 if (t) t();
+                if (++n >= kMaxTasksPerTick) {
+                    // 剩余任务塞回队列头/尾（这里简单塞回尾）
+                    {
+                        std::lock_guard<std::mutex> lk(m_tasksMutex);
+                        // 把没跑完的部分移回 pending
+                        for (size_t i = n; i < tasks.size(); ++i) {
+                            if (tasks[i]) m_pendingTasks.push_back(std::move(tasks[i]));
+                        }
+                    }
+                    // 让 loop 尽快再跑一轮，同时不给 IO 饿死
+                    m_processingTasks.store(false, std::memory_order_release);
+                    Wakeup();
+                    return;
+                }
             }
+
+            m_processingTasks.store(false, std::memory_order_release);
         }
 
         bool EventLoop::RegisterChannel(Channel* channel) {
@@ -176,12 +219,10 @@ namespace LikesProgram {
             for (Channel* ch : activeChannels) {
                 if (!ch) continue;
 
-#ifndef _WIN32
                 if (m_hasWakeup && m_wakeupChannel && ch == m_wakeupChannel.get()) {
                     HandleWakeupRead();
                     continue;
                 }
-#endif
 
                 const SocketType fd = ch->GetSocket();
 
@@ -221,8 +262,41 @@ namespace LikesProgram {
 
         void EventLoop::InitWakeup() {
 #ifdef _WIN32
-            // WindowsSelectPoller 无法用 pipe fd；先靠 pollTimeoutMs 兜底
             m_hasWakeup = false;
+
+            SocketType s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (s == kInvalidSocket) return;
+
+            // 绑定到 127.0.0.1:0（系统分配端口）
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = 0;
+
+            if (::bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+                ::closesocket(s);
+                return;
+            }
+
+            // 取回实际端口
+            int len = sizeof(addr);
+            if (::getsockname(s, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
+                ::closesocket(s);
+                return;
+            }
+
+            // 非阻塞
+            u_long nb = 1;
+            ::ioctlsocket(s, FIONBIO, &nb);
+
+            m_wakeupSock = s;
+            m_wakeupAddr = addr;
+
+            // 把 wakeupSock 当成普通可读 Channel 加进 poller
+            m_wakeupChannel = std::make_unique<Channel>(this, m_wakeupSock, IOEvent::Read, nullptr);
+            (void)m_poller->AddChannel(m_wakeupChannel.get());
+
+            m_hasWakeup = true;
 #else
             int fds[2]{ -1, -1 };
             if (::pipe(fds) != 0) {
@@ -244,7 +318,19 @@ namespace LikesProgram {
         }
 
         void EventLoop::Wakeup() {
-#ifndef _WIN32
+#ifdef _WIN32
+            if (!m_hasWakeup || m_wakeupSock == kInvalidSocket) return;
+
+            uint8_t b = 1;
+            (void)::sendto(
+                m_wakeupSock,
+                reinterpret_cast<const char*>(&b),
+                1,
+                0,
+                reinterpret_cast<const sockaddr*>(&m_wakeupAddr),
+                sizeof(m_wakeupAddr)
+            );
+#else
             if (m_hasWakeup) {
                 uint8_t b = 1;
                 for (;;) {
@@ -260,7 +346,29 @@ namespace LikesProgram {
         }
 
         void EventLoop::HandleWakeupRead() {
-#ifndef _WIN32
+#ifdef _WIN32
+            if (m_wakeupSock == kInvalidSocket) return;
+
+            uint8_t buf[256];
+            for (;;) {
+                sockaddr_in from{};
+                int fromlen = sizeof(from);
+                int n = ::recvfrom(
+                    m_wakeupSock,
+                    reinterpret_cast<char*>(buf),
+                    static_cast<int>(sizeof(buf)),
+                    0,
+                    reinterpret_cast<sockaddr*>(&from),
+                    &fromlen
+                );
+                if (n > 0) continue;
+
+                const int err = WSAGetLastError();
+                if (err == WSAEINTR) continue;
+                if (err == WSAEWOULDBLOCK) break;
+                break;
+            }
+#else
             uint8_t buf[256];
             for (;;) {
                 const auto n = ::read((int)m_wakeupReadFd, buf, sizeof(buf));

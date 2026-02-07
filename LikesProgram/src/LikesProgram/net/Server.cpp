@@ -74,9 +74,14 @@ namespace LikesProgram {
 
         Server::~Server() {
             Stop();
-            if (m_listenFd != (SocketType)-1) {
+            if (m_mainLoop && m_listenChannel) {
+                m_mainLoop->UnregisterChannel(m_listenChannel.get());
+                m_listenChannel.reset();
+            }
+
+            if (m_listenFd != kInvalidSocket) {
                 CloseSocket(m_listenFd);
-                m_listenFd = (SocketType)-1;
+                m_listenFd = kInvalidSocket;
             }
         }
 

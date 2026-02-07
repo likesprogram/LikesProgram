@@ -66,10 +66,10 @@ namespace LikesProgram {
             void SetLoopThreadIdOnce();    // 在 Run() 内初始化
 
             std::unique_ptr<Poller> m_poller;                     // 轮询器指针
-            std::atomic<bool> m_running{ false };                 // 是否运行标志
+            std::atomic<bool> m_running = false;                 // 是否运行标志
 
             // loop 线程 id（Run 之后有效）
-            std::atomic<bool> m_threadIdSet{ false };
+            std::atomic<bool> m_threadIdSet = false;
             std::thread::id m_loopThreadId{};
 
             // 连接持有：避免 Channel 中 Connection* 悬空
@@ -81,10 +81,16 @@ namespace LikesProgram {
             std::mutex m_tasksMutex;
 
             // wakeup（POSIX self-pipe）
-            bool m_hasWakeup{ false };
-            SocketType m_wakeupReadFd{};
-            SocketType m_wakeupWriteFd{};
+            bool m_hasWakeup = false;
+            SocketType m_wakeupReadFd;
+            SocketType m_wakeupWriteFd;
             std::unique_ptr<Channel> m_wakeupChannel;
+
+#ifdef _WIN32
+            SocketType m_wakeupSock = kInvalidSocket;
+            sockaddr_in m_wakeupAddr{};
+#endif
+            std::atomic_bool m_processingTasks = false;
 
             // poll 超时（毫秒）
             int m_pollTimeoutMs = 10;

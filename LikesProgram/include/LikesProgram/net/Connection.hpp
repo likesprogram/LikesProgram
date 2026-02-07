@@ -25,6 +25,9 @@ namespace LikesProgram {
 
             void Start();
 
+            // 失败回滚
+            void FailedRollback();
+
             SocketType GetSocket() const noexcept;
 
             void SetChannel(Channel* ch) noexcept;
@@ -98,9 +101,9 @@ namespace LikesProgram {
 
             void EnableWritingIfNeeded();
         private:
-            SocketType m_fd{ (SocketType)-1 };
-            EventLoop* m_loop{ nullptr };
-            Channel* m_channel{ nullptr };
+            SocketType m_fd = kInvalidSocket;
+            EventLoop* m_loop = nullptr;
+            Channel* m_channel = nullptr;
             std::unique_ptr<Channel> m_channelOwned; // 防泄漏/防悬空
 
             std::unique_ptr<Transport> m_transport;
@@ -110,7 +113,9 @@ namespace LikesProgram {
 
             CloseCallback m_onCloseInternal; // 仅框架用
 
-            State m_state{ State::Connected };
+            bool isFailedRollback = false;
+
+            State m_state = State::Connected;
 
             // 发送数据
             void Send(const void* data, size_t len);

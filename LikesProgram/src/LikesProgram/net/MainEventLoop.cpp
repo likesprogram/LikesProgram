@@ -68,7 +68,7 @@ namespace LikesProgram {
             for (auto& loop : m_subLoops) {
                 m_subThreads.emplace_back([loop]() {
                     loop->Run();
-                    });
+                });
             }
         }
 
@@ -139,19 +139,27 @@ namespace LikesProgram {
 
                         // 让 sub loop 持有 conn，避免 Channel 里的裸指针悬空
                         loop->AttachConnection(conn);
-                        conn->SetFrameworkCloseCallback([loop](Connection& c) {
-                            loop->DetachConnection(c.GetSocket());
-                            });
+                        std::weak_ptr<EventLoop> wloop = loop;
+                        conn->SetFrameworkCloseCallback([wloop](Connection& c) {
+                            if (auto s = wloop.lock()) s->DetachConnection(c.GetSocket());
+                        });
 
                         // Channel 由 Connection 持有，避免泄漏
                         auto ch = std::make_unique<Channel>(loop.get(), conn->GetSocket(), IOEvent::Read, conn.get());
                         conn->SetChannel(ch.get());
-                        loop->RegisterChannel(ch.get());
+                        if (!loop->RegisterChannel(ch.get())) {
+                            // 注册失败：回滚
+                            loop->DetachConnection(conn->GetSocket()); // 你这个函数会投递到 loop 线程也行，但此处已在 loop 线程
+                            conn->FailedRollback();
+                            // 关闭 socket
+                            CloseSocket(clientFd);
+                            return;
+                        }
                         conn->AdoptChannel(std::move(ch));
 
                         // 连接完成
-                        //conn->
-                        });
+                        conn->Start();
+                    });
                 }
             }
         }

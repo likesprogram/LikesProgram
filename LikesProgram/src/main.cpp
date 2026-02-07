@@ -18,7 +18,6 @@
 int main()
 {
     uint64_t i = 0;
-    ServerTest::Test();
 	do {
         std::cout << std::dec << std::endl << "===== Test【" << (i) <<"】 =====" << std::endl << std::endl;
         LikesProgram::String uuid = LikesProgram::CoreUtils::GenerateUUID(LikesProgram::String(""));
@@ -59,6 +58,9 @@ int main()
 
         std::cout << std::endl << std::endl << "===== StringFormatTest =====" << std::endl << std::endl;
         StringFormatTest::Test();
+
+        std::cout << std::endl << std::endl << "===== ServerTest =====" << std::endl << std::endl;
+        ServerTest::Test();
         i++;
     } while (false);
     return 0;
