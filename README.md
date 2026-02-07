@@ -49,6 +49,10 @@ LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标�
 
    ```bash
    cmake --build . --config Release --target INSTALL
+   或
+   & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S .\LikesProgram -B build -DBUILD_SHARED_LIBS=OFF -DENABLE_EXAMPLES=ON -DENABLE_STRICT_WARNINGS=ON
+
+   C:/Users/TX2/Desktop/Project/LikesProgram/bin
    ```
 
 6. 安装完成后，在 `CMAKE_INSTALL_PREFIX` 目录下会看到：

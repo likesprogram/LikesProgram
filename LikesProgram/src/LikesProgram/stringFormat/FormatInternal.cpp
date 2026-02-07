@@ -335,6 +335,23 @@ namespace LikesProgram {
                     if (a.type() == typeid(int)) return std::wstring(1, static_cast<wchar_t>(std::any_cast<int>(a)));
                 }
 
+                // ---------- 指针 ----------
+                if (type == U'p' || type == U'P') {
+                    if (a.type() == typeid(const void*) || a.type() == typeid(void*)) {
+                        const void* ptr = nullptr;
+                        if (a.type() == typeid(const void*)) ptr = std::any_cast<const void*>(a);
+                        else if (a.type() == typeid(void*)) ptr = std::any_cast<void*>(a);
+
+                        std::wostringstream oss;
+                        const auto v = reinterpret_cast<std::uintptr_t>(ptr);
+                        oss << L"0x"
+                            << std::uppercase << std::hex
+                            << std::setw(sizeof(void*) * 2) << std::setfill(L'0')
+                            << v;
+                        return oss.str();
+                    }
+                }
+
                 // ---------- 字符串 ----------
                 if (a.type() == typeid(String)) return std::any_cast<String>(a).ToWString();
                 if (a.type() == typeid(std::wstring)) return std::any_cast<std::wstring>(a);
@@ -352,14 +369,7 @@ namespace LikesProgram {
                     if (spec.GetTypeExpand().Empty()) return LikesProgram::Time::FormatTime(std::any_cast<LikesProgram::Time::TimePoint>(a)).ToWString();
                     else return LikesProgram::Time::FormatTime(std::any_cast<LikesProgram::Time::TimePoint>(a), spec.GetTypeExpand()).ToWString();
 
-                // ---------- 指针 ----------
-                if (type == U'p' || type == U'P') {
-                    if (a.type() == typeid(void*)) {
-                        std::wostringstream oss;
-                        oss << a.type().hash_code(); // 或者使用 uintptr_t 显示地址
-                        return oss.str();
-                    }
-                }
+                
             }
             catch (...) {}
             return std::nullopt;

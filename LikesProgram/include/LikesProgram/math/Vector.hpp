@@ -44,9 +44,9 @@ namespace LikesProgram {
 			bool operator==(const Vector& v) const;
 			bool operator!=(const Vector& v) const;
 			bool operator<(const Vector& v) const;  // 字典序比较
-			bool operator>(const Vector& v) const { return v < *this; }
-			bool operator<=(const Vector& v) const { return !(v < *this); }
-			bool operator>=(const Vector& v) const { return !(*this < v); }
+			bool operator>(const Vector& v) const;
+			bool operator<=(const Vector& v) const;
+			bool operator>=(const Vector& v) const;
 
 			double& operator[](size_t i);
 			const double& operator[](size_t i) const;

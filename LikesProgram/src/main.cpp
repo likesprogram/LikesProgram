@@ -13,11 +13,12 @@
 #include "../include/test/ConfigurationTest.hpp"
 #include "../include/test/Test.hpp"
 #include "../include/test/StringFormatTest.hpp"
+#include "../include/test/ServerTest.hpp"
 
 int main()
 {
     uint64_t i = 0;
-
+    ServerTest::Test();
 	do {
         std::cout << std::dec << std::endl << "===== Test【" << (i) <<"】 =====" << std::endl << std::endl;
         LikesProgram::String uuid = LikesProgram::CoreUtils::GenerateUUID(LikesProgram::String(""));

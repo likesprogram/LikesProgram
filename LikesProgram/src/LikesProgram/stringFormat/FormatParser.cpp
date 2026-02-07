@@ -348,7 +348,7 @@ namespace LikesProgram {
                 U'e', U'E',     // 科学计数法
                 U'g', U'G',     // 通用浮点
                 U'c',           // 字符
-                U'p', U'P',           // 指针
+                U'p', U'P',     // 指针
                 U't', U'T',     // 时间
                 U'%'            // 百分比
             };

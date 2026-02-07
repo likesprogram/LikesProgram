@@ -110,6 +110,15 @@ namespace LikesProgram {
         bool Vector::operator<(const Vector& v) const {
             return (m_x < v.m_x) || (m_x == v.m_x && m_y < v.m_y);
         }
+        bool Vector::operator>(const Vector& v) const {
+            return v < *this;
+        }
+        bool Vector::operator<=(const Vector& v) const {
+            return !(v < *this);
+        }
+        bool Vector::operator>=(const Vector& v) const {
+            return !(*this < v);
+        }
 
         double& Vector::operator[](size_t i) {
             if (i == 0) return m_x;

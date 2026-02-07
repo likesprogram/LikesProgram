@@ -136,10 +136,16 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
-    <ClCompile Include="src\LikesProgram\server\EventLoop.cpp" />
-    <ClCompile Include="src\LikesProgram\server\pollers\EpollPoller.cpp" />
-    <ClCompile Include="src\LikesProgram\server\pollers\WindowsSelectPoller.cpp" />
-    <ClCompile Include="src\LikesProgram\server\Server.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Buffer.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Channel.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Connection.cpp" />
+    <ClCompile Include="src\LikesProgram\net\EventLoop.cpp" />
+    <ClCompile Include="src\LikesProgram\net\MainEventLoop.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Poller.cpp" />
+    <ClCompile Include="src\LikesProgram\net\pollers\EpollPoller.cpp" />
+    <ClCompile Include="src\LikesProgram\net\pollers\WindowsSelectPoller.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Server.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Transport.cpp" />
     <ClCompile Include="src\LikesProgram\stringFormat\FormatInternal.cpp" />
     <ClCompile Include="src\LikesProgram\stringFormat\FormatParser.cpp" />
     <ClCompile Include="src\LikesProgram\stringFormat\FormatSpec.cpp" />
@@ -164,16 +170,18 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Buffer.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Channel.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Connection.hpp" />
-    <ClInclude Include="include\LikesProgram\server\EventLoop.hpp" />
-    <ClInclude Include="include\LikesProgram\server\IOEvent.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Poller.hpp" />
-    <ClInclude Include="include\LikesProgram\server\pollers\EpollPoller.hpp" />
-    <ClInclude Include="include\LikesProgram\server\pollers\WindowsSelectPoller.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Server.hpp" />
-    <ClInclude Include="include\LikesProgram\server\Transport.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Buffer.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Channel.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Connection.hpp" />
+    <ClInclude Include="include\LikesProgram\net\EventLoop.hpp" />
+    <ClInclude Include="include\LikesProgram\net\IOEvent.hpp" />
+    <ClInclude Include="include\LikesProgram\net\MainEventLoop.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Poller.hpp" />
+    <ClInclude Include="include\LikesProgram\net\pollers\EpollPoller.hpp" />
+    <ClInclude Include="include\LikesProgram\net\SocketType.hpp" />
+    <ClInclude Include="include\LikesProgram\net\pollers\WindowsSelectPoller.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Server.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Transport.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatInternal.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatParser.hpp" />
     <ClInclude Include="include\LikesProgram\stringFormat\FormatSpec.hpp" />
@@ -202,6 +210,7 @@
     <ClInclude Include="include\test\LoggerTest.hpp" />
     <ClInclude Include="include\test\MetricsTest.hpp" />
     <ClInclude Include="include\test\PercentileSketchTest.hpp" />
+    <ClInclude Include="include\test\ServerTest.hpp" />
     <ClInclude Include="include\test\StringFormatTest.hpp" />
     <ClInclude Include="include\test\StringTest.hpp" />
     <ClInclude Include="include\test\Test.hpp" />
@@ -214,6 +223,8 @@
     <ClInclude Include="include\LikesProgram\String.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="include\test\ServerTest.py" />
+    <None Include="include\test\Test.py" />
     <None Include="src\LikesProgram\unicode\CreateUnicodeCaseMap.py" />
   </ItemGroup>
   <ItemGroup>
