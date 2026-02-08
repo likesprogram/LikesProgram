@@ -2,6 +2,7 @@
 #ifndef _WIN32
 #include "../Poller.hpp"
 #include <vector>
+#include <sys/epoll.h>
 
 namespace LikesProgram {
 	namespace Net {
@@ -20,7 +21,7 @@ namespace LikesProgram {
 
         private:
             int m_epollfd = -1;
-            std::vector<struct epoll_event> m_events;
+            std::vector<struct ::epoll_event> m_events;
         };
 	}
 }

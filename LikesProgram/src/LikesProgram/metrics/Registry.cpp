@@ -2,6 +2,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <list>
+#include <atomic>
 #include <unordered_map>
 
 namespace LikesProgram {
@@ -13,7 +14,7 @@ namespace LikesProgram {
 		};
 
 		Registry& Registry::Global() {
-			static std::atomic<Registry*> instance{ nullptr };
+			static std::atomic<Registry*> instance = nullptr;
 			static std::mutex mutex;
 
 			// 检查实例是否需要重新创建

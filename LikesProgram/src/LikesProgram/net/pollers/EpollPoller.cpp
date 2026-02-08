@@ -1,7 +1,6 @@
 ﻿#ifndef _WIN32
 #include "../../../../include/LikesProgram/net/pollers/EpollPoller.hpp"
 #include "../../../../include/LikesProgram/net/IOEvent.hpp"
-#include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -25,8 +24,9 @@ namespace LikesProgram {
 
         static uint32_t IOEventToEpoll(IOEvent ev) {
             uint32_t out = 0;
-            if (Has(ev, IOEvent::Read))  out |= (EPOLLIN | EPOLLPRI);
-            if (Has(ev, IOEvent::Write)) out |= EPOLLOUT;
+
+            if ((ev & IOEvent::Read) != IOEvent::None)  out |= (EPOLLIN | EPOLLPRI);
+            if ((ev & IOEvent::Write) != IOEvent::None) out |= EPOLLOUT;
 
             // 错误与挂起
             out |= EPOLLERR | EPOLLHUP;
@@ -56,7 +56,7 @@ namespace LikesProgram {
         bool EpollPoller::UpdateImpl(int op, Channel* channel) {
             if (!channel) return false;
 
-            struct epoll_event e;
+            struct ::epoll_event e;
             e.events = IOEventToEpoll(channel->Events());
             e.data.ptr = channel;
 

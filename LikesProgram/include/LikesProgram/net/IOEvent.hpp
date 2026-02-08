@@ -3,7 +3,7 @@
 namespace LikesProgram {
     namespace Net {
         enum class IOEvent : int {
-            None = 0,
+            None = 0x00,
             Read = 0x01,
             Write = 0x02,
             Close = 0x04,

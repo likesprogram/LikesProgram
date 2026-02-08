@@ -1,10 +1,11 @@
 ﻿#pragma once
 #include "../LikesProgram/net/Server.hpp"
 #include "../LikesProgram/net/pollers/WindowsSelectPoller.hpp"
+#include "../LikesProgram/net/pollers/EpollPoller.hpp"
 #include "../LikesProgram/Logger.hpp"
 #include "../LikesProgram/String.hpp"
 #include <iostream>
-#include <stdio.h>
+#include <memory>
 
 using namespace LikesProgram::Net;
 
@@ -35,7 +36,7 @@ protected:
         // 最简单：把当前 buffer 全部回写，然后消费掉
         const auto n = in.ReadableBytes();
         if (n > 0) {
-            LOG_INFO(u"OnMessage [{}]", (char*)in.Data());
+            LOG_INFO(u"OnMessage [{}]", (char*)in.Peek());
             const char* message = "Server Message";
             in.Append(message, std::strlen(message));
             Send(in);

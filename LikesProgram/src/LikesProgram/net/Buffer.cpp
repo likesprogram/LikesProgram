@@ -30,14 +30,6 @@ namespace LikesProgram {
             return m_buffer.data() + m_writerIndex;
         }
 
-        size_t Buffer::Size() const noexcept {
-            return ReadableBytes();
-        }
-
-        const uint8_t* Buffer::Data() const noexcept {
-            return Peek();
-        }
-
         // 读：消费
         void Buffer::Consume(size_t len) noexcept {
             if (len >= ReadableBytes()) {
@@ -66,7 +58,7 @@ namespace LikesProgram {
         }
 
         void Buffer::Append(const Buffer& other) {
-            Append(other.Data(), other.Size());
+            Append(other.Peek(), other.ReadableBytes());
         }
 
         // 写入后推进 writer

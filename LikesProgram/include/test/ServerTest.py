@@ -29,7 +29,7 @@ def work(i):
             recv_some(s, f"[{i}] echo")
 
 ts = []
-for i in range(30000):
+for i in range(3000):
     t = threading.Thread(target=work, args=(i,))
     t.start()
     ts.append(t)

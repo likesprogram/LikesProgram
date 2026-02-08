@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <sstream>
 #include <any>
 
 namespace LikesProgram {
@@ -180,7 +181,7 @@ namespace LikesProgram {
                     std::is_enum_v<T> ||
                     std::is_same_v<T, bool> ||
                     std::is_pointer_v<T>) {
-                    return String::FromValue(value);
+                    return String::Format(u"{}", value);
                 } else {
                     // 其他类型，尝试转换为字符串
                     std::wstringstream ss;

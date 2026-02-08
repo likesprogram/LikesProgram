@@ -4,7 +4,7 @@
 #include "../LikesProgram/stringFormat/FormatParser.hpp"
 #include "../LikesProgram/Logger.hpp"
 #include "../LikesProgram/stringFormat/FormatInternal.hpp"
-#include "../LikesProgram/Time/Timer.hpp"
+#include "../LikesProgram/time/Timer.hpp"
 using namespace LikesProgram;
 using namespace LikesProgram::Time;
 using namespace LikesProgram::StringFormat;

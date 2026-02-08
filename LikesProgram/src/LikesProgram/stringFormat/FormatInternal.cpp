@@ -1,7 +1,8 @@
 ﻿#include "../../../include/LikesProgram/stringFormat/FormatInternal.hpp"
+#include "../../../include/LikesProgram/time/Time.hpp"
 #include <sstream>
 #include <iomanip>
-#include "../../../include/LikesProgram/time/Time.hpp"
+#include <atomic>
 
 namespace LikesProgram {
     namespace StringFormat {
@@ -47,7 +48,7 @@ namespace LikesProgram {
 
         // 单例
         FormatInternal& FormatInternal::Instance() {
-            static std::atomic<FormatInternal*> instance{ nullptr };
+            static std::atomic<FormatInternal*> instance = nullptr;
             static std::mutex mutex;
 
             // 检查实例是否需要重新创建
@@ -357,17 +358,15 @@ namespace LikesProgram {
                 if (a.type() == typeid(std::wstring)) return std::any_cast<std::wstring>(a);
                 if (a.type() == typeid(const wchar_t*)) return std::wstring(std::any_cast<const wchar_t*>(a));
                 if (a.type() == typeid(wchar_t*)) return std::wstring(std::any_cast<wchar_t*>(a));
-                if (a.type() == typeid(std::string))
-                    return String(std::any_cast<std::string>(a), String::Encoding::UTF8).ToWString();
-                if (a.type() == typeid(const char*))
-                    return String(std::any_cast<const char*>(a), String::Encoding::UTF8).ToWString();
-                if (a.type() == typeid(char*))
-                    return String(std::any_cast<char*>(a), String::Encoding::UTF8).ToWString();
+                if (a.type() == typeid(std::string)) return String(std::any_cast<std::string>(a), String::Encoding::UTF8).ToWString();
+                if (a.type() == typeid(const char*)) return String(std::any_cast<const char*>(a), String::Encoding::UTF8).ToWString();
+                if (a.type() == typeid(char*)) return String(std::any_cast<char*>(a), String::Encoding::UTF8).ToWString();
 
                 // ---------- 时间 ----------
-                if (a.type() == typeid(LikesProgram::Time::TimePoint))
+                if (a.type() == typeid(LikesProgram::Time::TimePoint)) {
                     if (spec.GetTypeExpand().Empty()) return LikesProgram::Time::FormatTime(std::any_cast<LikesProgram::Time::TimePoint>(a)).ToWString();
                     else return LikesProgram::Time::FormatTime(std::any_cast<LikesProgram::Time::TimePoint>(a), spec.GetTypeExpand()).ToWString();
+                }
 
                 
             }

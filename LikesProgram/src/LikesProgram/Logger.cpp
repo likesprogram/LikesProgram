@@ -62,7 +62,7 @@ namespace LikesProgram {
             if (!inst) {
                 inst = new Logger(autoStart, debug);
                 instance.store(inst, std::memory_order_release);
-                CoreUtils::SetCurrentThreadName(u"主线程"); // 默认将初始化线程名为“主线程”
+                //CoreUtils::SetCurrentThreadName(u"主线程"); // 默认将初始化线程名为“主线程”
             }
         }
 

@@ -9,6 +9,7 @@
 #include <shared_mutex>
 #include <string>
 #include <typeindex>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
