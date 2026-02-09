@@ -29,7 +29,7 @@ namespace LikesProgram {
             // 失败回滚
             void FailedRollback();
 
-            const SocketType GetSocket() const noexcept;
+            SocketType GetSocket() const noexcept;
 
             void SetChannel(Channel* ch) noexcept;
 

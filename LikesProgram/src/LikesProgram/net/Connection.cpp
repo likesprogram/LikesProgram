@@ -28,7 +28,7 @@ namespace LikesProgram {
             isFailedRollback = true;
         }
 
-        const SocketType Connection::GetSocket() const noexcept {
+        SocketType Connection::GetSocket() const noexcept {
             return m_fd;
         }
 

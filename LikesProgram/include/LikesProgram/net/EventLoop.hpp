@@ -71,6 +71,7 @@ namespace LikesProgram {
             void HandleWakeupRead();
             void SetLoopThreadIdOnce();    // 在 Run() 内初始化
 
+            const Server* m_server;
             std::unique_ptr<Poller> m_poller;                     // 轮询器指针
             std::atomic<bool> m_running = false;                 // 是否运行标志
 
@@ -97,8 +98,6 @@ namespace LikesProgram {
             sockaddr_in m_wakeupAddr{};
 #endif
             std::atomic_bool m_processingTasks = false;
-
-            const Server* m_server;
 
             // poll 超时（毫秒）
             int m_pollTimeoutMs = 10;

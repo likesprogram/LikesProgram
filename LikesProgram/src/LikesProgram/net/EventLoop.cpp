@@ -258,7 +258,7 @@ namespace LikesProgram {
                     continue;
                 }
 
-                const SocketType fd = ch->GetSocket();
+                SocketType fd = ch->GetSocket();
 
                 std::shared_ptr<Connection> conn;
                 {
