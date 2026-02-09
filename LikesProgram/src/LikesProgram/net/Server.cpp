@@ -57,6 +57,7 @@ namespace LikesProgram {
 
             // 创建主事件循环
             m_mainLoop = std::make_shared<MainEventLoop>(
+                this,
                 std::move(pollerFactory),
                 std::move(connectionFactory),
                 subLoopCount
@@ -95,6 +96,10 @@ namespace LikesProgram {
             if (!m_mainLoop) return;
             m_mainLoop->Stop();
             m_mainLoop->StopSubLoops();
+        }
+
+        void Server::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) const {
+            if(m_mainLoop) m_mainLoop->Broadcast(data, len, removeSockets);
         }
 
         SocketType Server::Listen() {

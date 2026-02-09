@@ -15,7 +15,7 @@ namespace LikesProgram {
         class MainEventLoop final : public EventLoop {
         public:
             using ConnectionFactory = std::function<std::shared_ptr<Connection>(SocketType, EventLoop*)>;
-            MainEventLoop(PollerFactory subPollerFactory,
+            MainEventLoop(Server* server, PollerFactory subPollerFactory,
                 ConnectionFactory subConnectionFactory,
                 size_t subLoopCount = 0);
 
@@ -27,6 +27,8 @@ namespace LikesProgram {
             // 停止 sub loops（会调用 Stop 并 Join）
             void StopSubLoops();
 
+            // 广播
+            void Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) override;
         protected:
             // main loop 的事件处理：只处理 accept
             void ProcessEvents(const std::vector<Channel*>& activeChannels) override;

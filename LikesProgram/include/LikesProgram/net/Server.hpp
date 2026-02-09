@@ -16,12 +16,14 @@ namespace LikesProgram {
         public:
             // 构造函数，创建监听 Channel 并注册到 MainEventLoop
             explicit Server(unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
-            virtual ~Server();
+            ~Server();
 
             // 启动：先 start sub loops，再跑 main loop（阻塞）
             void Run();
             void Stop();
 
+            // 广播
+            void Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) const;
         private:
 
             // 创建监听 socket

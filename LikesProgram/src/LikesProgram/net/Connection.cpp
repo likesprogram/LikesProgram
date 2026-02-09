@@ -28,7 +28,7 @@ namespace LikesProgram {
             isFailedRollback = true;
         }
 
-        SocketType Connection::GetSocket() const noexcept {
+        const SocketType Connection::GetSocket() const noexcept {
             return m_fd;
         }
 
@@ -38,6 +38,25 @@ namespace LikesProgram {
 
         void Connection::Send(const Buffer& buf) {
             Send(buf.Peek(), buf.ReadableBytes());
+        }
+
+        void Connection::Send(const void* data, size_t len) {
+            if (m_state == State::Closed) return;
+            if (!data || len == 0) return;
+
+            if (m_loop && !m_loop->IsInLoopThread()) {
+                // 捕获 shared_ptr，避免 this 悬空
+                auto self = weak_from_this();
+                Buffer copy; copy.Append(data, len);
+                m_loop->PostTask([self, buf = std::move(copy)]() mutable {
+                    auto s = self.lock();
+                    if (s) s->SendInLoop(buf.Peek(), buf.ReadableBytes());
+                });
+                return;
+            }
+
+            if (m_state == State::Closed) return;
+            SendInLoop(static_cast<const uint8_t*>(data), len);
         }
 
         void Connection::AdoptChannel(std::unique_ptr<Channel> ch) {
@@ -131,7 +150,7 @@ namespace LikesProgram {
             bool madeProgress = false;
 
             while (m_outBuffer.ReadableBytes() > 0) {
-                const IoResult r = m_transport->WriteSome(m_outBuffer);
+                const IoResult r = m_transport->WriteSome(m_outBuffer.Peek(), m_outBuffer.ReadableBytes());
 
                 if (r.status == IoStatus::Ok) {
                     if (r.nbytes > 0) {
@@ -175,26 +194,26 @@ namespace LikesProgram {
             DoClose(/*notify*/true);
         }
 
+        const Server* Connection::GetServer() const {
+            return m_loop->GetServer();
+        }
+
         void Connection::SetCloseCallbackInternal(CloseCallback cb) {
             m_onCloseInternal = std::move(cb);
         }
 
-        void Connection::SendInLoop(const void* data, size_t len) {
+        // 拷贝一次
+        void Connection::SendInLoop(const uint8_t* data, size_t len) {
             if (!m_transport || m_state == State::Closed) return;
 
             // outBuffer 为空：尝试直接写，减少延迟
             if (m_outBuffer.ReadableBytes() == 0) {
-                Buffer tmp;
-                tmp.Append(data, len);
-
-                const IoResult r = m_transport->WriteSome(tmp);
+                const IoResult r = m_transport->WriteSome(data, len);
 
                 if (r.status == IoStatus::Ok) {
-                    if (r.nbytes > 0) tmp.Consume((size_t)r.nbytes);
-
                     // 仍有剩余：进入 outBuffer，打开写事件
-                    if (tmp.ReadableBytes() > 0) {
-                        m_outBuffer.Append(tmp);
+                    if (r.nbytes < static_cast<int64_t>(len)) {
+                        m_outBuffer.Append(data + r.nbytes, len - r.nbytes);
                         EnableWritingIfNeeded();
                     }
                     else {
@@ -292,26 +311,6 @@ namespace LikesProgram {
                 m_channel->EnableWriting();
                 if (m_loop) m_loop->UpdateChannel(m_channel);
             }
-        }
-
-        void Connection::Send(const void* data, size_t len) {
-            if (m_state == State::Closed) return;
-            if (!data || len == 0) return;
-
-            Buffer copy;
-            copy.Append(data, len);
-
-            if (m_loop && !m_loop->IsInLoopThread()) {
-                // 捕获 shared_ptr，避免 this 悬空
-                auto self = shared_from_this();
-                m_loop->PostTask([self, buf = std::move(copy)]() mutable {
-                    if (self->m_state == State::Closed) return;
-                    self->SendInLoop(buf.Peek(), buf.ReadableBytes());
-                    });
-                return;
-            }
-
-            SendInLoop(copy.Peek(), copy.ReadableBytes());
         }
 	}
 }

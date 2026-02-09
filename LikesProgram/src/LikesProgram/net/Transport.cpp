@@ -85,13 +85,10 @@ namespace LikesProgram {
             }
         }
 
-        IoResult TcpTransport::WriteSome(const Buffer& out) {
+        IoResult TcpTransport::WriteSome(const uint8_t* p, size_t len) {
             if (m_closed.load(std::memory_order_acquire) || m_fd < 0) {
                 return MakeError(/*err*/0);
             }
-
-            const uint8_t* p = out.Peek();
-            size_t len = out.ReadableBytes();
 
             if (p == nullptr || len == 0) {
                 // 没有数据可写：这不算错误

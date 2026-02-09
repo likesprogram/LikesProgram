@@ -9,6 +9,7 @@ namespace LikesProgram {
     namespace Net {
         class EventLoop; // 前向声明
         class Channel;   // 前向声明
+        class Server;
         class Connection : public std::enable_shared_from_this<Connection> {
         public:
             using CloseCallback = std::function<void(Connection&)>;
@@ -28,11 +29,15 @@ namespace LikesProgram {
             // 失败回滚
             void FailedRollback();
 
-            SocketType GetSocket() const noexcept;
+            const SocketType GetSocket() const noexcept;
 
             void SetChannel(Channel* ch) noexcept;
 
+            // 发送数据
             void Send(const Buffer& buf);
+
+            // 发送数据
+            void Send(const void* data, size_t len);
 
             void AdoptChannel(std::unique_ptr<Channel> ch);
 
@@ -57,6 +62,7 @@ namespace LikesProgram {
             // 错误事件
             void HandleError();
 
+            const Server* GetServer() const;
         protected:
             // 连接建立完成（可用于发欢迎包、初始化状态）
             virtual void OnConnected() {}
@@ -86,7 +92,7 @@ namespace LikesProgram {
             void SetCloseCallbackInternal(CloseCallback cb);
             friend class Server;
 
-            void SendInLoop(const void* data, size_t len);
+            void SendInLoop(const uint8_t* data, size_t len);
 
             bool AdvanceHandshake();
 
@@ -116,9 +122,6 @@ namespace LikesProgram {
             bool isFailedRollback = false;
 
             State m_state = State::Connected;
-
-            // 发送数据
-            void Send(const void* data, size_t len);
         };
     }
 }

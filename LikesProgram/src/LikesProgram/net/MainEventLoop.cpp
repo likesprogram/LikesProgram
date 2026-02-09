@@ -35,10 +35,10 @@ namespace LikesProgram {
             return hc ? static_cast<size_t>(hc) : 1;
         }
 
-        MainEventLoop::MainEventLoop(PollerFactory subPollerFactory,
+        MainEventLoop::MainEventLoop(Server* server, PollerFactory subPollerFactory,
             ConnectionFactory subConnectionFactory,
             size_t subLoopCount)
-            : EventLoop(subPollerFactory()),
+            : EventLoop(server, subPollerFactory()),
             m_subPollerFactory(std::move(subPollerFactory)),
             m_subConnectionFactory(subConnectionFactory),
             m_subLoopCount(subLoopCount ? subLoopCount : DefaultSubLoopCount()) {
@@ -52,7 +52,7 @@ namespace LikesProgram {
             for (size_t i = 0; i < m_subLoopCount; ++i) {
                 auto poller = m_subPollerFactory();
                 assert(poller && "sub poller factory returned null");
-                m_subLoops.push_back(std::make_shared<EventLoop>(std::move(poller)));
+                m_subLoops.push_back(std::make_shared<EventLoop>(GetServer(), std::move(poller)));
             }
         }
 
@@ -83,6 +83,10 @@ namespace LikesProgram {
             }
             m_subThreads.clear();
             m_subStarted = false;
+        }
+
+        void MainEventLoop::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) {
+            for (auto subLoop : m_subLoops) subLoop->Broadcast(data, len, removeSockets);
         }
 
         std::shared_ptr<EventLoop> MainEventLoop::PickSubLoopRoundRobin() {

@@ -13,13 +13,14 @@
 
 namespace LikesProgram {
     namespace Net {
-        class EventLoop {
+        class Server;
+        class EventLoop: public std::enable_shared_from_this<EventLoop> {
         public:
             // 创建 Poller 的工厂：每个 loop 必须独占一个 Poller
             using PollerFactory = std::function<std::unique_ptr<Poller>()>;
 
             using Task = std::function<void()>;
-            explicit EventLoop(std::unique_ptr<Poller> poller);
+            explicit EventLoop(const Server* server, std::unique_ptr<Poller> poller);
             virtual ~EventLoop();
 
             EventLoop(const EventLoop&) = delete;
@@ -49,6 +50,11 @@ namespace LikesProgram {
             // 约定：连接应在其归属 loop 线程 attach/detach（跨线程会自动 PostTask）
             void AttachConnection(const std::shared_ptr<Connection>& c);
             void DetachConnection(SocketType fd);
+
+            // 广播
+            virtual void Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets);
+        
+            const Server* GetServer() const;
         protected:
             // 处理 Poller 返回的活跃 Channel
             // 子类（MainEventLoop）可 override 来做 accept 分发
@@ -91,6 +97,8 @@ namespace LikesProgram {
             sockaddr_in m_wakeupAddr{};
 #endif
             std::atomic_bool m_processingTasks = false;
+
+            const Server* m_server;
 
             // poll 超时（毫秒）
             int m_pollTimeoutMs = 10;

@@ -24,9 +24,10 @@ public:
 protected:
     void OnConnected() override {
         // 可选：欢迎消息
-        LOG_DEBUG(u"Connected fd[{}]", (long long)GetSocket());
+        LOG_WARN(u"Connected fd[{}]", (long long)GetSocket());
         LOG_DEBUG(u"Send Hello Message [echo server: connected]");
-        const char* hello = "echo server: connected\r\n";
+        std::string socket = "client[" + std::to_string(GetSocket()) + "]";
+        const char* hello = socket.c_str();
         Buffer buffer;
         buffer.Append(hello, std::strlen(hello));
         Send(buffer);
@@ -36,11 +37,21 @@ protected:
         // 最简单：把当前 buffer 全部回写，然后消费掉
         const auto n = in.ReadableBytes();
         if (n > 0) {
-            LOG_INFO(u"OnMessage [{}]", (char*)in.Peek());
-            const char* message = "Server Message";
-            in.Append(message, std::strlen(message));
-            Send(in);
-            in.Consume(n);
+            LOG_INFO(u"OnMessage [{}]", std::string((char*)in.Peek(), in.ReadableBytes()));
+            std::string socket = "client[" + std::to_string(GetSocket()) + "]: Message:[";
+            Buffer message;
+            message.Append(socket.c_str(), socket.size());
+            message.Append(in.Peek(), in.ReadableBytes());
+            message.Append("]", 1);
+
+            LOG_WARN(u"Broadcast [{}]", std::string((char*)message.Peek(), message.ReadableBytes()));
+            //Send(in);
+            const Server* server = GetServer();
+            server->Broadcast(message.Peek(), message.ReadableBytes(), {
+                GetSocket() // 去除自己
+            });
+
+            in.Consume(n); // 移除已使用的消息
         }
     }
 

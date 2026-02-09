@@ -29,7 +29,7 @@ namespace LikesProgram {
             virtual IoResult ReadSome(Buffer& in) = 0;
 
             // 从 outBuffer 里尽可能写到 socket/ssl（按 Buffer 可读区域写），返回结果
-            virtual IoResult WriteSome(const Buffer& out) = 0;
+            virtual IoResult WriteSome(const uint8_t* p, size_t len) = 0;
 
             // 半关闭（优雅关闭写端）与全关闭分离
             virtual void ShutdownWrite() = 0;
@@ -56,7 +56,7 @@ namespace LikesProgram {
             ~TcpTransport() override { Close(); }
 
             IoResult ReadSome(Buffer& in) override;
-            IoResult WriteSome(const Buffer& out) override;
+            IoResult WriteSome(const uint8_t* p, size_t len) override;
 
             void ShutdownWrite() override;
             void Close() override;

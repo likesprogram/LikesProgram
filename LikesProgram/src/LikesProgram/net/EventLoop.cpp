@@ -23,8 +23,8 @@ namespace LikesProgram {
         }
 #endif
 
-        EventLoop::EventLoop(std::unique_ptr<Poller> poller)
-            : m_poller(std::move(poller)) {
+        EventLoop::EventLoop(const Server* server, std::unique_ptr<Poller> poller)
+            : m_server(server), m_poller(std::move(poller)) {
             assert(m_poller && "EventLoop requires a valid Poller");
             InitWakeup();
         }
@@ -213,6 +213,40 @@ namespace LikesProgram {
 
             std::lock_guard<std::mutex> lk(m_connMutex);
             m_connections.erase(fd);
+        }
+
+        void EventLoop::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) {
+            // 确保运行在 loop 中
+            if (!IsInLoopThread()) {
+                auto self = weak_from_this();
+                Buffer copy;
+                copy.Append(data, len);
+                PostTask([self, buf = std::move(copy), removeSocketsTemp = removeSockets]() {
+                    if (auto loop = self.lock()) loop->Broadcast(buf.Peek(), buf.ReadableBytes(), removeSocketsTemp);
+                });
+                return;
+            }
+
+            // 处理移除项 并发送
+            if (removeSockets.empty()) {
+                // 无排除对象：广播给所有当前存在的连接
+                for (auto& [fd, c] : m_connections) if (c) c->Send(data, len);
+            }
+            else if (removeSockets.size() == 1) {
+                // 只排除一个 fd（最常见：排除发送者自身）
+                auto except = removeSockets[0];
+                for (auto& [fd, c] : m_connections) if (c && fd != except) c->Send(data, len);
+            }
+            else {
+                // 排除多个 fd：
+                // 使用临时集合加速 contains 判断
+                std::unordered_set<SocketType> removed(removeSockets.begin(), removeSockets.end());
+                for (auto& [fd, c] : m_connections) if (c && !removed.count(fd)) c->Send(data, len);
+            }
+        }
+
+        const Server* EventLoop::GetServer() const {
+            return m_server;
         }
 
         void EventLoop::ProcessEvents(const std::vector<Channel*>& activeChannels) {

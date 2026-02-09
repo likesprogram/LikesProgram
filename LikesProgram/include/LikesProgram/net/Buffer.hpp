@@ -11,8 +11,12 @@ namespace LikesProgram {
         public:
             // 预留在 buffer 前部的空间
             static constexpr size_t kCheapPrepend = 8;
-            // 默认初始容量
+            // 默认初始容量（不含 prepend）
             static constexpr size_t kInitialSize = 1024;
+            // trim 后保留的容量（不含 prepend）
+            static constexpr size_t kReserveAfterTrim = 64 * 1024;
+            // 触发 trim 的阈值（按 vector.capacity()）
+            static constexpr size_t kMaxIdleCapacity = 1024 * 1024;
             // 构造函数：初始化 buffer 大小
             explicit Buffer(size_t initialSize = kInitialSize);
 
@@ -35,6 +39,9 @@ namespace LikesProgram {
 
             // 清空所有可读数据
             void RetrieveAll() noexcept;
+
+            // 重置内存
+            void TrimIfLarge() noexcept;
 
             // 写：追加
             void Append(const void* data, size_t len);

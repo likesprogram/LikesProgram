@@ -34,15 +34,32 @@ namespace LikesProgram {
         void Buffer::Consume(size_t len) noexcept {
             if (len >= ReadableBytes()) {
                 RetrieveAll();
-            }
-            else {
+            } else {
                 m_readerIndex += len;
             }
         }
 
         void Buffer::RetrieveAll() noexcept {
+            // 重置 指针位置
             m_readerIndex = kCheapPrepend;
             m_writerIndex = kCheapPrepend;
+            // 重置大小
+            TrimIfLarge();
+        }
+
+        void Buffer::TrimIfLarge() noexcept {
+            // 只有在“空”且“容量过大”时才缩
+            if (ReadableBytes() != 0) return;
+            if (m_buffer.capacity() <= kMaxIdleCapacity) return;
+
+            try {
+                std::vector<uint8_t> newbuf;
+                newbuf.resize(kCheapPrepend + kReserveAfterTrim);
+                m_buffer.swap(newbuf);
+                m_readerIndex = kCheapPrepend;
+                m_writerIndex = kCheapPrepend;
+            }
+            catch (...) { /* 放弃 shrink，保证不崩 */ }
         }
 
         // 写：追加
@@ -91,7 +108,7 @@ namespace LikesProgram {
             // 可整理的空间 = prependable + writable
             if (PrependableBytes() + WritableBytes() < len + kCheapPrepend) {
                 // 不够，扩容
-                m_buffer.resize(m_writerIndex + len);
+                m_buffer.resize(std::max(m_buffer.size() * 2, m_writerIndex + len));
             }
             else {
                 // 整理：把可读数据挪到 kCheapPrepend 开始处
