@@ -5,6 +5,7 @@
 #include "Connection.hpp"
 #include "Channel.hpp"
 #include "Transport.hpp"
+#include "../String.hpp"
 
 namespace LikesProgram {
     namespace Net {
@@ -15,7 +16,7 @@ namespace LikesProgram {
         class Server {
         public:
             // 构造函数，创建监听 Channel 并注册到 MainEventLoop
-            explicit Server(unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
+            explicit Server(std::vector<String>& addrs, unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
             ~Server();
 
             // 启动：先 start sub loops，再跑 main loop（阻塞）
@@ -27,15 +28,16 @@ namespace LikesProgram {
         private:
 
             // 创建监听 socket
-            SocketType Listen();
+            bool Listen(std::vector<String>& addrs);
 
             // 设置 socket 为非阻塞模式
             int SetNonBlocking(SocketType fdOrSocket);
 
         protected:
             std::shared_ptr<MainEventLoop> m_mainLoop; // 主事件循环对象
-            SocketType m_listenFd = kInvalidSocket; // 监听 socket fd
-            std::unique_ptr<Channel> m_listenChannel;
+            //SocketType m_listenFd = kInvalidSocket; // 监听 socket fd
+            std::vector<SocketType> m_listenFds;
+            std::vector<std::unique_ptr<Channel>> m_listenChannels;
             unsigned short m_port = 0;                // 监听端口号
         };
     }

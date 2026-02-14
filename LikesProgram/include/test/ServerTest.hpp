@@ -100,7 +100,13 @@ namespace ServerTest {
         unsigned short port = 8080;
         size_t subLoops = 16;
 
+        std::vector<String> addrs = {
+            u"0.0.0.0",
+            u"::"
+        };
+
         Server server(
+            addrs,
             port,
             pollerFactory,
             connectionFactory,
