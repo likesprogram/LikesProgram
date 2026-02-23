@@ -45,11 +45,12 @@ protected:
             message.Append("]", 1);
 
             LOG_WARN(u"Broadcast [{}]", std::string((char*)message.Peek(), message.ReadableBytes()));
-            //Send(in);
-            const Server* server = GetServer();
-            server->Broadcast(message.Peek(), message.ReadableBytes(), {
-                GetSocket() // 去除自己
-            });
+
+            std::shared_ptr<Broadcast> broadcast = GetBroadcast();
+            Send(in);
+            
+            // 广播（去除自己）
+            broadcast->Send(message.Peek(), message.ReadableBytes(), GetSocket());
 
             in.Consume(n); // 移除已使用的消息
         }
@@ -82,8 +83,24 @@ namespace ServerTest {
         // 控制台输出 Sink
         logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
 
+        // 创建连接器工厂
+        ConnectionFactory connectionFactory = [](SocketType fd, EventLoop* ownerLoop) -> std::shared_ptr<Connection> {
+            auto transport = std::make_unique<TcpTransport>(fd);
+            return std::make_shared<EchoConnection>(fd, ownerLoop, std::move(transport));
+        };
+
+
+        std::vector<String> addrs = { u"0.0.0.0", u"::" };
+        unsigned short port = 8080;
+        size_t subLoops = 16;
+
+        Server server(addrs, port, connectionFactory, subLoops);
+
+        /* 自定义 轮询器
+
         // 创建轮询器工厂
         PollerFactory pollerFactory = []() -> std::unique_ptr<Poller> {
+            // 这里可以自行修改，只需要返回 std::unique_ptr<Poller> 即可，其中 自定义的沦陷器 需要继承 Poller
 #ifdef _WIN32
             return std::make_unique<WindowsSelectPoller>(nullptr);
 #else
@@ -91,31 +108,14 @@ namespace ServerTest {
 #endif
         };
 
-        // 创建连接器工厂
-        ConnectionFactory connectionFactory = [](SocketType fd, EventLoop* ownerLoop) -> std::shared_ptr<Connection> {
-            auto transport = std::make_unique<TcpTransport>(fd);
-            return std::make_shared<EchoConnection>(fd, ownerLoop, std::move(transport));
-        };
+        Server server(addrs, port, pollerFactory, connectionFactory, subLoops);
 
-        unsigned short port = 8080;
-        size_t subLoops = 16;
-
-        std::vector<String> addrs = {
-            u"0.0.0.0",
-            u"::"
-        };
-
-        Server server(
-            addrs,
-            port,
-            pollerFactory,
-            connectionFactory,
-            subLoops
-        );
+        */
         
         LOG_DEBUG(u"EchoServer listening on port [{}] subLoops [{}]", (size_t)port, subLoops);
 
         server.Run(); // 阻塞
+
         logger.Shutdown();
     }
 }

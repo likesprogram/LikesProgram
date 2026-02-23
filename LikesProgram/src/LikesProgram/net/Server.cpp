@@ -48,6 +48,17 @@ namespace LikesProgram {
 #endif
         }
 
+        static PollerFactory DefaultPollerFactory() {
+#if defined(_WIN32)
+            return []() -> std::unique_ptr<Poller> { return std::make_unique<WindowsSelectPoller>(nullptr); };
+#else
+            return []() -> std::unique_ptr<Poller> { return std::make_unique<EpollPoller>(nullptr); };
+#endif
+        }
+
+        Server::Server(std::vector<String>& addrs, unsigned short port, ConnectionFactory connectionFactory, size_t subLoopCount)
+        : Server(addrs, port, DefaultPollerFactory(), std::move(connectionFactory), subLoopCount){ }
+
         Server::Server(std::vector<String>& addrs, unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount) : m_port(port) {
 #ifdef _WIN32
             (void)EnsureWinsock();
@@ -60,11 +71,13 @@ namespace LikesProgram {
 
             // 创建主事件循环
             m_mainLoop = std::make_shared<MainEventLoop>(
-                this,
                 std::move(pollerFactory),
                 std::move(connectionFactory),
                 subLoopCount
             );
+
+            // 注入广播器
+            m_mainLoop->SetBroadcast(std::make_shared<Broadcast>());
 
             // 将监听通道注册到主循环中
             for (auto fd : m_listenFds) {
@@ -106,8 +119,8 @@ namespace LikesProgram {
             m_mainLoop->StopSubLoops();
         }
 
-        void Server::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) const {
-            if(m_mainLoop) m_mainLoop->Broadcast(data, len, removeSockets);
+        std::shared_ptr<Broadcast> Server::GetBroadcast() noexcept {
+            return m_mainLoop->GetBroadcast();
         }
 
         bool Server::Listen(std::vector<String>& addrs) {

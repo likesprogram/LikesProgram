@@ -36,7 +36,7 @@ namespace LikesProgram {
         }
 
         IoResult TcpTransport::ReadSome(Buffer& in) {
-            if (m_closed.load(std::memory_order_acquire) || m_fd < 0) {
+            if (m_closed.load(std::memory_order_acquire) || m_fd == kInvalidSocket) {
                 return MakeError(/*err*/0);
             }
 
@@ -86,7 +86,7 @@ namespace LikesProgram {
         }
 
         IoResult TcpTransport::WriteSome(const uint8_t* p, size_t len) {
-            if (m_closed.load(std::memory_order_acquire) || m_fd < 0) {
+            if (m_closed.load(std::memory_order_acquire) || m_fd == kInvalidSocket) {
                 return MakeError(/*err*/0);
             }
 
@@ -139,7 +139,7 @@ namespace LikesProgram {
             if (m_closed.exchange(true, std::memory_order_acq_rel)) {
                 return;
             }
-            if (m_fd >= 0) {
+            if (m_fd != kInvalidSocket) {
                 CloseSocket(m_fd);
                 m_fd = (SocketType)-1;
             }

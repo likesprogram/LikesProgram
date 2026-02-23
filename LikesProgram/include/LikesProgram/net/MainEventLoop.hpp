@@ -1,13 +1,14 @@
 ﻿#pragma once
-#pragma once
 #include "EventLoop.hpp"
 #include "Channel.hpp"
 #include "IOEvent.hpp"
+#include "Broadcast.hpp"
 #include <functional>
 #include <memory>
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <span>
 
 namespace LikesProgram {
     namespace Net {
@@ -15,9 +16,7 @@ namespace LikesProgram {
         class MainEventLoop final : public EventLoop {
         public:
             using ConnectionFactory = std::function<std::shared_ptr<Connection>(SocketType, EventLoop*)>;
-            MainEventLoop(Server* server, PollerFactory subPollerFactory,
-                ConnectionFactory subConnectionFactory,
-                size_t subLoopCount = 0);
+            MainEventLoop(PollerFactory subPollerFactory, ConnectionFactory subConnectionFactory, size_t subLoopCount = 0);
 
             ~MainEventLoop() override;
 
@@ -27,8 +26,14 @@ namespace LikesProgram {
             // 停止 sub loops（会调用 Stop 并 Join）
             void StopSubLoops();
 
-            // 广播
-            void Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) override;
+            // 获取 所有 sub loops
+            std::span<const std::shared_ptr<EventLoop>> GetSubLoops() const noexcept;
+
+            // 设置广播器
+            void SetBroadcast(std::shared_ptr<Broadcast> broadcast) noexcept;
+
+            // 获取广播器
+            std::shared_ptr<Broadcast> GetBroadcast() noexcept;
         protected:
             // main loop 的事件处理：只处理 accept
             void ProcessEvents(const std::vector<Channel*>& activeChannels) override;
@@ -40,6 +45,7 @@ namespace LikesProgram {
             PollerFactory m_subPollerFactory;
             ConnectionFactory m_subConnectionFactory;
 
+            std::shared_ptr<Broadcast> m_broadcast = nullptr;    // 广播器
             std::vector<std::shared_ptr<EventLoop>> m_subLoops;
             std::vector<std::thread> m_subThreads;
 

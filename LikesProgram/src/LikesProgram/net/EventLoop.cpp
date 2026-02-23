@@ -23,8 +23,7 @@ namespace LikesProgram {
         }
 #endif
 
-        EventLoop::EventLoop(const Server* server, std::unique_ptr<Poller> poller)
-            : m_server(server), m_poller(std::move(poller)) {
+        EventLoop::EventLoop(std::unique_ptr<Poller> poller) : m_poller(std::move(poller)) {
             assert(m_poller && "EventLoop requires a valid Poller");
             InitWakeup();
         }
@@ -215,14 +214,14 @@ namespace LikesProgram {
             m_connections.erase(fd);
         }
 
-        void EventLoop::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) {
+        void EventLoop::BroadcastLocalExcept(const void* data, size_t len, const std::vector<SocketType>& removeSockets) {
             // 确保运行在 loop 中
             if (!IsInLoopThread()) {
                 auto self = weak_from_this();
                 Buffer copy;
                 copy.Append(data, len);
                 PostTask([self, buf = std::move(copy), removeSocketsTemp = removeSockets]() {
-                    if (auto loop = self.lock()) loop->Broadcast(buf.Peek(), buf.ReadableBytes(), removeSocketsTemp);
+                    if (auto loop = self.lock()) loop->BroadcastLocalExcept(buf.Peek(), buf.ReadableBytes(), removeSocketsTemp);
                 });
                 return;
             }
@@ -243,10 +242,6 @@ namespace LikesProgram {
                 std::unordered_set<SocketType> removed(removeSockets.begin(), removeSockets.end());
                 for (auto& [fd, c] : m_connections) if (c && !removed.count(fd)) c->Send(data, len);
             }
-        }
-
-        const Server* EventLoop::GetServer() const {
-            return m_server;
         }
 
         void EventLoop::ProcessEvents(const std::vector<Channel*>& activeChannels) {

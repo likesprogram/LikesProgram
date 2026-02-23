@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Buffer.hpp"
 #include "Transport.hpp"
+#include "Broadcast.hpp"
 #include <memory>
 #include <functional>
 #include <atomic>
@@ -62,7 +63,6 @@ namespace LikesProgram {
             // 错误事件
             void HandleError();
 
-            const Server* GetServer() const;
         protected:
             // 连接建立完成（可用于发欢迎包、初始化状态）
             virtual void OnConnected() {}
@@ -88,6 +88,8 @@ namespace LikesProgram {
             // 错误
             virtual void OnError(int err) { (void)err; }
 
+            // 获取广播器
+            std::shared_ptr<Broadcast> GetBroadcast() const noexcept;
         private:
             void SetCloseCallbackInternal(CloseCallback cb);
             friend class Server;
@@ -111,6 +113,9 @@ namespace LikesProgram {
             EventLoop* m_loop = nullptr;
             Channel* m_channel = nullptr;
             std::unique_ptr<Channel> m_channelOwned; // 防泄漏/防悬空
+
+            friend class MainEventLoop;
+            std::shared_ptr<Broadcast> m_broadcast; // 广播器
 
             std::unique_ptr<Transport> m_transport;
 

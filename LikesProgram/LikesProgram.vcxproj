@@ -136,8 +136,10 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Broadcast.cpp" />
     <ClCompile Include="src\LikesProgram\net\Buffer.cpp" />
     <ClCompile Include="src\LikesProgram\net\Channel.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Client.cpp" />
     <ClCompile Include="src\LikesProgram\net\Connection.cpp" />
     <ClCompile Include="src\LikesProgram\net\EventLoop.cpp" />
     <ClCompile Include="src\LikesProgram\net\MainEventLoop.cpp" />
@@ -170,8 +172,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Broadcast.hpp" />
     <ClInclude Include="include\LikesProgram\net\Buffer.hpp" />
     <ClInclude Include="include\LikesProgram\net\Channel.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Client.hpp" />
     <ClInclude Include="include\LikesProgram\net\Connection.hpp" />
     <ClInclude Include="include\LikesProgram\net\EventLoop.hpp" />
     <ClInclude Include="include\LikesProgram\net\IOEvent.hpp" />

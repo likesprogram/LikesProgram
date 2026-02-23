@@ -35,14 +35,9 @@ namespace LikesProgram {
             return hc ? static_cast<size_t>(hc) : 1;
         }
 
-        MainEventLoop::MainEventLoop(Server* server, PollerFactory subPollerFactory,
-            ConnectionFactory subConnectionFactory,
-            size_t subLoopCount)
-            : EventLoop(server, subPollerFactory()),
-            m_subPollerFactory(std::move(subPollerFactory)),
-            m_subConnectionFactory(subConnectionFactory),
-            m_subLoopCount(subLoopCount ? subLoopCount : DefaultSubLoopCount()) {
-
+        MainEventLoop::MainEventLoop(PollerFactory subPollerFactory, ConnectionFactory subConnectionFactory, size_t subLoopCount)
+        : EventLoop(subPollerFactory()), m_subPollerFactory(std::move(subPollerFactory)), m_subConnectionFactory(subConnectionFactory),
+        m_subLoopCount(subLoopCount ? subLoopCount : DefaultSubLoopCount()) {
             assert(m_subPollerFactory && "subPollerFactory required");
             assert(m_subConnectionFactory && "subConnectionFactory required");
             assert(m_subLoopCount > 0);
@@ -52,7 +47,7 @@ namespace LikesProgram {
             for (size_t i = 0; i < m_subLoopCount; ++i) {
                 auto poller = m_subPollerFactory();
                 assert(poller && "sub poller factory returned null");
-                m_subLoops.push_back(std::make_shared<EventLoop>(GetServer(), std::move(poller)));
+                m_subLoops.push_back(std::make_shared<EventLoop>(std::move(poller)));
             }
         }
 
@@ -85,8 +80,21 @@ namespace LikesProgram {
             m_subStarted = false;
         }
 
-        void MainEventLoop::Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets) {
-            for (auto subLoop : m_subLoops) subLoop->Broadcast(data, len, removeSockets);
+        std::span<const std::shared_ptr<EventLoop>> MainEventLoop::GetSubLoops() const noexcept {
+            return std::span<const std::shared_ptr<EventLoop>>(m_subLoops);
+        }
+
+        void MainEventLoop::SetBroadcast(std::shared_ptr<Broadcast> broadcast) noexcept {
+            m_broadcast = std::move(broadcast);
+
+            auto base = weak_from_this().lock();
+            if (!base) return;
+
+            m_broadcast->m_mainLoop = std::static_pointer_cast<MainEventLoop>(base);
+        }
+
+        std::shared_ptr<Broadcast> MainEventLoop::GetBroadcast() noexcept {
+            return m_broadcast;
         }
 
         std::shared_ptr<EventLoop> MainEventLoop::PickSubLoopRoundRobin() {
@@ -131,15 +139,15 @@ namespace LikesProgram {
 
                     // Round-robin 选择 sub loop
                     auto loop = PickSubLoopRoundRobin();
-                    auto connFactory = m_subConnectionFactory; // 拷贝，避免捕获 this
                     // 把连接创建 + 注册 Channel 投递到 sub loop 线程执行
-                    loop->PostTask([loop, clientFd, connFactory]() {
+                    loop->PostTask([loop, clientFd, connFactory = m_subConnectionFactory, broadcast = m_broadcast]() {
                         // 在 sub loop 线程里创建 Connection（确保 loop 归属正确）
                         auto conn = connFactory(clientFd, loop.get());
                         if (!conn) {
                             CloseSocket(clientFd);
                             return;
                         }
+                        conn->m_broadcast = broadcast; // 注入广播器
 
                         // 让 sub loop 持有 conn，避免 Channel 里的裸指针悬空
                         loop->AttachConnection(conn);

@@ -194,8 +194,8 @@ namespace LikesProgram {
             DoClose(/*notify*/true);
         }
 
-        const Server* Connection::GetServer() const {
-            return m_loop->GetServer();
+        std::shared_ptr<Broadcast> Connection::GetBroadcast() const noexcept {
+            return m_broadcast;
         }
 
         void Connection::SetCloseCallbackInternal(CloseCallback cb) {

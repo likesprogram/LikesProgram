@@ -18,9 +18,10 @@ namespace LikesProgram {
         public:
             // 创建 Poller 的工厂：每个 loop 必须独占一个 Poller
             using PollerFactory = std::function<std::unique_ptr<Poller>()>;
+            using ConnectionFactory = std::function<std::shared_ptr<Connection>(SocketType, EventLoop*)>;
 
             using Task = std::function<void()>;
-            explicit EventLoop(const Server* server, std::unique_ptr<Poller> poller);
+            explicit EventLoop(std::unique_ptr<Poller> poller);
             virtual ~EventLoop();
 
             EventLoop(const EventLoop&) = delete;
@@ -51,10 +52,8 @@ namespace LikesProgram {
             void AttachConnection(const std::shared_ptr<Connection>& c);
             void DetachConnection(SocketType fd);
 
-            // 广播
-            virtual void Broadcast(const void* data, size_t len, const std::vector<SocketType>& removeSockets);
-        
-            const Server* GetServer() const;
+            // 对此 Loop 广播
+            void BroadcastLocalExcept(const void* data, size_t len, const std::vector<SocketType>& removeSockets);
         protected:
             // 处理 Poller 返回的活跃 Channel
             // 子类（MainEventLoop）可 override 来做 accept 分发
@@ -71,7 +70,6 @@ namespace LikesProgram {
             void HandleWakeupRead();
             void SetLoopThreadIdOnce();    // 在 Run() 内初始化
 
-            const Server* m_server;
             std::unique_ptr<Poller> m_poller;                     // 轮询器指针
             std::atomic<bool> m_running = false;                 // 是否运行标志
 
