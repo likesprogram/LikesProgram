@@ -28,9 +28,9 @@ namespace LikesProgram {
             EventLoop& operator=(const EventLoop&) = delete;
 
             // 启动
-            void Run();
+            void Start();
             // 停止
-            void Stop();
+            void Shutdown();
 
             // 当前线程是否为 loop 线程
             bool IsInLoopThread() const noexcept;
@@ -68,12 +68,12 @@ namespace LikesProgram {
             void InitWakeup();
             void Wakeup();                 // 唤醒 loop
             void HandleWakeupRead();
-            void SetLoopThreadIdOnce();    // 在 Run() 内初始化
+            void SetLoopThreadIdOnce();    // 在 Start() 内初始化
 
             std::unique_ptr<Poller> m_poller;                     // 轮询器指针
             std::atomic<bool> m_running = false;                 // 是否运行标志
 
-            // loop 线程 id（Run 之后有效）
+            // loop 线程 id（Start 之后有效）
             std::atomic<bool> m_threadIdSet = false;
             std::thread::id m_loopThreadId{};
 

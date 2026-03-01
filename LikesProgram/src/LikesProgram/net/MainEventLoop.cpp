@@ -52,7 +52,7 @@ namespace LikesProgram {
         }
 
         MainEventLoop::~MainEventLoop() {
-            StopSubLoops();
+            ShutdownSubLoops();
         }
 
         void MainEventLoop::StartSubLoops() {
@@ -62,16 +62,16 @@ namespace LikesProgram {
             m_subThreads.reserve(m_subLoops.size());
             for (auto& loop : m_subLoops) {
                 m_subThreads.emplace_back([loop]() {
-                    loop->Run();
+                    loop->Start();
                 });
             }
         }
 
-        void MainEventLoop::StopSubLoops() {
+        void MainEventLoop::ShutdownSubLoops() {
             if (!m_subStarted) return;
 
             for (auto& loop : m_subLoops) {
-                loop->Stop();
+                loop->Shutdown();
             }
             for (auto& t : m_subThreads) {
                 if (t.joinable()) t.join();

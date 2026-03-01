@@ -70,7 +70,7 @@ namespace LikesProgram {
             }
         }
 
-        void EventLoop::Run() {
+        void EventLoop::Start() {
             SetLoopThreadIdOnce();
             m_running.store(true, std::memory_order_release);
 
@@ -90,7 +90,7 @@ namespace LikesProgram {
                 ProcessPendingTasks();
             }
 
-            // 退出前清空任务（Stop 后 PostTask 可能仍进来）
+            // 退出前清空任务（Shutdown 后 PostTask 可能仍进来）
             ProcessPendingTasks();
 
             // 兜底：清空连接持有，避免任何路径漏 Detach
@@ -100,8 +100,8 @@ namespace LikesProgram {
             }
         }
 
-        void EventLoop::Stop() {
-            // 如果从其他线程 Stop，需要 wakeup 打断 poll
+        void EventLoop::Shutdown() {
+            // 如果从其他线程 Shutdown，需要 wakeup 打断 poll
             if (!m_running.exchange(false, std::memory_order_acq_rel)) return;
             Wakeup();
         }

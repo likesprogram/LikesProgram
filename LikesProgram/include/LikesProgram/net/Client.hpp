@@ -3,7 +3,7 @@
 #include "Channel.hpp"
 #include "Connection.hpp"
 #include "Transport.hpp"
-
+#include "../String.hpp"
 #include <functional>
 #include <memory>
 #include <string>
@@ -22,7 +22,7 @@ namespace LikesProgram {
             using DisconnectedCallback = std::function<void()>;
 
         public:
-            Client(std::string host, unsigned short port, ConnectionFactory factory, size_t subLoopCount = 0);
+            Client(const String& host, unsigned short port, ConnectionFactory factory, size_t subLoopCount = 0);
 
             ~Client();
 
@@ -30,28 +30,16 @@ namespace LikesProgram {
             Client& operator=(const Client&) = delete;
 
             // 异步：会切到 loop 线程
-            void Run();
-            void Stop();
+            void Start();
+            void Shutdown();
 
             // 业务侧常用：获取当前连接（可能为空）
             Connection* GetConnection() const noexcept;
-
-            // 发送：若未连接返回 false（最小可用）
-            bool Send(std::string_view data);
-            bool Send(const Buffer& buf);
-
-            // 设置回调
-            void SetOnConnected(ConnectedCallback cb);
-            void SetOnConnectFailed(ConnectFailedCallback cb);
-            void SetOnDisconnected(DisconnectedCallback cb);
 
         private:
             enum class State : uint8_t { Idle, Connecting, Connected, Stopping, Closed };
 
         private:
-            void RunInLoop();
-            void StopInLoop();
-
             // 连接阶段
             void BeginConnect();                 // create fd + nonblock connect
             void OnConnectEvent();               // writable -> check SO_ERROR
@@ -67,7 +55,7 @@ namespace LikesProgram {
 
         private:
             EventLoop* m_loop{};
-            std::string m_host;
+            String m_host;
             uint16_t m_port{};
 
             State m_state{ State::Idle };
@@ -78,10 +66,6 @@ namespace LikesProgram {
             std::unique_ptr<Connection> m_conn;
 
             ConnectionFactory m_factory;
-
-            ConnectedCallback m_onConnected;
-            ConnectFailedCallback m_onConnectFailed;
-            DisconnectedCallback m_onDisconnected;
 
             std::chrono::milliseconds m_reconnectDelay{ 0 };
         };

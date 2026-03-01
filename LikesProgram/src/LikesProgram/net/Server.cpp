@@ -94,7 +94,7 @@ namespace LikesProgram {
         }
 
         Server::~Server() {
-            Stop();
+            Shutdown();
             if (m_mainLoop) {
                 for (auto& ch : m_listenChannels) {
                     if (ch) m_mainLoop->UnregisterChannel(ch.get());
@@ -107,16 +107,88 @@ namespace LikesProgram {
             m_listenFds.clear();
         }
 
-        void Server::Run() {
+        void Server::Start() {
+            {
+                std::lock_guard<std::mutex> lk(m_stateMutex);
+                if (!m_mainLoop) return; // 主事件循环不存在，直接退出
+
+                // 已经在运行/启动中/正在停止，直接返回
+                if (StatusAnyOf(Status::Running, Status::Starting, Status::Stopping)) return;
+
+                SetStatus(Status::Starting);
+            }
+
+            // 如果之前线程对象还存在，等待关闭
+            if (m_mainThread.joinable()) {
+                if (m_mainThread.get_id() != std::this_thread::get_id()) m_mainThread.join();
+                else return;
+            }
+
+            // 等待结束，判断环境是否变化
+            std::lock_guard<std::mutex> lk(m_stateMutex);
             if (!m_mainLoop) return;
-            m_mainLoop->StartSubLoops();
-            m_mainLoop->Run(); // 阻塞
+            if (!StatusEquals(Status::Starting)) return;
+
+            // 启动线程
+            m_mainThread = std::thread([this]() {
+                try {
+                    // 启动子循环
+                    m_mainLoop->StartSubLoops();
+
+                    // 检查状态被修改
+                    if (StatusAnyOf(Status::Stopping, Status::Stopped)) {
+                        m_mainLoop->ShutdownSubLoops();
+                        return;
+                    }
+
+                    // 设置标志位
+                    SetStatus(Status::Running);
+
+                    // 启动主事件循环
+                    m_mainLoop->Start();
+                } catch (...) { /* 吃掉错误 */ }
+
+                // 通知主循环退出
+                try {
+                    m_mainLoop->Shutdown(); // 防止意外退出，这里重复调用一次 Shutdown
+                    m_mainLoop->ShutdownSubLoops();
+                } catch (...) { /* 吃掉错误 */ }
+
+                SetStatus(Status::Stopped);
+            });
         }
 
-        void Server::Stop() {
-            if (!m_mainLoop) return;
-            m_mainLoop->Stop();
-            m_mainLoop->StopSubLoops();
+        void Server::WaitShutdown() const noexcept {
+            std::unique_lock<std::mutex> lk(m_stateMutex);
+
+            m_stateCv.wait(lk, [this]() {
+                return StatusEquals(Status::Stopped);
+            });
+        }
+
+        void Server::Shutdown() {
+            {
+                std::lock_guard<std::mutex> lk(m_stateMutex);
+                if (!m_mainLoop) return; // 主事件循环不存在，直接退出
+
+                // 已经在停止/启动中/正在停止，直接返回
+                if (StatusAnyOf(Status::Stopped, Status::Stopping)) return;
+
+                SetStatus(Status::Stopping);
+
+                // 通知主循环退出
+                try {
+                    m_mainLoop->Shutdown();
+                } catch (...) { /* 吃掉错误 */ }
+
+                if (!m_mainThread.joinable()) return;
+            }
+            // 等待 线程结束
+            if (m_mainThread.get_id() != std::this_thread::get_id()) m_mainThread.join();
+        }
+
+        Server::Status Server::GetStatus() const noexcept {
+            return m_status.load(std::memory_order_acquire);
         }
 
         std::shared_ptr<Broadcast> Server::GetBroadcast() noexcept {
@@ -238,6 +310,15 @@ namespace LikesProgram {
             if (flags < 0) return -1;
             return ::fcntl((int)fdOrSocket, F_SETFL, flags | O_NONBLOCK);
 #endif
+        }
+
+        void Server::SetStatus(Status status) {
+            m_status.store(status, std::memory_order_release);
+            m_stateCv.notify_all();
+        }
+
+        bool Server::StatusEquals(Status status) const noexcept {
+            return m_status.load(std::memory_order_acquire) == status;
         }
     }
 }

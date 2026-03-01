@@ -20,11 +20,11 @@ namespace LikesProgram {
 
             ~MainEventLoop() override;
 
-            // 启动所有 sub loops（主 loop 仍由外部调用 Run()）
+            // 启动所有 sub loops（主 loop 仍由外部调用 Start()）
             void StartSubLoops();
 
-            // 停止 sub loops（会调用 Stop 并 Join）
-            void StopSubLoops();
+            // 停止 sub loops（会调用 Shutdown 并 Join）
+            void ShutdownSubLoops();
 
             // 获取 所有 sub loops
             std::span<const std::shared_ptr<EventLoop>> GetSubLoops() const noexcept;
