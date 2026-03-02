@@ -23,7 +23,7 @@ namespace LikesProgram {
                 Running,    // 运行中
                 Stopping    // 正在停止
             };
-            // 构造函数，创建监听 Channel 并注册到 MainEventLoop
+            // 构造函数
             explicit Server(std::vector<String>& addrs, unsigned short port, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
             // 自定义轮询器
             explicit Server(std::vector<String>& addrs, unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);

@@ -161,9 +161,7 @@ namespace LikesProgram {
         void Server::WaitShutdown() const noexcept {
             std::unique_lock<std::mutex> lk(m_stateMutex);
 
-            m_stateCv.wait(lk, [this]() {
-                return StatusEquals(Status::Stopped);
-            });
+            m_stateCv.wait(lk, [this]() { return StatusEquals(Status::Stopped); });
         }
 
         void Server::Shutdown() {
