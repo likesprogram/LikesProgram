@@ -188,5 +188,15 @@ namespace LikesProgram {
 
             return LikesProgram::String(result);
         }
+
+        std::tm ToLocalTime(std::time_t t) {
+            std::tm tm{};
+#ifdef _WIN32
+            localtime_s(&tm, &t);
+#else
+            localtime_r(&t, &tm);
+#endif
+            return tm;
+        }
     }
 }

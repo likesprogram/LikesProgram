@@ -2,7 +2,7 @@
 #include "../LikesProgram/net/Server.hpp"
 #include "../LikesProgram/net/pollers/WindowsSelectPoller.hpp"
 #include "../LikesProgram/net/pollers/EpollPoller.hpp"
-#include "../LikesProgram/Logger.hpp"
+#include "../LikesProgram/log/Logger.hpp"
 #include "../LikesProgram/String.hpp"
 #include "../LikesProgram/net/Client.hpp"
 #include <iostream>
@@ -15,17 +15,17 @@ class EchoConnection final : public Connection {
 public:
     EchoConnection(SocketType fd, EventLoop* loop, std::unique_ptr<Transport> transport)
         : Connection(fd, loop, std::move(transport)) {
-        LOG_DEBUG(u"Server new conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
+        LogDebug(u"Server new conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
     }
 
     ~EchoConnection() {
-        LOG_DEBUG(u"Server del conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
+        LogDebug(u"Server del conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
     }
 
 protected:
     void OnConnected() override {
         // 可选：欢迎消息
-        LOG_DEBUG(u"Send Hello Message [echo server: connected]");
+        LogDebug(u"Send Hello Message [echo server: connected]");
         std::string socket = "Server socket: " + std::to_string(GetSocket());
         const char* hello = socket.c_str();
         Buffer buffer;
@@ -37,14 +37,14 @@ protected:
         // 最简单：把当前 buffer 全部回写，然后消费掉
         const auto n = in.ReadableBytes();
         if (n > 0) {
-            LOG_INFO(u"Server OnMessage [{}]", std::string((char*)in.Peek(), in.ReadableBytes()));
+            LogInfo(u"Server OnMessage [{}]", std::string((char*)in.Peek(), in.ReadableBytes()));
             std::string socket = "Client[" + std::to_string(GetSocket()) + "]: Message:[";
             Buffer message;
             message.Append(socket.c_str(), socket.size());
             message.Append(in.Peek(), in.ReadableBytes());
             message.Append("]", 1);
 
-            LOG_WARN(u"Server broadcast [{}]", std::string((char*)message.Peek(), message.ReadableBytes()));
+            LogWarn(u"Server broadcast [{}]", std::string((char*)message.Peek(), message.ReadableBytes()));
 
             std::shared_ptr<Broadcast> broadcast = GetBroadcast();
             Send(in);
@@ -58,7 +58,7 @@ protected:
 
     void OnClosed() override {
         // 连接关闭
-        LOG_WARN(u"Server closed fd[{}]", (long long)GetSocket());
+        LogWarn(u"Server closed fd[{}]", (long long)GetSocket());
     }
 
     void OnError(int err) override {
@@ -72,17 +72,17 @@ class ClientConnection final : public Connection {
 public:
     ClientConnection(SocketType fd, EventLoop* loop, std::unique_ptr<Transport> transport)
         : Connection(fd, loop, std::move(transport)) {
-        LOG_DEBUG(u"Client new conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
+        LogDebug(u"Client new conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
     }
 
     ~ClientConnection() {
-        LOG_DEBUG(u"Client del conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
+        LogDebug(u"Client del conn[{}] this[{:P}]", (long long)GetSocket(), (const void*)this);
     }
 
 protected:
     void OnConnected() override {
         // 可选：欢迎消息
-        LOG_DEBUG(u"Send Hello Message [echo client: connected]");
+        LogDebug(u"Send Hello Message [echo client: connected]");
         std::string socket = "Client socket: " + std::to_string(GetSocket());
         const char* hello = socket.c_str();
         Buffer buffer;
@@ -94,7 +94,7 @@ protected:
         // 最简单：把当前 buffer 全部回写，然后消费掉
         const auto n = in.ReadableBytes();
         if (n > 0) {
-            LOG_INFO(u"ClientOnMessage [{}]", std::string((char*)in.Peek(), in.ReadableBytes()));
+            LogInfo(u"ClientOnMessage [{}]", std::string((char*)in.Peek(), in.ReadableBytes()));
 
             in.Consume(n); // 移除已使用的消息
         }
@@ -102,7 +102,7 @@ protected:
 
     void OnClosed() override {
         // 连接关闭
-        LOG_WARN(u"Client closed fd[{}]", (long long)GetSocket());
+        LogWarn(u"Client closed fd[{}]", (long long)GetSocket());
     }
 
     void OnError(int err) override {
@@ -113,19 +113,18 @@ protected:
 
 namespace ServerTest {
     void Test() {
-        // 初始化日志
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true, true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true);
 #endif
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
 
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
-        // 控制台输出 Sink
-        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+        logger.SetLevel(LikesProgram::Log::Level::Trace);
+        // 内置控制台输出 Sink
+        logger.AddSink(LikesProgram::Log::ConsoleSink::CreateSink()); // 输出到控制台
 
         // 创建连接器工厂
         ConnectionFactory connectionFactory = [](SocketType fd, EventLoop* ownerLoop) -> std::shared_ptr<Connection> {
@@ -137,7 +136,7 @@ namespace ServerTest {
         std::vector<String> addrs = { u"0.0.0.0", u"::" };
         unsigned short port = 8080;
         size_t subLoops = 16;
-        LOG_DEBUG(u"EchoServer listening on port [{}] subLoops [{}]", (size_t)port, subLoops);
+        LogDebug(u"EchoServer listening on port [{}] subLoops [{}]", (size_t)port, subLoops);
 
         Server server(addrs, port, connectionFactory, subLoops);
 
@@ -203,7 +202,7 @@ namespace ServerTest {
         // 阻塞线程
         //server.WaitShutdown(); // 等待 Server 停止
 
-        LOG_DEBUG(u"EchoServer Shutdown");
+        LogDebug(u"EchoServer Shutdown");
 
         logger.Shutdown();
     }

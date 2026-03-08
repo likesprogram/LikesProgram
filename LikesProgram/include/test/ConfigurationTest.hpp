@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "../LikesProgram/Configuration.hpp"
 #include "../LikesProgram/String.hpp"
-#include "../LikesProgram/Logger.hpp"
+#include "../LikesProgram/log/Logger.hpp"
 #include <sstream>
 #include <vector>
 
@@ -100,17 +100,17 @@ namespace LikesProgram {
 namespace ConfigurationTest {
     void Test() {
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true, true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true);
 #endif
 
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
+        logger.SetLevel(LikesProgram::Log::Level::Trace);
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Log::ConsoleSink::CreateSink()); // 输出到控制台
 
         // 创建顶层配置对象
         LikesProgram::Configuration cfg;
@@ -168,12 +168,12 @@ namespace ConfigurationTest {
             out += u", Street: "; out += street;
             out += u", Zip: "; out += LikesProgram::String(std::to_string(zip));
             out += u", Active: "; out += LikesProgram::String(active ? u"true" : u"false");
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
         catch (std::exception& e) {
             LikesProgram::String out = u"Conversion error: ";
             out += (LikesProgram::String)e.what();
-            LOG_ERROR(out);
+            LogError(out);
         }
 
         // CastPolicy 示例
@@ -181,12 +181,12 @@ namespace ConfigurationTest {
             double userIdDouble = cfg[u"user_id"].AsDouble(LikesProgram::Configuration::CastPolicy::Strict);
             LikesProgram::String out = u"User ID as double: ";
             out += (LikesProgram::String)std::to_string(userIdDouble);
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
         catch (std::exception& e) {
             LikesProgram::String out = u"Strict cast error: ";
             out += (LikesProgram::String)e.what();
-            LOG_ERROR(out);
+            LogError(out);
         }
 
         // 安全获取 tryGet
@@ -194,40 +194,40 @@ namespace ConfigurationTest {
         if (cfg[u"projects"][u"list"][1][u"stars"].TryGet(stars)) {
             LikesProgram::String out = u"Project 2 stars: ";
             out += (LikesProgram::String)std::to_string(stars);
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
 
         // 遍历对象
-        LOG_WARN(u"User info : ");
+        LogWarn(u"User info : ");
         for (auto it = cfg.beginObject(); it != cfg.endObject(); ++it) {
             LikesProgram::String out = it->first;
             out += u": "; out += it->second.AsString();
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
 
         // 遍历数组
-        LOG_WARN(u"Hobbies : ");
+        LogWarn(u"Hobbies : ");
         for (const auto& hobby : cfg[u"hobbies"]) {
             LikesProgram::String out = u"- ";
             out += hobby.AsString();
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
         // 遍历数组
-        LOG_WARN(u"Hobbies : ");
+        LogWarn(u"Hobbies : ");
         for (size_t i = 0; i < cfg[u"hobbies"].Size(); ++i) {
             LikesProgram::String out = u"- ";
             out += cfg[u"hobbies"].At(i).AsString();
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
 
         // 遍历嵌套数组 + 对象
-        LOG_WARN(u"nProjects : ");
+        LogWarn(u"nProjects : ");
         for (const auto& project : cfg[u"projects"][u"list"]) {
             LikesProgram::String out = u"- ";
             out += project[u"name"].AsString();
             out += u" ("; out += (LikesProgram::String)std::to_string(project[u"stars"].AsInt());
             out += u" stars)";
-            LOG_DEBUG(out);
+            LogDebug(out);
         }
         // JSON 序列化 / 反序列化
 
@@ -239,14 +239,14 @@ namespace ConfigurationTest {
         LikesProgram::String jsonText = cfg.Dump(4); // 缩进4空格
         LikesProgram::String jsonTextOut = u"Serialized JSON : \n";
         jsonTextOut += jsonText;
-        LOG_DEBUG(jsonTextOut);
+        LogDebug(jsonTextOut);
 
         // 使用默认的序列化器，反序列化
         LikesProgram::Configuration loadedCfg;
         loadedCfg.Load(jsonText);
         LikesProgram::String loadedOut = u"Loaded project 1 name: ";
         loadedOut += loadedCfg[u"projects"][u"list"][0][u"name"].AsString();
-        LOG_DEBUG(loadedOut);
+        LogDebug(loadedOut);
 
         // 异常捕获示例
         try {
@@ -256,7 +256,7 @@ namespace ConfigurationTest {
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (key missing): ";
             out += (LikesProgram::String)e.what();
-            LOG_ERROR(out);
+            LogError(out);
         }
 
         try {
@@ -266,7 +266,7 @@ namespace ConfigurationTest {
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (type mismatch): ";
             out += (LikesProgram::String)e.what();
-            LOG_ERROR(out);
+            LogError(out);
         }
 
         try {
@@ -276,7 +276,7 @@ namespace ConfigurationTest {
         catch (std::exception& e) {
             LikesProgram::String out = u"Expected error (array out-of-range): ";
             out += (LikesProgram::String)e.what();
-            LOG_ERROR(out);
+            LogError(out);
         }
 
         // 使用自定义序列化器，注意：因为自定义序列化器是JSON，与上面使用的默认序列化器输出格式相同，因此才可以正常读取
@@ -287,14 +287,14 @@ namespace ConfigurationTest {
         LikesProgram::String simpleText = cfg.Dump(4); // 缩进4空格
         LikesProgram::String simpleTextOut = u"SimpleSerializer Text : \n";
         simpleTextOut += simpleText;
-        LOG_DEBUG(simpleTextOut);
+        LogDebug(simpleTextOut);
 
         LikesProgram::Configuration loadedCfg1;
         loadedCfg1.SetSerializer(LikesProgram::CreateSimpleSerializer());
         loadedCfg1.Load(simpleText);
         LikesProgram::String loadedOut1 = u"Loaded project 1 name: ";
         loadedOut1 += loadedCfg1[u"projects"][u"list"][0][u"name"].AsString();
-        LOG_DEBUG(loadedOut1);
+        LogDebug(loadedOut1);
 
         logger.Shutdown();
     }

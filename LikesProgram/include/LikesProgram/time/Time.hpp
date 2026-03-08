@@ -17,6 +17,9 @@ namespace LikesProgram {
         // 格式化时间
 		LikesProgram::String FormatTime(const TimePoint& tp, const LikesProgram::String& fmt = u"%Y-%m-%d %H:%M:%S");
         
+        // std::time_t → std::tm
+        std::tm ToLocalTime(std::time_t t);
+
         // 纳秒 → system_clock::time_point
         inline TimePoint NsToSystemClock(Nanoseconds ns) {
             return TimePoint{ std::chrono::duration_cast<TimePoint::duration>(ns) };

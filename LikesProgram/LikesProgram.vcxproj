@@ -131,6 +131,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\LikesProgram\log\LoggerType.cpp" />
+    <ClCompile Include="src\LikesProgram\log\sinks\ConsoleSink.cpp" />
+    <ClCompile Include="src\LikesProgram\log\sinks\FileSink.cpp" />
+    <ClCompile Include="src\LikesProgram\log\sinks\Sink.cpp" />
     <ClCompile Include="src\LikesProgram\math\PercentileSketch.cpp" />
     <ClCompile Include="src\LikesProgram\math\Vector3.cpp" />
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
@@ -152,7 +156,7 @@
     <ClCompile Include="src\LikesProgram\stringFormat\FormatParser.cpp" />
     <ClCompile Include="src\LikesProgram\stringFormat\FormatSpec.cpp" />
     <ClCompile Include="src\LikesProgram\system\CoreUtils.cpp" />
-    <ClCompile Include="src\LikesProgram\Logger.cpp" />
+    <ClCompile Include="src\LikesProgram\log\Logger.cpp" />
     <ClCompile Include="src\LikesProgram\math\Math.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Counter.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Histogram.cpp" />
@@ -172,6 +176,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\Configuration.hpp" />
+    <ClInclude Include="include\LikesProgram\log\LoggerType.hpp" />
+    <ClInclude Include="include\LikesProgram\log\sinks\ConsoleSink.hpp" />
+    <ClInclude Include="include\LikesProgram\log\sinks\FileSink.hpp" />
+    <ClInclude Include="include\LikesProgram\log\sinks\Sink.hpp" />
     <ClInclude Include="include\LikesProgram\net\Broadcast.hpp" />
     <ClInclude Include="include\LikesProgram\net\Buffer.hpp" />
     <ClInclude Include="include\LikesProgram\net\Channel.hpp" />
@@ -191,7 +199,7 @@
     <ClInclude Include="include\LikesProgram\stringFormat\FormatSpec.hpp" />
     <ClInclude Include="include\LikesProgram\system\CoreUtils.hpp" />
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp" />
-    <ClInclude Include="include\LikesProgram\Logger.hpp" />
+    <ClInclude Include="include\LikesProgram\log\Logger.hpp" />
     <ClInclude Include="include\LikesProgram\math\PercentileSketch.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector3.hpp" />
     <ClInclude Include="include\LikesProgram\math\Vector4.hpp" />

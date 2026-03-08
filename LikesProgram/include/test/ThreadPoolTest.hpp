@@ -1,22 +1,22 @@
 ﻿#pragma once
 #include "../LikesProgram/threading/ThreadPool.hpp"
-#include "../LikesProgram/Logger.hpp"
+#include "../LikesProgram/log/Logger.hpp"
 #include "../LikesProgram/String.hpp"
 
 namespace ThreadPoolTest {
 	void Test() {        // 初始化日志
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true, true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true);
 #endif
 
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Trace);
+        logger.SetLevel(LikesProgram::Log::Level::Trace);
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Log::ConsoleSink::CreateSink()); // 输出到控制台
 
         LikesProgram::ThreadPool::Options optins = {
         2,   // 最小线程数
@@ -35,12 +35,12 @@ namespace ThreadPoolTest {
         pool.Start();
 
         // 输出 注册器 中的 Metrics 内容
-        LOG_WARN(registry->ExportPrometheus());
+        LogWarn(registry->ExportPrometheus());
         // 提交一些任务
         for (int i = 0; i < 30; i++) {
             // 提交无返回值无参数的任务
             pool.PostNoArg([i]() {
-                LOG_DEBUG(u"PostNoArg：Hello from worker");
+                LogDebug(u"PostNoArg：Hello from worker");
                 //std::cout << "PostNoArg：Hello from worker" << std::endl;
             });
 
@@ -50,14 +50,14 @@ namespace ThreadPoolTest {
                 LikesProgram::String out;
                 out.Append(message);
                 out.Append(u"：Hello from worker");
-                LOG_DEBUG(out);
+                LogDebug(out);
                 //std::cout << "Post：Hello from worker" << std::endl;
             }, u"Post");
 
             // 提交有返回值有参数的任务
             auto poolOut = pool.Submit([i](LikesProgram::String message) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                LOG_DEBUG(message);
+                LogDebug(message);
                 //std::cout << "Submit：Hello from worker" << std::endl;
                 LikesProgram::String out;
                 out.Append(message);
@@ -68,34 +68,34 @@ namespace ThreadPoolTest {
             }, u"Submit");
 
             // 等待任务完成, 并获取结果（这里会拖慢任务效率）
-            // LOG_WARN(poolOut.get());
+            // LogWarn(poolOut.get());
 
             if (i % 10 == 0) {
-                LOG_WARN(poolOut.get()); // 每隔10次输出一次 Submit 的运行结果
+                LogWarn(poolOut.get()); // 每隔10次输出一次 Submit 的运行结果
 
                 // 输出 注册器 中的 Metrics 内容
-                LOG_WARN(registry->ExportPrometheus());
+                LogWarn(registry->ExportPrometheus());
 
                 // 获取快照统计信息
                 LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
-                LOG_WARN(stats.ToString());
+                LogWarn(stats.ToString());
             }
         }
 
         // 关闭线程池
         pool.Shutdown();
         if (pool.AwaitTermination(std::chrono::milliseconds(1000))) { // 等待线程池关闭
-            LOG_WARN(u"线程池已关闭");
+            LogWarn(u"线程池已关闭");
         } else {
-            LOG_ERROR(u"线程池关闭超时");
+            LogError(u"线程池关闭超时");
         }
 
         // 获取快照统计信息
         LikesProgram::ThreadPool::Statistics stats = pool.Snapshot();
-        LOG_WARN(stats.ToString());
+        LogWarn(stats.ToString());
 
         // 输出 注册器 中的 Metrics 内容
-        LOG_WARN(registry->ExportPrometheus());
+        LogWarn(registry->ExportPrometheus());
 
         logger.Shutdown();
 	}

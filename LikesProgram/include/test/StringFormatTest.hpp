@@ -2,7 +2,7 @@
 #include <iostream>
 #include "../LikesProgram/String.hpp"
 #include "../LikesProgram/stringFormat/FormatParser.hpp"
-#include "../LikesProgram/Logger.hpp"
+#include "../LikesProgram/log/Logger.hpp"
 #include "../LikesProgram/stringFormat/FormatInternal.hpp"
 #include "../LikesProgram/time/Timer.hpp"
 using namespace LikesProgram;
@@ -24,7 +24,7 @@ namespace StringFormatTest {
                     log += e.message;
                     log += u"\n";
                 }
-                LOG_DEBUG(log);
+                LogDebug(log);
                 return;
             }
 
@@ -80,31 +80,26 @@ namespace StringFormatTest {
                 }
             }
 
-            LOG_DEBUG(log);
+            LogDebug(log);
         }
         catch (const std::exception& ex) {
-            LOG_DEBUG(String(u"异常: ") + String(ex.what()));
+            LogDebug(String(u"异常: ") + String(ex.what()));
         }
 	}
 
     void Test() {
-        // 初始化日志
 #ifdef _DEBUG
-        auto& logger = LikesProgram::Logger::Instance(true, true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true, true);
 #else
-        auto& logger = LikesProgram::Logger::Instance(true);
+        auto& logger = LikesProgram::Log::Logger::Instance(true);
 #endif
 
 #ifdef _WIN32
         logger.SetEncoding(LikesProgram::String::Encoding::GBK);
 #endif
-#ifdef _DEBUG
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Debug);
-#else
-        logger.SetLevel(LikesProgram::Logger::LogLevel::Info);
-#endif
+        logger.SetLevel(LikesProgram::Log::Level::Trace);
         // 内置控制台输出 Sink
-        logger.AddSink(LikesProgram::Logger::CreateConsoleSink()); // 输出到控制台
+        logger.AddSink(LikesProgram::Log::ConsoleSink::CreateSink()); // 输出到控制台
         
         // 基本索引和格式化
         FormatParserTest(u"Hello {0}, number={1:d05}");          // 占位符索引 + 数字格式化（宽度5，补0）
@@ -148,43 +143,43 @@ namespace StringFormatTest {
         // ===========================
         // 1. 基本索引
         // ===========================
-        LOG_DEBUG(String::Format(U"Hello {}, {}!", U"World", 123));                   // 自动索引
-        LOG_DEBUG(String::Format(U"{1} + {0} = {2}", 2, 3, 5));                        // 显式索引
-        LOG_DEBUG(String::Format(U"{2}{}{1}{}", U"X", 7, U"Y"));                       // 混合索引
-        LOG_DEBUG(String::Format(U"{2}{}{}{}{}{}", U"X", U"A", U"B", U"C", U"D"));   // 智能分配未使用索引
-        LOG_DEBUG(String::Format(U"{} {2} {}", U"first", U"second", U"third"));       // 自动补齐
+        LogDebug(String::Format(U"Hello {}, {}!", U"World", 123));                   // 自动索引
+        LogDebug(String::Format(U"{1} + {0} = {2}", 2, 3, 5));                        // 显式索引
+        LogDebug(String::Format(U"{2}{}{1}{}", U"X", 7, U"Y"));                       // 混合索引
+        LogDebug(String::Format(U"{2}{}{}{}{}{}", U"X", U"A", U"B", U"C", U"D"));   // 智能分配未使用索引
+        LogDebug(String::Format(U"{} {2} {}", U"first", U"second", U"third"));       // 自动补齐
 
         // ===========================
         // 2. 数值类型
         // ===========================
-        LOG_DEBUG(String::Format(U"Decimal: {:d} {:i}", 123, -456));
-        LOG_DEBUG(String::Format(U"Hex: {:x} {:X} {:#x} {:#X}", 255, 255, 255, 255));
-        LOG_DEBUG(String::Format(U"Binary: {:b} {:#b}", 10, 10));
-        LOG_DEBUG(String::Format(U"Octal: {:o} {:#o}", 63, 63));
-        LOG_DEBUG(String::Format(U"Float: {:.2f} {:.3f}", 3.14159, 2.71828));
-        LOG_DEBUG(String::Format(U"Scientific: {:.2e} {:.3E}", 1234.5678, 1234.5678));
-        LOG_DEBUG(String::Format(U"Percent: {:.2%}", 0.1234));
-        LOG_DEBUG(String::Format(U"Sign: {:+d} {:-d} {: d} {:+.2f}", 42, -42, 7, 3.14));
+        LogDebug(String::Format(U"Decimal: {:d} {:i}", 123, -456));
+        LogDebug(String::Format(U"Hex: {:x} {:X} {:#x} {:#X}", 255, 255, 255, 255));
+        LogDebug(String::Format(U"Binary: {:b} {:#b}", 10, 10));
+        LogDebug(String::Format(U"Octal: {:o} {:#o}", 63, 63));
+        LogDebug(String::Format(U"Float: {:.2f} {:.3f}", 3.14159, 2.71828));
+        LogDebug(String::Format(U"Scientific: {:.2e} {:.3E}", 1234.5678, 1234.5678));
+        LogDebug(String::Format(U"Percent: {:.2%}", 0.1234));
+        LogDebug(String::Format(U"Sign: {:+d} {:-d} {: d} {:+.2f}", 42, -42, 7, 3.14));
 
         // ===========================
         // 3. 填充与对齐
         // ===========================
-        LOG_DEBUG(String::Format(U"Right: '{:*>10}'", U"R"));
-        LOG_DEBUG(String::Format(U"Left: '{:<10}'", U"L"));
-        LOG_DEBUG(String::Format(U"Center: '{:^10}'", U"C"));
-        LOG_DEBUG(String::Format(U"Multi-fill: '{:'**'^8}' '{:'--'<10}'", U"A", U"B"));
-        LOG_DEBUG(String::Format(U"Complex: '{:'░'^9}'", U"X"));
+        LogDebug(String::Format(U"Right: '{:*>10}'", U"R"));
+        LogDebug(String::Format(U"Left: '{:<10}'", U"L"));
+        LogDebug(String::Format(U"Center: '{:^10}'", U"C"));
+        LogDebug(String::Format(U"Multi-fill: '{:'**'^8}' '{:'--'<10}'", U"A", U"B"));
+        LogDebug(String::Format(U"Complex: '{:'░'^9}'", U"X"));
 
         // ===========================
         // 4. 时间类型 (type=t/T)
         // ===========================
         auto now = std::chrono::system_clock::now();
-        LOG_DEBUG(String::Format(U"Time: {:t%Y-%m-%d %H:%M:%S}", now));
-        LOG_DEBUG(String::Format(U"Time2: {:t%Y/%m/%d %H:%M:%S %6f}", now));
-        LOG_DEBUG(String::Format(U"Time3: {:t%Y/%m/%d %H:%M:%S %f AP}", now));
-        LOG_DEBUG(String::Format(U"Time4: {:tYYYY-MM-DD hh:mm:ss SSS}", now));
-        LOG_DEBUG(String::Format(U"Time4: {:t%Y-M-D %H:%M:%S SSS AP W WW TZ}", now));
-        LOG_DEBUG(String::Format(U"Time5: {:tW WW TZ}", now)); // 星期简写/全称 + 时区
+        LogDebug(String::Format(U"Time: {:t%Y-%m-%d %H:%M:%S}", now));
+        LogDebug(String::Format(U"Time2: {:t%Y/%m/%d %H:%M:%S %6f}", now));
+        LogDebug(String::Format(U"Time3: {:t%Y/%m/%d %H:%M:%S %f AP}", now));
+        LogDebug(String::Format(U"Time4: {:tYYYY-MM-DD hh:mm:ss SSS}", now));
+        LogDebug(String::Format(U"Time4: {:t%Y-M-D %H:%M:%S SSS AP W WW TZ}", now));
+        LogDebug(String::Format(U"Time5: {:tW WW TZ}", now)); // 星期简写/全称 + 时区
 
         // ===========================
         // 5. 自定义类型
@@ -202,47 +197,47 @@ namespace StringFormatTest {
 
         // 检查是否注册成功
         if (fmt.HasFormatter("Vec2")) {
-            LOG_DEBUG(u"Formatter Vec2 registered.");
+            LogDebug(u"Formatter Vec2 registered.");
         }
 
         Vec2 v{ 1.23, 4.56 };
-        LOG_DEBUG(String::Format(U"Custom Vec2: {:uVec2}", v));
+        LogDebug(String::Format(U"Custom Vec2: {:uVec2}", v));
 
         // ===========================
         // 6. 花括号转义
         // ===========================
-        LOG_DEBUG(String::Format(U"Escape {{}} test"));
+        LogDebug(String::Format(U"Escape {{}} test"));
 
         // ===========================
         // 7. 多字符填充与组合
         // ===========================
-        LOG_DEBUG(String::Format(U"Multi-char fill: '{:'**'<6}' '{:'--'^8}' '{:'##'>10}'", U"A", U"B", U"C"));
+        LogDebug(String::Format(U"Multi-char fill: '{:'**'<6}' '{:'--'^8}' '{:'##'>10}'", U"A", U"B", U"C"));
 
         // ===========================
         // 8. 空字符串
         // ===========================
-        LOG_DEBUG(String::Format(U"Empty string: '{}'", U""));
+        LogDebug(String::Format(U"Empty string: '{}'", U""));
 
         // ===========================
         // 9. 指针类型
         // ===========================
         int val = 42;
         int* ptr = &val;
-        LOG_DEBUG(String::Format(U"Pointer: {:p}", ptr));
+        LogDebug(String::Format(U"Pointer: {:p}", ptr));
 
         // ===========================
         // 10. 错误回退
         // ===========================
-        LOG_DEBUG(String::Format(U"Missing brace {0:05", 10));   // 缺少闭括号
-        LOG_DEBUG(String::Format(U"Invalid type {0:abc!}", 10)); // 无效格式字符
-        LOG_DEBUG(String::Format(U"Unmatched { text"));
-        LOG_DEBUG(String::Format(U"Unmatched } text"));
-        LOG_DEBUG(String::Format(U"Empty {}", U""));
+        LogDebug(String::Format(U"Missing brace {0:05", 10));   // 缺少闭括号
+        LogDebug(String::Format(U"Invalid type {0:abc!}", 10)); // 无效格式字符
+        LogDebug(String::Format(U"Unmatched { text"));
+        LogDebug(String::Format(U"Unmatched } text"));
+        LogDebug(String::Format(U"Empty {}", U""));
 
         // ===========================
         // 11. 智能索引重复测试
         // ===========================
-        LOG_DEBUG(String::Format(U"{1}{}{1}{}{}{}", U"A", U"B", U"C", U"D", U"E"));
+        LogDebug(String::Format(U"{1}{}{1}{}{}{}", U"A", U"B", U"C", U"D", U"E"));
 
         logger.Shutdown();
     }

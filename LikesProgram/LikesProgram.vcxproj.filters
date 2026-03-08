@@ -45,7 +45,7 @@
     <ClCompile Include="src\LikesProgram\threading\ThreadPool.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\LikesProgram\Logger.cpp">
+    <ClCompile Include="src\LikesProgram\log\Logger.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\LikesProgram\Configuration.cpp">
@@ -129,6 +129,18 @@
     <ClCompile Include="src\LikesProgram\net\Broadcast.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\log\sinks\Sink.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\log\LoggerType.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\log\sinks\ConsoleSink.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\LikesProgram\log\sinks\FileSink.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp">
@@ -173,7 +185,7 @@
     <ClInclude Include="include\LikesProgram\threading\ThreadPool.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="include\LikesProgram\Logger.hpp">
+    <ClInclude Include="include\LikesProgram\log\Logger.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\test\LoggerTest.hpp">
@@ -294,6 +306,18 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\net\Broadcast.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\log\sinks\Sink.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\log\LoggerType.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\log\sinks\ConsoleSink.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\log\sinks\FileSink.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
