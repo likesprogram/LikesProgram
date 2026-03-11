@@ -2,6 +2,7 @@
 #include "Buffer.hpp"
 #include "Transport.hpp"
 #include "Broadcast.hpp"
+#include "Address.hpp"
 #include <memory>
 #include <functional>
 #include <atomic>
@@ -90,6 +91,11 @@ namespace LikesProgram {
 
             // 获取广播器
             std::shared_ptr<Broadcast> GetBroadcast() const noexcept;
+
+            // 获取对端地址
+            const Address& GetRemoteAddress() const noexcept;
+            // 获取本段地址
+            const Address& GetLocalAddress() const noexcept;
         private:
             void SetCloseCallbackInternal(CloseCallback cb);
             friend class Server;
@@ -118,6 +124,9 @@ namespace LikesProgram {
             std::shared_ptr<Broadcast> m_broadcast; // 广播器
 
             std::unique_ptr<Transport> m_transport;
+
+            Address m_remoteAddr; // 对端地址
+            Address m_localAddr; // 本端地址
 
             Buffer m_inBuffer;
             Buffer m_outBuffer;

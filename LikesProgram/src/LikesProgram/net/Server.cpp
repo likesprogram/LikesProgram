@@ -56,17 +56,34 @@ namespace LikesProgram {
 #endif
         }
 
-        Server::Server(std::vector<String>& addrs, unsigned short port, ConnectionFactory connectionFactory, size_t subLoopCount)
-        : Server(addrs, port, DefaultPollerFactory(), std::move(connectionFactory), subLoopCount){ }
+        Server::Server(const Address& listenAddr, ConnectionFactory connectionFactory, size_t subLoopCount)
+        : Server(std::vector<Address>{listenAddr}, DefaultPollerFactory(), std::move(connectionFactory), subLoopCount) { }
 
-        Server::Server(std::vector<String>& addrs, unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount) : m_port(port) {
+        Server::Server(const std::vector<Address>& listenAddrs, ConnectionFactory connectionFactory, size_t subLoopCount)
+        : Server(listenAddrs, DefaultPollerFactory(), std::move(connectionFactory), subLoopCount) { }
+
+        Server::Server(const Address& listenAddr, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount)
+        : Server(std::vector<Address>{listenAddr}, std::move(pollerFactory), std::move(connectionFactory), subLoopCount) { }
+
+        Server::Server(const std::vector<Address>& listenAddrs, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount) {
 #ifdef _WIN32
             (void)EnsureWinsock();
 #endif
+            m_listenAddrs.clear();
+
+            // 解析并去重
+            std::unordered_set<std::string> seen;
+            for (const auto& addr : listenAddrs) {
+                auto resolved = Address::Resolve(addr.Ip(), addr.Port());
+                for (auto& a : resolved) {
+                    std::string key = a.ToString();  // ip:port
+                    if (seen.insert(key).second) m_listenAddrs.push_back(std::move(a));
+                }
+            }
 
             // 监听 socket
-            if (!Listen(addrs)) {
-                throw std::runtime_error("Failed to listen on port " + std::to_string(port));
+            if (!Listen()) {
+                throw std::runtime_error("Failed to listen");
             }
 
             // 创建主事件循环
@@ -193,108 +210,83 @@ namespace LikesProgram {
             return m_mainLoop->GetBroadcast();
         }
 
-        bool Server::Listen(std::vector<String>& addrs) {
+        bool Server::Listen() {
             for (auto fd: m_listenFds) if (fd != kInvalidSocket) CloseSocket(fd);
             m_listenFds.clear();
 
-            // 端口字符串
-            const std::string portStr = std::to_string(m_port);
+            addrinfo* result = nullptr;
 
-            // 若配置为空：默认 "*"
-            std::vector<LikesProgram::String> targets = addrs;
-            if (targets.empty()) targets.push_back(u"*");
-
-            for (const auto& a : targets) {
-                const std::string ip = a.ToStdString();
-
-                addrinfo hints{};
-                hints.ai_family = AF_UNSPEC;     // IPv4 + IPv6
-                hints.ai_socktype = SOCK_STREAM;
-                hints.ai_protocol = IPPROTO_TCP;
-                hints.ai_flags = AI_PASSIVE;    // host 为 nullptr 时表示 any
-
-                const char* host = nullptr;
-                if (!(ip.empty() || ip == "*")) {
-                    host = ip.c_str();
-                    hints.ai_flags = 0; // 指定地址时不需要 AI_PASSIVE
+            for (const auto& addr : m_listenAddrs) {
+                SocketType fd = (SocketType)::socket(addr.FamilyValue(), SOCK_STREAM, IPPROTO_TCP);
+                if (fd == kInvalidSocket) {
+#ifdef _WIN32
+                    std::cout << "socket() failed family=" << addr.FamilyValue()
+                        << " wsa=" << WSAGetLastError() << "\n";
+#else
+                    std::cout << "socket() failed family=" << addr.FamilyValue()
+                        << " errno=" << errno << " " << std::strerror(errno) << "\n";
+#endif
+                    continue;
                 }
 
-                addrinfo* result = nullptr;
-                const int gai = ::getaddrinfo(host, portStr.c_str(), &hints, &result);
-                if (gai != 0 || !result) continue; // 这个地址解析失败，尝试下一个
-
-                for (addrinfo* rp = result; rp != nullptr; rp = rp->ai_next) {
-                    SocketType fd = (SocketType)::socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-                    if (fd == kInvalidSocket) {
+                // 复用地址（用 int，不要用 char）
+                int reuse = 1;
 #ifdef _WIN32
-                        std::cout << "socket() failed family=" << rp->ai_family
-                            << " wsa=" << WSAGetLastError() << "\n";
+                ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
 #else
-                        std::cout << "socket() failed family=" << rp->ai_family
-                            << " errno=" << errno << " " << std::strerror(errno) << "\n";
-#endif
-                        continue;
-                    }
-
-                    // 复用地址（用 int，不要用 char）
-                    int reuse = 1;
-#ifdef _WIN32
-                    ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
-#else
-                    ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+                ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 #endif
 
-                    // IPv6 dual-stack（失败不致命，记录一下即可）
+                // IPv6 dual-stack（失败不致命，记录一下即可）
 #ifdef IPV6_V6ONLY
-                    if (rp->ai_family == AF_INET6) {
+                if (addr.FamilyValue() == AF_INET6) {
 #ifdef _WIN32
-                        DWORD v6only = 1;
-                        if (::setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
-                            (const char*)&v6only, sizeof(v6only)) != 0) {
-                            std::cout << "setsockopt(IPV6_V6ONLY=0) failed wsa=" << WSAGetLastError() << "\n";
-                        }
+                    DWORD v6only = 1;
+                    if (::setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY,
+                        (const char*)&v6only, sizeof(v6only)) != 0) {
+                        std::cout << "setsockopt(IPV6_V6ONLY=0) failed wsa=" << WSAGetLastError() << "\n";
+                    }
 #else
-                        int v6only = 1;
-                        if (::setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) != 0) {
-                            std::cout << "setsockopt(IPV6_V6ONLY=0) failed errno=" << errno
-                                << " " << std::strerror(errno) << "\n";
-                        }
-#endif
+                    int v6only = 1;
+                    if (::setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) != 0) {
+                        std::cout << "setsockopt(IPV6_V6ONLY=0) failed errno=" << errno
+                            << " " << std::strerror(errno) << "\n";
                     }
 #endif
-
-                    // bind
-                    if (::bind(fd, rp->ai_addr, (socklen_t)rp->ai_addrlen) != 0) {
-#ifdef _WIN32
-                        const int e = WSAGetLastError();
-                        std::cout << "bind() failed family=" << rp->ai_family << " wsa=" << e << "\n";
-#else
-                        const int e = errno;
-                        std::cout << "bind() failed family=" << rp->ai_family
-                            << " errno=" << e << " " << std::strerror(e) << "\n";
-#endif
-                        CloseSocket(fd);
-                        continue;
-                    }
-
-                    if (::listen(fd, 128) != 0) {
-#ifdef _WIN32
-                        const int e = WSAGetLastError();
-                        std::cout << "listen() failed family=" << rp->ai_family << " wsa=" << e << "\n";
-#else
-                        const int e = errno;
-                        std::cout << "listen() failed family=" << rp->ai_family
-                            << " errno=" << e << " " << std::strerror(e) << "\n";
-#endif
-                        CloseSocket(fd);
-                        continue;
-                    }
-
-                    SetNonBlocking(fd);
-                    m_listenFds.push_back(fd);
                 }
-                ::freeaddrinfo(result);
+#endif
+
+                // bind
+                if (::bind(fd, addr.SockAddr(), addr.Length()) != 0) {
+#ifdef _WIN32
+                    const int e = WSAGetLastError();
+                    std::cout << "bind() failed family=" << addr.FamilyValue() << " wsa=" << e << "\n";
+#else
+                    const int e = errno;
+                    std::cout << "bind() failed family=" << addr.FamilyValue()
+                        << " errno=" << e << " " << std::strerror(e) << "\n";
+#endif
+                    CloseSocket(fd);
+                    continue;
+                }
+
+                if (::listen(fd, 128) != 0) {
+#ifdef _WIN32
+                    const int e = WSAGetLastError();
+                    std::cout << "listen() failed family=" << addr.FamilyValue() << " wsa=" << e << "\n";
+#else
+                    const int e = errno;
+                    std::cout << "listen() failed family=" << addr.FamilyValue()
+                        << " errno=" << e << " " << std::strerror(e) << "\n";
+#endif
+                    CloseSocket(fd);
+                    continue;
+                }
+
+                SetNonBlocking(fd);
+                m_listenFds.push_back(fd);
             }
+            ::freeaddrinfo(result);
             if (m_listenFds.empty()) return false;
             return true;
         }

@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "Buffer.hpp"
 #include "SocketType.hpp"
 #include <memory>
@@ -11,12 +11,12 @@ namespace LikesProgram {
 			Broadcast() = default;
 			~Broadcast() = default;
 
-			// ·¢ËÍÊı¾İ
+			// å‘é€æ•°æ®
 			void Send(const Buffer& buf);
 			void Send(const Buffer& buf, const SocketType removeSocket);
 			void Send(const Buffer& buf, const std::vector<SocketType>& removeSockets);
 
-			// ·¢ËÍÊı¾İ
+			// å‘é€æ•°æ®
 			void Send(const void* data, size_t len);
 			void Send(const void* data, size_t len, const SocketType removeSocket);
 			void Send(const void* data, size_t len, const std::vector<SocketType>& removeSockets);

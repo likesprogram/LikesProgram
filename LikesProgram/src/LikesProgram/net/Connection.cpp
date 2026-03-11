@@ -7,6 +7,8 @@ namespace LikesProgram {
 	namespace Net {
         Connection::Connection(SocketType fd, EventLoop* loop, std::unique_ptr<Transport> transport)
             : m_fd(fd), m_loop(loop), m_transport(std::move(transport)) {
+            m_remoteAddr = Address::GetRemoteAddress(fd);
+            m_localAddr = Address::GetLocalAddress(fd);
         }
 
         Connection::~Connection() {
@@ -196,6 +198,14 @@ namespace LikesProgram {
 
         std::shared_ptr<Broadcast> Connection::GetBroadcast() const noexcept {
             return m_broadcast;
+        }
+
+        const Address& Connection::GetRemoteAddress() const noexcept {
+            return m_remoteAddr;
+        }
+
+        const Address& Connection::GetLocalAddress() const noexcept {
+            return m_localAddr;
         }
 
         void Connection::SetCloseCallbackInternal(CloseCallback cb) {

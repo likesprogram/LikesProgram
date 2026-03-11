@@ -1,4 +1,4 @@
-#include "../../../include/LikesProgram/log/LoggerType.hpp"
+﻿#include "../../../include/LikesProgram/log/LoggerType.hpp"
 
 namespace LikesProgram {
 	namespace Log {

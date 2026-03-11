@@ -1,4 +1,4 @@
-#include "../../../../include/LikesProgram/log/sinks/ConsoleSink.hpp"
+﻿#include "../../../../include/LikesProgram/log/sinks/ConsoleSink.hpp"
 #include <iostream>
 #ifdef _WIN32
 #include <windows.h>

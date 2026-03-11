@@ -121,6 +121,8 @@ namespace ConfigurationTest {
 
         // 使用 emplace 添加键值
         cfg.Emplace(u"is_active", true);
+        cfg.Emplace(u"is_ae", false);
+        cfg[u"is_e"] = false;
 
         // 嵌套对象
         LikesProgram::Configuration address;

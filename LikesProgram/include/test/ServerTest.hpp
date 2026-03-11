@@ -31,6 +31,10 @@ protected:
         Buffer buffer;
         buffer.Append(hello, std::strlen(hello));
         Send(buffer);
+
+        std::string serverAddress = "{" + GetLocalAddress().ToString() + "}";
+        std::string clientAddress = "{" + GetRemoteAddress().ToString() + "}";
+        LogDebug(u"[Server] Connected: Server address: {}, Client address: {}", serverAddress, clientAddress);
     }
 
     void OnMessage(Buffer& in) override {
@@ -88,6 +92,10 @@ protected:
         Buffer buffer;
         buffer.Append(hello, std::strlen(hello));
         Send(buffer);
+
+        std::string serverAddress = "{" + GetRemoteAddress().ToString() + "}";
+        std::string clientAddress = "{" + GetLocalAddress().ToString() + "}";
+        LogDebug(u"[Client] Connected: Server address: {}, Client address: {}", serverAddress, clientAddress);
     }
 
     void OnMessage(Buffer& in) override {
@@ -136,9 +144,10 @@ namespace ServerTest {
         std::vector<String> addrs = { u"0.0.0.0", u"::" };
         unsigned short port = 8080;
         size_t subLoops = 16;
+
         LogDebug(u"EchoServer listening on port [{}] subLoops [{}]", (size_t)port, subLoops);
 
-        Server server(addrs, port, connectionFactory, subLoops);
+        Server server(Address("*", port), connectionFactory, subLoops);
 
         /* 自定义 轮询器
 
@@ -167,7 +176,7 @@ namespace ServerTest {
             return std::make_shared<ClientConnection>(fd, ownerLoop, std::move(transport));
         };
         // 创建客户端
-        Client client(u"127.0.0.1", port, clientConnectionFactory);
+        Client client(Address("127.0.0.1", port), clientConnectionFactory);
         client.Start(); // 开始，连接
         // 等待 客户端 启动完成
         std::this_thread::sleep_for(std::chrono::seconds(2));

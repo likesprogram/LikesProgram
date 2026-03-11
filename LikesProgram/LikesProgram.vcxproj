@@ -140,6 +140,7 @@
     <ClCompile Include="src\LikesProgram\math\Vector4.cpp" />
     <ClCompile Include="src\LikesProgram\metrics\Gauge.cpp" />
     <ClCompile Include="src\LikesProgram\Configuration.cpp" />
+    <ClCompile Include="src\LikesProgram\net\Address.cpp" />
     <ClCompile Include="src\LikesProgram\net\Broadcast.cpp" />
     <ClCompile Include="src\LikesProgram\net\Buffer.cpp" />
     <ClCompile Include="src\LikesProgram\net\Channel.cpp" />
@@ -180,6 +181,7 @@
     <ClInclude Include="include\LikesProgram\log\sinks\ConsoleSink.hpp" />
     <ClInclude Include="include\LikesProgram\log\sinks\FileSink.hpp" />
     <ClInclude Include="include\LikesProgram\log\sinks\Sink.hpp" />
+    <ClInclude Include="include\LikesProgram\net\Address.hpp" />
     <ClInclude Include="include\LikesProgram\net\Broadcast.hpp" />
     <ClInclude Include="include\LikesProgram\net\Buffer.hpp" />
     <ClInclude Include="include\LikesProgram\net\Channel.hpp" />

@@ -1,18 +1,18 @@
-#pragma once
+ï»¿#pragma once
 #include "Sink.hpp"
 
 namespace LikesProgram {
 	namespace Log {
         class FileSink : public Sink {
         public:
-            // ¹¹Ôì
+            // æ„é€ 
             explicit FileSink(const LikesProgram::String& path, const LikesProgram::String& filename, size_t maxFileSizeMB = 30);
             ~FileSink();
 
-            // ÖØĞ´Êä³öº¯Êı
+            // é‡å†™è¾“å‡ºå‡½æ•°
             void Write(const Message& message) override;
 
-            // ¹¹½¨¹¤³§
+            // æ„å»ºå·¥å‚
             static std::shared_ptr<Sink> CreateSink(const LikesProgram::String& path, const LikesProgram::String& filename, size_t maxFileSizeMB = 30);
         private:
             class FileSinkImpl;

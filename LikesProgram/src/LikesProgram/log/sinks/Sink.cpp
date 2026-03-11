@@ -1,4 +1,4 @@
-#include "../../../../include/LikesProgram/log/sinks/Sink.hpp"
+ï»¿#include "../../../../include/LikesProgram/log/sinks/Sink.hpp"
 #include "../../../../include/LikesProgram/time/Time.hpp"
 #include <iomanip>
 
@@ -13,32 +13,32 @@ namespace LikesProgram {
             auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(message.timestamp.time_since_epoch()) % 1000;
 
             std::wostringstream woss;
-            // Ê±¼ä
+            // æ—¶é—´
             std::tm tm = LikesProgram::Time::ToLocalTime(time_tc);
             woss << L"[" << std::put_time(&tm, L"%F %T") << L"." << std::setw(3) << std::setfill(L'0') << time_ms.count() << L"] ";
 
-            // Ïß³ÌÐÅÏ¢
+            // çº¿ç¨‹ä¿¡æ¯
             woss << L"[T:";
             if (!message.threadName.Empty()) woss << message.threadName.ToWString();
             else woss << message.tid;
             woss << L"] ";
 
-            // Êä³öÆ÷Ãû³Æ
+            // è¾“å‡ºå™¨åç§°
             woss << L"[" << (m_sinkName.Empty() ? L"UnknownSink" : m_sinkName.ToWString()) << L"] ";
 
-            // ÈÕÖ¾¼¶±ð
+            // æ—¥å¿—çº§åˆ«
             woss << L"[" << LevelToString(message.level).ToWString() << L"] ";
 
-            // ÊÇ·ñÊä³ö µ÷ÊÔÐÅÏ¢
+            // æ˜¯å¦è¾“å‡º è°ƒè¯•ä¿¡æ¯
             if (message.debug) {
-                // º¯ÊýÐÅÏ¢
+                // å‡½æ•°ä¿¡æ¯
                 woss << L"[Function:" << message.func << L"] ";
 
-                // ÎÄ¼þÐÅÏ¢
+                // æ–‡ä»¶ä¿¡æ¯
                 woss << L"(" << message.file << L":" << message.line << L") ";
             }
 
-            // ÈÕÖ¾ÏûÏ¢
+            // æ—¥å¿—æ¶ˆæ¯
             woss << message.msg.ToWString();
 
             return String(woss.str());

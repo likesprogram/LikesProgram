@@ -4,6 +4,7 @@
 #include "MainEventLoop.hpp"
 #include "Connection.hpp"
 #include "Channel.hpp"
+#include "Address.hpp"
 #include "Transport.hpp"
 #include "Broadcast.hpp"
 #include "../String.hpp"
@@ -24,9 +25,11 @@ namespace LikesProgram {
                 Stopping    // 正在停止
             };
             // 构造函数
-            explicit Server(std::vector<String>& addrs, unsigned short port, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
+            explicit Server(const Address& listenAddr, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
+            explicit Server(const std::vector<Address>& listenAddrs, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
             // 自定义轮询器
-            explicit Server(std::vector<String>& addrs, unsigned short port, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
+            explicit Server(const Address& listenAddr, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
+            explicit Server(const std::vector<Address>& listenAddrs, PollerFactory pollerFactory, ConnectionFactory connectionFactory, size_t subLoopCount = 0);
             ~Server();
 
             // 启动
@@ -44,9 +47,8 @@ namespace LikesProgram {
             // 获取广播器
             std::shared_ptr<Broadcast> GetBroadcast() noexcept;
         private:
-
             // 创建监听 socket
-            bool Listen(std::vector<String>& addrs);
+            bool Listen();
 
             // 设置 socket 为非阻塞模式
             int SetNonBlocking(SocketType fdOrSocket);
@@ -73,7 +75,8 @@ namespace LikesProgram {
             std::shared_ptr<MainEventLoop> m_mainLoop; // 主事件循环对象
             std::vector<SocketType> m_listenFds;
             std::vector<std::unique_ptr<Channel>> m_listenChannels;
-            unsigned short m_port = 0;                 // 监听端口号
+
+            std::vector<Address> m_listenAddrs;         // 监听地址
 
             std::thread m_mainThread;                  // 线程
             std::atomic<Status> m_status = Status::Stopped;

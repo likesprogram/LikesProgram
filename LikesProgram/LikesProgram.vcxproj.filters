@@ -141,6 +141,9 @@
     <ClCompile Include="src\LikesProgram\log\sinks\FileSink.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\net\Address.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp">
@@ -318,6 +321,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\log\sinks\FileSink.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\net\Address.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,19 +1,19 @@
-#pragma once
+ï»¿#pragma once
 #include "../../system/LikesProgramLibExport.hpp"
 #include "../LoggerType.hpp"
 
 namespace LikesProgram {
 	namespace Log {
-        // Sink ³éÏó½Ó¿Ú
+        // Sink æŠ½è±¡æ¥å£
         class LIKESPROGRAM_API Sink {
         public:
             virtual ~Sink() = default;
             Sink(const String& sinkName = u"");
 
-            // Ğ´ÈÕÖ¾½Ó¿Ú
+            // å†™æ—¥å¿—æ¥å£
             virtual void Write(const Message& message) = 0;
         protected:
-            // ¸ñÊ½»¯ÈÕÖ¾ÄÚÈİ
+            // æ ¼å¼åŒ–æ—¥å¿—å†…å®¹
             const String FormatLogMessage(const Message& message);
         private:
             String m_sinkName;
