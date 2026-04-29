@@ -1,52 +1,21 @@
-ï»¿#include "../../../include/LikesProgram/net/Transport.hpp"
+#include "../../../../include/LikesProgram/net/transports/TcpTransport.hpp"
 #include <cstdint>
 #include <algorithm>
-#if defined(_WIN32)
-#include <ws2tcpip.h>
-// Windows: errno ä¸é€‚ç”¨äº socketï¼Œä½¿ç”¨ WSAGetLastError
-static int GetSockErr() { return ::WSAGetLastError(); }
-static bool IsWouldBlock(int e) { return e == WSAEWOULDBLOCK; }
-static bool IsInterrupted(int e) { return e == WSAEINTR; }
-static void CloseSocket(SocketType fd) { ::closesocket(fd); }
-static int ShutdownWriteSock(SocketType fd) { return ::shutdown(fd, SD_SEND); }
-#else
-#include <unistd.h>
-#include <errno.h>
-#include <sys/socket.h>
-static int GetSockErr() { return errno; }
-static bool IsWouldBlock(int e) { return e == EAGAIN || e == EWOULDBLOCK; }
-static bool IsInterrupted(int e) { return e == EINTR; }
-static void CloseSocket(SocketType fd) { ::close(fd); }
-static int ShutdownWriteSock(SocketType fd) { return ::shutdown(fd, SHUT_WR); }
-#endif
 
 namespace LikesProgram {
     namespace Net {
-        static inline IoResult MakeOk(int64_t n) {
-            return { IoStatus::Ok, n, 0 };
-        }
-        static inline IoResult MakeWouldBlock() {
-            return { IoStatus::WouldBlock, 0, 0 };
-        }
-        static inline IoResult MakePeerClosed() {
-            return { IoStatus::PeerClosed, 0, 0 };
-        }
-        static inline IoResult MakeError(int err) {
-            return { IoStatus::Error, 0, err };
-        }
-
         IoResult TcpTransport::ReadSome(Buffer& in) {
             if (m_closed.load(std::memory_order_acquire) || m_fd == kInvalidSocket) {
                 return MakeError(/*err*/0);
             }
 
-            // å¾ªç¯è¯»å–ç›´åˆ° WouldBlockï¼ˆé€‚é… epoll ETï¼›LT ä¹Ÿæ— å®³ï¼‰
+            // Ñ­»·¶ÁÈ¡Ö±µ½ WouldBlock£¨ÊÊÅä epoll ET£»LT Ò²ÎŞº¦£©
             int64_t total = 0;
             for (;;) {
-                // å•æ¬¡æœ€å¤šæœŸæœ›è¯»å…¥ 64KBï¼ˆå¯æŒ‰éœ€è°ƒæ•´ï¼‰
+                // µ¥´Î×î¶àÆÚÍû¶ÁÈë 64KB£¨¿É°´Ğèµ÷Õû£©
                 constexpr size_t kMaxChunk = 64 * 1024;
 
-                // ç¡®ä¿æœ‰å¯å†™ç©ºé—´
+                // È·±£ÓĞ¿ÉĞ´¿Õ¼ä
                 in.EnsureWritableBytes(kMaxChunk);
 
                 uint8_t* dst = in.BeginWrite();
@@ -60,27 +29,27 @@ namespace LikesProgram {
                 if (n > 0) {
                     in.HasWritten(static_cast<size_t>(n));
                     total += static_cast<int64_t>(n);
-                    continue; // ETï¼šç»§ç»­è¯»
+                    continue; // ET£º¼ÌĞø¶Á
                 }
 
                 if (n == 0) {
-                    // å¯¹ç«¯ FINï¼Œè¯»åˆ° EOF
+                    // ¶Ô¶Ë FIN£¬¶Áµ½ EOF
                     if (total > 0) return MakeOk(total);
                     return MakePeerClosed();
                 }
 
                 // n < 0
                 const int err = GetSockErr();
-                if (IsInterrupted(err)) continue; // EINTRï¼šé‡è¯•
+                if (IsInterrupted(err)) continue; // EINTR£ºÖØÊÔ
 
                 if (IsWouldBlock(err)) {
-                    // éé˜»å¡è¯»å®Œäº†
+                    // ·Ç×èÈû¶ÁÍêÁË
                     if (total > 0) return MakeOk(total);
                     return MakeWouldBlock();
                 }
 
-                // çœŸå®é”™è¯¯
-                if (total > 0) return MakeOk(total); // å·²ç»æœ‰è¿›å±•ï¼Œå…ˆæŠŠè¿›å±•äº¤ç»™ä¸Šå±‚å¤„ç†
+                // ÕæÊµ´íÎó
+                if (total > 0) return MakeOk(total); // ÒÑ¾­ÓĞ½øÕ¹£¬ÏÈ°Ñ½øÕ¹½»¸øÉÏ²ã´¦Àí
                 return MakeError(err);
             }
         }
@@ -91,13 +60,13 @@ namespace LikesProgram {
             }
 
             if (p == nullptr || len == 0) {
-                // æ²¡æœ‰æ•°æ®å¯å†™ï¼šè¿™ä¸ç®—é”™è¯¯
+                // Ã»ÓĞÊı¾İ¿ÉĞ´£ºÕâ²»Ëã´íÎó
                 return MakeOk(0);
             }
 
             int64_t total = 0;
 
-            // å°½åŠ›å†™ï¼ˆå¯å†™å¤šå°‘å†™å¤šå°‘ï¼‰ï¼Œç›´åˆ° WouldBlock / å†™å®Œ
+            // ¾¡Á¦Ğ´£¨¿ÉĞ´¶àÉÙĞ´¶àÉÙ£©£¬Ö±µ½ WouldBlock / Ğ´Íê
             while (len > 0) {
 #if defined(_WIN32)
                 const int chunk = (len > static_cast<size_t>(INT_MAX)) ? INT_MAX : static_cast<int>(len);
@@ -121,7 +90,7 @@ namespace LikesProgram {
                     return MakeWouldBlock();
                 }
 
-                // çœŸå®é”™è¯¯
+                // ÕæÊµ´íÎó
                 if (total > 0) return MakeOk(total);
                 return MakeError(err);
             }
@@ -131,7 +100,7 @@ namespace LikesProgram {
 
         void TcpTransport::ShutdownWrite() {
             if (m_fd == kInvalidSocket) return;
-            // shutdown å¤±è´¥ä¸ä¸€å®šè‡´å‘½ï¼ˆæ¯”å¦‚å·²å…³é—­ï¼‰ï¼Œä¸å¼ºè¡Œæ ‡é”™
+            // shutdown Ê§°Ü²»Ò»¶¨ÖÂÃü£¨±ÈÈçÒÑ¹Ø±Õ£©£¬²»Ç¿ĞĞ±ê´í
             (void)ShutdownWriteSock(m_fd);
         }
 

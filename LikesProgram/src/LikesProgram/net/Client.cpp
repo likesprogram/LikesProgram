@@ -13,8 +13,6 @@
 #include <io.h>
 #pragma comment(lib, "ws2_32.lib")
 #include "../../../include/LikesProgram/net/pollers/WindowsSelectPoller.hpp"
-static int GetSockErr() { return ::WSAGetLastError(); }
-//static bool IsWouldBlock(int e) { return e == WSAEWOULDBLOCK; }
 static bool IsInProgress(int e) { return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
 static int SetNonBlockingSock(SocketType s) { u_long nb = 1; return ::ioctlsocket(s, FIONBIO, &nb); }
 #else
@@ -28,8 +26,6 @@ static int SetNonBlockingSock(SocketType s) { u_long nb = 1; return ::ioctlsocke
 #include <errno.h>
 #include <poll.h>
 #include "../../../include/LikesProgram/net/pollers/EpollPoller.hpp"
-static int GetSockErr() { return errno; }
-//static bool IsWouldBlock(int e) { return e == EAGAIN || e == EWOULDBLOCK; }
 static bool IsInProgress(int e) { return e == EINPROGRESS; }
 static int SetNonBlockingSock(SocketType s) {
 	int flags = ::fcntl(s, F_GETFL, 0);

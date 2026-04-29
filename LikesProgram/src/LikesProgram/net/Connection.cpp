@@ -61,6 +61,20 @@ namespace LikesProgram {
             SendInLoop(static_cast<const uint8_t*>(data), len);
         }
 
+        void Connection::RunInLoop(Task task) {
+            if (!m_loop) return;
+            if (m_loop->IsInLoopThread()) {
+                task();
+            } else {
+                m_loop->PostTask(std::move(task));
+            }
+        }
+
+        void Connection::QueueInLoop(Task task) {
+            if (!m_loop) return;
+            m_loop->PostTask(std::move(task));
+        }
+
         void Connection::AdoptChannel(std::unique_ptr<Channel> ch) {
             m_channelOwned = std::move(ch);
             m_channel = m_channelOwned.get();
@@ -258,7 +272,7 @@ namespace LikesProgram {
                 // 握手完成：恢复读关注；写关注按 outBuffer
                 EnableReading();
                 EnableWritingIfNeeded();
-                OnConnected();
+                OnHandshakeDone();
                 return true;
             }
 

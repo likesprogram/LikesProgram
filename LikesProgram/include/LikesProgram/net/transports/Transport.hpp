@@ -1,7 +1,25 @@
 ﻿#pragma once
-#include "Buffer.hpp"
-#include "SocketType.hpp"
+#include "../Buffer.hpp"
+#include "../SocketType.hpp"
 #include <atomic>
+#if defined(_WIN32)
+#include <ws2tcpip.h>
+inline int GetSockErr() { return ::WSAGetLastError(); }
+inline bool IsWouldBlock(int e) { return e == WSAEWOULDBLOCK; }
+inline bool IsInterrupted(int e) { return e == WSAEINTR; }
+inline void CloseSocket(SocketType fd) { ::closesocket(fd); }
+inline int ShutdownWriteSock(SocketType fd) { return ::shutdown(fd, SD_SEND); }
+#else
+#include <unistd.h>
+#include <errno.h>
+#include <sys/socket.h>
+inline int GetSockErr() { return errno; }
+inline bool IsWouldBlock(int e) { return e == EAGAIN || e == EWOULDBLOCK; }
+inline bool IsInterrupted(int e) { return e == EINTR; }
+inline void CloseSocket(SocketType fd) { ::close(fd); }
+inline int ShutdownWriteSock(SocketType fd) { return ::shutdown(fd, SHUT_WR); }
+#endif
+
 
 namespace LikesProgram {
     namespace Net {
@@ -45,21 +63,14 @@ namespace LikesProgram {
             virtual bool RemainWantRead() const { return true; }
             virtual bool RemainWantWrite() const { return false; }
         protected:
+            static IoResult MakeOk(int64_t n);
+            static IoResult MakeWouldBlock();
+            static IoResult MakePeerClosed();
+            static IoResult MakeError(int err);
+
+        protected:
             SocketType m_fd = kInvalidSocket;
             std::atomic<bool> m_closed = false;
-        };
-
-        // TCP 明文传输实现
-        class TcpTransport : public Transport {
-        public:
-            explicit TcpTransport(SocketType fd) : Transport(fd) {}
-            ~TcpTransport() override { Close(); }
-
-            IoResult ReadSome(Buffer& in) override;
-            IoResult WriteSome(const uint8_t* p, size_t len) override;
-
-            void ShutdownWrite() override;
-            void Close() override;
         };
     }
 }

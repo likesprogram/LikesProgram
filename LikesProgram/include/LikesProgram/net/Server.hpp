@@ -5,7 +5,6 @@
 #include "Connection.hpp"
 #include "Channel.hpp"
 #include "Address.hpp"
-#include "Transport.hpp"
 #include "Broadcast.hpp"
 #include "../String.hpp"
 #include <condition_variable>

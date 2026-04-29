@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "Buffer.hpp"
-#include "Transport.hpp"
+#include "transports/Transport.hpp"
 #include "Broadcast.hpp"
 #include "Address.hpp"
 #include <memory>
@@ -14,6 +14,7 @@ namespace LikesProgram {
         class Server;
         class Connection : public std::enable_shared_from_this<Connection> {
         public:
+            using Task = std::function<void()>;
             using CloseCallback = std::function<void(Connection&)>;
 
             enum class State {
@@ -40,6 +41,12 @@ namespace LikesProgram {
 
             // 发送数据
             void Send(const void* data, size_t len);
+
+            // 在事件循环线程执行任务
+            void RunInLoop(Task task);
+
+            // 将任务投递到事件循环线程
+            void QueueInLoop(Task task);
 
             void AdoptChannel(std::unique_ptr<Channel> ch);
 
