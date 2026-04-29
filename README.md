@@ -99,6 +99,7 @@ LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标�
 * [7. Logger（日志系统）](#7-logger日志系统)
 * [8. System / Utils（系统与通用工具）](#8-system--utils系统与通用工具)
 * [9. Configuration（配置管理）](#9-configuration配置管理)
+* [10. Net（基于Rector模型的网络库）](#10-net-基于Rector模型的网络库)
 
 ---
 
@@ -297,6 +298,29 @@ Configuration 是一个 **结构上类似 JSON 的配置对象模型**，用于�
 示例：
 
 * `include/test/ConfigurationTest.hpp`
+
+---
+
+### 10. Net（基于Rector模型的网络库）
+
+路径：`include/LikesProgram/net/*`
+
+Metrics 是一个 **面向长期运行服务的工程级指标系统**，而非简单计数工具。
+
+支持的指标类型：
+
+* `Server`：服务器类
+* `Client`：客户端类
+* `Connection`：消息处理基类
+* `Buffer`：网络传输数据
+
+特性：
+
+* 事件驱动
+
+示例：
+
+* `include/test/ServerTest.hpp`
 
 ---
 
