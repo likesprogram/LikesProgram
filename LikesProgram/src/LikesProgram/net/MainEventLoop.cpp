@@ -106,8 +106,6 @@ namespace LikesProgram {
             // 约定：main loop 注册的 channel 就是 listen socket 的 channel
             // activeChannels 里每个可读事件都表示有新连接可 accept
             for (Channel* ch : activeChannels) {
-                if (!ch) continue;
-
                 // main loop 只关心 Read（accept）
                 if ((ch->Revents() & IOEvent::Read) == IOEvent::None) continue;
 

@@ -77,14 +77,35 @@ namespace LikesProgram {
             // 有 wakeup：可以无限阻塞，靠 Wakeup() 打断
             const int pollTimeout = m_hasWakeup ? -1 : m_pollTimeoutMs;
             std::vector<Channel*> active;
+            std::vector<Channel*> ioActive;
             while (m_running.load(std::memory_order_acquire)) {
                 active.clear();
+                ioActive.clear();
 
-                // poll
+                // 等待 IO / wakeup 事件
                 m_poller->Poll(pollTimeout, active);
 
-                // dispatch
-                if (!active.empty()) ProcessEvents(active);
+                // 先由 EventLoop 基类统一消费内部 wakeup 事件
+                // 防止 许派生类 MainEventLoop 把 wakeup fd 当成 listen fd 去 accept
+                if (!active.empty()) {
+                    ioActive.reserve(active.size());
+
+                    for (Channel* ch : active) {
+                        if (!ch) continue;
+                        if (m_hasWakeup && m_wakeupChannel && ch == m_wakeupChannel.get()) {
+                            HandleWakeupRead();
+                            continue;
+                        }
+                        ioActive.push_back(ch);
+                    }
+                }
+                // 如果 Shutdown() 已经把 m_running 置为 false，则不要再派发业务 IO
+                // 但 wakeup 已经被读空，不会造成下次空转
+                if (!m_running.load(std::memory_order_acquire)) break;
+
+                // 只把真正的业务 IO 事件交给 ProcessEvents()
+                // 派生类 MainEventLoop::ProcessEvents() 此时只会收到 listen fd
+                if (!ioActive.empty()) ProcessEvents(ioActive);
 
                 // tasks
                 ProcessPendingTasks();
@@ -246,13 +267,6 @@ namespace LikesProgram {
 
         void EventLoop::ProcessEvents(const std::vector<Channel*>& activeChannels) {
             for (Channel* ch : activeChannels) {
-                if (!ch) continue;
-
-                if (m_hasWakeup && m_wakeupChannel && ch == m_wakeupChannel.get()) {
-                    HandleWakeupRead();
-                    continue;
-                }
-
                 SocketType fd = ch->GetSocket();
 
                 std::shared_ptr<Connection> conn;
