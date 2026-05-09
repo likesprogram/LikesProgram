@@ -17,6 +17,15 @@ LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标�
 
 ## 使用说明
 
+### 第三方依赖
+
+LikesProgram 当前使用 OpenSSL 提供 TLS/SSL 与加密传输能力。
+如果使用 vcpkg，可在启用 manifest 模式后由 `vcpkg.json` 自动安装依赖：
+
+```bash
+vcpkg install
+```
+
 ### 编译
 
 1. 确保已安装 [CMake](https://cmake.org/)（≥ 3.15），以及 C++20 语言支持
@@ -99,7 +108,7 @@ LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标�
 * [7. Logger（日志系统）](#7-logger日志系统)
 * [8. System / Utils（系统与通用工具）](#8-system--utils系统与通用工具)
 * [9. Configuration（配置管理）](#9-configuration配置管理)
-* [10. Net（基于Rector模型的网络库）](#10-net基于rector模型的网络库)
+* [10. Net（基于 Reactor 模型的网络库）](#10-net基于-reactor-模型的网络库)
 
 ---
 
@@ -301,23 +310,30 @@ Configuration 是一个 **结构上类似 JSON 的配置对象模型**，用于�
 
 ---
 
-### 10. Net（基于Rector模型的网络库）
+### 10. Net（基于 Reactor 模型的网络库）
 
 路径：`include/LikesProgram/net/*`
 
-Net 是一个 **基于Rector模型的网络库**，采用面向对象的封装方法，极大地简化了使用门槛。
-支持 TLS，需要自己初始化后在连接成功后手动调用 Connection::StartTlsAfterWriteComplete(SSL_CTX* sslCtx, TlsMode mode)。
+Net 模块提供一套基于事件驱动 Reactor 模型的网络编程基础组件，
+用于构建 TCP 客户端、服务端、连接管理、缓冲区读写以及 TLS 传输能力。
 
-支持的指标类型：
+核心组件：
 
-* `Server`：服务器类
-* `Client`：客户端类
-* `Connection`：消息处理基类
-* `Buffer`：网络传输数据
+- `Server`：服务端封装
+- `Client`：客户端封装
+- `Connection`：连接与事件处理基类
+- `Buffer`：网络读写缓冲区
+- `Transport`：传输层抽象
+- `TcpTransport`：普通 TCP 传输
+- `TlsTransport`：基于 OpenSSL 的 TLS 传输
 
 特性：
 
-* 事件驱动
+- 基于事件循环的非阻塞 I/O
+- 支持连接级读写缓冲
+- 支持 TCP/TLS 传输层抽象
+- 支持 STARTTLS 类协议的连接升级场景
+- 适合服务端、客户端和长期运行网络程序
 
 示例：
 
