@@ -305,7 +305,8 @@ Configuration 是一个 **结构上类似 JSON 的配置对象模型**，用于�
 
 路径：`include/LikesProgram/net/*`
 
-Metrics 是一个 **面向长期运行服务的工程级指标系统**，而非简单计数工具。
+Net 是一个 **基于Rector模型的网络库**，采用面向对象的封装方法，极大地简化了使用门槛。
+支持 TLS，需要自己初始化后在连接成功后手动调用 Connection::StartTlsAfterWriteComplete(SSL_CTX* sslCtx, TlsMode mode)。
 
 支持的指标类型：
 
