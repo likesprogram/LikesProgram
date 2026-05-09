@@ -3,6 +3,12 @@
 
 namespace LikesProgram {
     namespace Net {
+        SocketType Transport::DetachFd() noexcept {
+            SocketType fd = m_fd;
+            m_fd = kInvalidSocket;
+            m_closed.store(true, std::memory_order_release);
+            return fd;
+        }
         IoResult Transport::MakeOk(int64_t n) {
             return { IoStatus::Ok, n, 0 };
         }

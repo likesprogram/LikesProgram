@@ -33,11 +33,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # =========================
 # 收集源文件和头文件
 # =========================
-file(GLOB_RECURSE LP_HEADERS
+file(GLOB_RECURSE LP_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LikesProgram/*.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/include/LikesProgram/*.h
 )
-file(GLOB_RECURSE LP_SOURCES
+file(GLOB_RECURSE LP_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LikesProgram/*.cpp
 )
 
@@ -55,7 +55,14 @@ target_include_directories(LikesProgram
 
 # ---- 添加线程支持 ----
 find_package(Threads REQUIRED)
-target_link_libraries(LikesProgram INTERFACE Threads::Threads)
+# ---- 添加SSL/TLS支持 ----
+find_package(OpenSSL REQUIRED)
+target_link_libraries(LikesProgram
+    PUBLIC
+        Threads::Threads
+        OpenSSL::SSL
+        OpenSSL::Crypto
+)
 
 # ---------- 输出名和目录 ----------
 if (BUILD_SHARED_LIBS)
@@ -123,12 +130,10 @@ if (ENABLE_EXAMPLES)
     # Demo 可执行文件（把所有源文件都编进去）
     add_executable(LikesProgramDemo
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-        ${LP_HEADERS}
-        ${LP_SOURCES}
         ${TEST_HEADERS}
     )
-    # 仅示例程序链接线程库
-    target_link_libraries(LikesProgramDemo PRIVATE Threads::Threads)
+
+    target_link_libraries(LikesProgramDemo PRIVATE LikesProgram)
 
     # 头文件搜索路径
     target_include_directories(LikesProgramDemo PRIVATE

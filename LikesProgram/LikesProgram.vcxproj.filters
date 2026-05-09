@@ -147,6 +147,9 @@
     <ClCompile Include="src\LikesProgram\net\transports\TcpTransport.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\LikesProgram\net\transports\TlsTransport.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\LikesProgram\system\LikesProgramLibExport.hpp">
@@ -330,6 +333,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="include\LikesProgram\net\transports\TcpTransport.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\LikesProgram\net\transports\TlsTransport.hpp">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

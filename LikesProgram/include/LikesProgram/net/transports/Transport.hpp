@@ -43,6 +43,9 @@ namespace LikesProgram {
             explicit Transport(SocketType fd) : m_fd(fd) {}
             virtual ~Transport() = default;
 
+            // 关闭通信描述符
+            SocketType DetachFd() noexcept;
+
             // 从 socket/ssl 读到 inBuffer（append），返回结果
             virtual IoResult ReadSome(Buffer& in) = 0;
 

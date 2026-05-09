@@ -1,6 +1,7 @@
 ﻿#include "../../../include/LikesProgram/net/Connection.hpp"
 #include "../../../include/LikesProgram/net/Channel.hpp"
 #include "../../../include/LikesProgram/net/EventLoop.hpp"
+#include "../../../include/LikesProgram/net/transports/TlsTransport.hpp"
 #include <iostream>
 
 namespace LikesProgram {
@@ -193,7 +194,8 @@ namespace LikesProgram {
             // outBuffer 已空：关写事件，通知业务“写完了”
             if (m_outBuffer.ReadableBytes() == 0) {
                 DisableWriting();
-                if (madeProgress) OnWriteComplete();
+                RefreshChannelEvents();
+                if (madeProgress) NotifyWriteComplete();
             }
 
             // Closing 且已写完：shutdownWrite（发送 FIN / TLS close_notify 由 Transport 决定）
@@ -208,6 +210,19 @@ namespace LikesProgram {
 
         void Connection::HandleError() {
             DoClose(/*notify*/true);
+        }
+
+        void Connection::StartTlsAfterWriteComplete(SSL_CTX* sslCtx, TlsMode mode) {
+            m_pendingTlsMode = mode;
+            if (!sslCtx || m_state == State::Closed) return;
+            if (m_loop && !m_loop->IsInLoopThread()) {
+                auto self = shared_from_this();
+                m_loop->PostTask([self, sslCtx, mode]() {
+                    self->StartTlsAfterWriteCompleteInLoop(sslCtx, mode);
+                });
+                return;
+            }
+            StartTlsAfterWriteCompleteInLoop(sslCtx, mode);
         }
 
         std::shared_ptr<Broadcast> Connection::GetBroadcast() const noexcept {
@@ -230,6 +245,15 @@ namespace LikesProgram {
         void Connection::SendInLoop(const uint8_t* data, size_t len) {
             if (!m_transport || m_state == State::Closed) return;
 
+            // TLS 握手阶段不直接写应用层数据，先入队
+            if (m_transport->NeedHandshake()) {
+                m_outBuffer.Append(data, len);
+                EnableReading();
+                EnableWriting();
+                RefreshChannelEvents();
+                return;
+            }
+
             // outBuffer 为空：尝试直接写，减少延迟
             if (m_outBuffer.ReadableBytes() == 0) {
                 const IoResult r = m_transport->WriteSome(data, len);
@@ -242,7 +266,7 @@ namespace LikesProgram {
                     }
                     else {
                         // 全部直接写完
-                        OnWriteComplete();
+                        NotifyWriteComplete();
                     }
                     return;
                 }
@@ -271,7 +295,8 @@ namespace LikesProgram {
             if (r.status == IoStatus::Ok) {
                 // 握手完成：恢复读关注；写关注按 outBuffer
                 EnableReading();
-                EnableWritingIfNeeded();
+                if (m_outBuffer.ReadableBytes() > 0) EnableWriting(); else DisableWriting();
+                RefreshChannelEvents();
                 OnHandshakeDone();
                 return true;
             }
@@ -280,6 +305,7 @@ namespace LikesProgram {
                 // WANT_READ/WANT_WRITE：动态调整关注事件（Channel 需支持 DisableReading/DisableWriting）
                 if (m_transport->RemainWantRead()) EnableReading(); else DisableReading();
                 if (m_transport->RemainWantWrite()) EnableWriting(); else DisableWriting();
+                RefreshChannelEvents();
                 return false;
             }
 
@@ -335,6 +361,63 @@ namespace LikesProgram {
                 m_channel->EnableWriting();
                 if (m_loop) m_loop->UpdateChannel(m_channel);
             }
+        }
+
+        void Connection::StartTlsAfterWriteCompleteInLoop(SSL_CTX* sslCtx, TlsMode mode) {
+            if (!sslCtx || m_state == State::Closed || !m_transport) return;
+
+            if (m_tlsEnabled || m_tlsUpgradePending) return;
+
+            m_tlsUpgradePending = true;
+            m_pendingSslCtx = sslCtx;
+            m_pendingTlsMode = mode;
+
+            if (m_outBuffer.ReadableBytes() == 0) {
+                UpgradeToTlsInLoop(sslCtx, mode);
+                return;
+            }
+
+            EnableWritingIfNeeded();
+        }
+
+
+        void Connection::UpgradeToTlsInLoop(SSL_CTX* sslCtx, TlsMode mode) {
+            if (!sslCtx || m_state == State::Closed || !m_transport) return;
+
+            if (m_tlsEnabled) return;
+
+            if (m_outBuffer.ReadableBytes() != 0) {
+                EnableWritingIfNeeded();
+                return;
+            }
+
+            // 旧 Transport 脱离 fd
+            SocketType fd = m_transport->DetachFd();
+            // 替换为 TLS Transport
+            m_transport = std::make_unique<TlsTransport>(fd, sslCtx, mode);
+
+            m_tlsEnabled = true;
+            m_tlsUpgradePending = false;
+            m_pendingSslCtx = nullptr;
+
+            EnableReading();
+            EnableWriting();
+            RefreshChannelEvents();
+
+            // 主动推进一次握手
+            AdvanceHandshake();
+        }
+
+        void Connection::NotifyWriteComplete() {
+            OnWriteComplete();
+
+            if (m_tlsUpgradePending && m_outBuffer.ReadableBytes() == 0 && m_pendingSslCtx) {
+                UpgradeToTlsInLoop(m_pendingSslCtx, m_pendingTlsMode);
+            }
+        }
+
+        void Connection::RefreshChannelEvents() {
+            if (m_channel && m_loop) m_loop->UpdateChannel(m_channel);
         }
 	}
 }

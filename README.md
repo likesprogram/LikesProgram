@@ -416,5 +416,17 @@ README.md                      // 设计背景与模块关系
 
 ## 许可证
 
-本库采用 **BSD 3-Clause License**，详见 LICENSE 文件。
-Licensed under the BSD 3-Clause License. See LICENSE for details.
+LikesProgram 采用 **Apache License 2.0** 开源。
+
+你可以在遵守许可证条款的前提下，自由使用、复制、修改、分发本项目，
+包括用于商业项目和闭源项目。
+
+需要注意：
+
+- 原始版权声明和许可证声明必须保留；
+- 修改后的文件应明确标注修改；
+- 不得使用作者、项目名或贡献者名义为衍生项目进行背书；
+- 本项目按“现状”提供，不对适用性、稳定性或安全性作任何保证；
+- 第三方依赖仍受其各自许可证约束。
+
+详见仓库中的 `LICENSE` 与 `NOTICE`。

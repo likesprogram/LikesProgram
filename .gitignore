@@ -30,6 +30,7 @@ Release/
 x64/
 x86/
 bin/
+logs/
 build/
 out/
 
@@ -51,6 +52,7 @@ Makefile
 
 # ================= 第三方库 build 文件 =================
 third_party/*/build/
+vcpkg_installed/
 
 # ================= 保留的源码和文档 =================
 # 只跟踪以下文件类型

@@ -6,35 +6,79 @@ Author: 龙兵寅
 Website: https://likesprogram.com
 GitHub: https://github.com/likesprogram/LikesProgram
 
-This project is licensed under the BSD 3-Clause License.
-See the LICENSE file for full license text.
+Copyright 2025 龙兵寅
+
+Licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+--------------------------------------------------------
+
+Project Statement
+-----------------
+
+LikesProgram is a modern C++20 infrastructure library that provides
+reusable components for long-running services, tooling, and network
+applications.
+
+This project includes modules for Unicode strings, formatting,
+configuration, metrics, threading, logging, system utilities, and
+event-driven networking.
+
+The official project name, website, repository address, and author
+information are provided for attribution and identification purposes.
+They may not be used to endorse or promote derived products without
+prior written permission.
 
 --------------------------------------------------------
 
 Third-Party Components
 ----------------------
 
-LikesProgram currently does not embed or redistribute any third-party
-libraries as compiled dependencies.
+LikesProgram may link against third-party libraries when optional
+features are enabled or when the project is built with package managers
+such as vcpkg.
 
-The following third-party data or specifications may be used during
-the development or code generation process:
+LikesProgram does not embed the source code of the following third-party
+libraries in this repository. They are used as external dependencies and
+remain subject to their own license terms.
+
+- OpenSSL
+  License: Apache License 2.0
+  Website: https://www.openssl.org
+  Source: https://github.com/openssl/openssl
+
+  OpenSSL is used to provide TLS/SSL and cryptographic functionality,
+  including encrypted network transports, certificate handling, and
+  TLS-enabled client/server communication.
+
+  OpenSSL is a separate third-party component. This NOTICE file does
+  not replace the OpenSSL license text. When distributing binaries that
+  link against OpenSSL, include the applicable OpenSSL license file and
+  comply with its license terms.
+
+--------------------------------------------------------
+
+Third-Party Data and Specifications
+-----------------------------------
+
+The following third-party data or specifications may be used during the
+development or code generation process:
 
 - UnicodeData.txt
   License: Unicode License
   Source: https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
 
-  This data is used to generate Unicode case-mapping tables
-  (BMP / SMP conversion logic) within LikesProgram.
-  The generated tables are derived works based on the Unicode Character Database.
+  This data is used to generate Unicode case-mapping tables within
+  LikesProgram. The generated tables are derived works based on the
+  Unicode Character Database.
 
 --------------------------------------------------------
 
 Acknowledgments
-----------------
+---------------
 
 If you use LikesProgram in your project, attribution is appreciated
-but not required.
+but not required beyond the requirements of the Apache License 2.0.
 
 Example acknowledgment:
 

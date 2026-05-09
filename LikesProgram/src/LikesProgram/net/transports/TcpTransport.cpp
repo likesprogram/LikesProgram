@@ -110,7 +110,7 @@ namespace LikesProgram {
             }
             if (m_fd != kInvalidSocket) {
                 CloseSocket(m_fd);
-                m_fd = (SocketType)-1;
+                m_fd = kInvalidSocket;
             }
         }
     }

@@ -1,67 +1,18 @@
-BSD 3-Clause License
+Apache License
+Version 2.0, January 2004
 
-Copyright (c) 2025, 龙兵寅
-All rights reserved.
+Copyright 2025 龙兵寅
 
-Project: LikesProgram
-Website: https://likesprogram.com
-GitHub: https://github.com/likesprogram/LikesProgram
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this project except in compliance with the License.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+You may obtain a copy of the License at:
 
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
+    https://www.apache.org/licenses/LICENSE-2.0
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
-3. Neither the name of the copyright holder nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
-
---------------------------------------------------------
-
-Author Attribution (Optional)
-
-If you use LikesProgram in your project,
-the author would greatly appreciate an acknowledgment
-in your documentation or acknowledgments section, for example:
-
-"This project uses the LikesProgram library.
- https://github.com/likesprogram/LikesProgram"
-
---------------------------------------------------------
-
-中文说明：
-
-本项目采用 BSD 3-Clause License 进行许可。
-允许在保留版权声明和许可条款的前提下，自由使用、复制、修改和分发，
-包括用于商业和闭源项目。
-
-本软件按“现状”提供，不对其适用性、稳定性或安全性作任何保证，
-使用者需自行承担由此产生的风险。
-
---------------------------------------------------------
-
-作者署名（非强制）：
-
-如果您在项目中使用了 LikesProgram，
-作者将非常感谢您在文档或致谢中提及本项目，例如：
-
-“本项目使用了 LikesProgram 库
-https://github.com/likesprogram/LikesProgram”
-
+See the Apache License, Version 2.0 for the specific language governing
+permissions and limitations under the License.
