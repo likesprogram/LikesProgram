@@ -1,3 +1,18 @@
+# ================= 保留的源码和文档 =================
+# 只跟踪以下文件类型
+!*.cpp
+!*.c
+!*.h
+!*.hpp
+!*.inl
+!*.sln
+!*.vcxproj
+!*.txt
+!*.md
+!*.json
+!LICENSE
+!NOTICE
+
 # ================= Visual Studio =================
 .vs/
 *.vcxproj.user
@@ -24,6 +39,11 @@
 *.tlog/
 *.lastbuildstate
 
+# ================== 设计文件 ==================
+*.aps
+*.ncb
+docs/
+
 # ================= Build 输出 =================
 Debug/
 Release/
@@ -31,7 +51,7 @@ x64/
 x86/
 bin/
 logs/
-build/
+build*/
 out/
 
 # ================= CMake =================
@@ -39,6 +59,8 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+CMakeSettings.json
+CMakeUserPresets.json
 
 # ================= VSCode =================
 .vscode/
@@ -53,18 +75,3 @@ Makefile
 # ================= 第三方库 build 文件 =================
 third_party/*/build/
 vcpkg_installed/
-
-# ================= 保留的源码和文档 =================
-# 只跟踪以下文件类型
-!*.cpp
-!*.c
-!*.h
-!*.hpp
-!*.inl
-!*.sln
-!*.vcxproj
-!*.txt
-!*.md
-!*.json
-!LICENSE
-!NOTICE

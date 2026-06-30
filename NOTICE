@@ -34,27 +34,13 @@ prior written permission.
 Third-Party Components
 ----------------------
 
-LikesProgram may link against third-party libraries when optional
-features are enabled or when the project is built with package managers
-such as vcpkg.
+The current LikesProgram source tree does not embed third-party library
+source code and the currently available modules do not declare or link
+against OpenSSL or other third-party runtime libraries.
 
-LikesProgram does not embed the source code of the following third-party
-libraries in this repository. They are used as external dependencies and
-remain subject to their own license terms.
-
-- OpenSSL
-  License: Apache License 2.0
-  Website: https://www.openssl.org
-  Source: https://github.com/openssl/openssl
-
-  OpenSSL is used to provide TLS/SSL and cryptographic functionality,
-  including encrypted network transports, certificate handling, and
-  TLS-enabled client/server communication.
-
-  OpenSSL is a separate third-party component. This NOTICE file does
-  not replace the OpenSSL license text. When distributing binaries that
-  link against OpenSSL, include the applicable OpenSSL license file and
-  comply with its license terms.
+If future optional packages introduce external dependencies, those
+dependencies should be documented here and remain subject to their own
+license terms.
 
 --------------------------------------------------------
 

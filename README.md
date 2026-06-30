@@ -1,449 +1,342 @@
 # LikesProgram
 
-## 简介
+LikesProgram 是一个 C++20 基础组件库。它采用“Core + 可选扩展包”的结构：先提供稳定、轻量、无第三方重依赖的公共基础能力，再按功能域拆成日志、配置、指标、线程、网络等独立包。
 
-LikesProgram 是一个 **现代 C++（C++20）通用基础设施库**，目标不是“做大而全的框架”，而是提供一组**工程中反复会用到、但标准库没给全、第三方库又太重**的基础组件。
+当前版本可用的模块有：
 
-它更像一个“工具箱”：每个模块都可以单独使用，也可以自然地组合在一起，适合写 **服务端程序、基础设施、工具链、长期维护的工程**。
+| 模块 | CMake target | 默认构建 | 用途 | 手册 |
+| --- | --- | --- | --- | --- |
+| LikesProgramCore | `LikesProgram::Core` | 是 | Unicode 字符串、格式化、时间、状态返回、平台信息、字节视图等基础能力 | [packages/LikesProgramCore/README.md](packages/LikesProgramCore/README.md) |
+| LikesProgramLogging | `LikesProgram::Logging` | 否，需要手动开启 | 异步日志、控制台/文件输出、结构化 JSON Lines、上下文字段、失败重试、多进程文件写入、运行时配置与诊断 | [packages/LikesProgramLogging/README.md](packages/LikesProgramLogging/README.md) |
+| LikesProgramConfig | `LikesProgram::Config` | 否，需要手动开启 | `key=value`、JSON、YAML、TOML、值树、类型安全读取、默认值回退和 Schema 校验 | [packages/LikesProgramConfig/README.md](packages/LikesProgramConfig/README.md) |
 
-项目强调：
+后续版本可能继续提供 `LikesProgramMetrics`、`LikesProgramThreading`、`LikesProgramThreadingMetrics`、`LikesProgramNet`、`LikesProgramNetTls` 等包。当前版本请只使用上表中的模块；如果开启当前版本暂不提供的包，CMake 会提示该包不可用。
 
-* 明确的所有权与生命周期（避免隐式魔法）
-* 可测试性（`include/test` 中提供大量使用示例）
-* 接近 STL / 标准库的接口风格
-* 跨平台（Windows / Linux）
+## 版本信息
 
----
+当前版本是 `1.0.0`。
 
-## 使用说明
+在程序里可以通过 Core 提供的版本 API 读取当前库版本：
 
-### 第三方依赖
+```cpp
+#include <LikesProgram/Core/Version.hpp>
 
-LikesProgram 当前使用 OpenSSL 提供 TLS/SSL 与加密传输能力。
-如果使用 vcpkg，可在启用 manifest 模式后由 `vcpkg.json` 自动安装依赖：
+auto info = LikesProgram::Version::Current();
+auto text = LikesProgram::Version::CurrentString(); // "1.0.0"
+
+if (LikesProgram::Version::IsAtLeast(1, 0, 0)) {
+    // 当前版本至少是 1.0.0
+}
+```
+
+扩展包也提供包名、版本和可用性检查，便于二次开发时输出诊断信息：
+
+```cpp
+#include <LikesProgram/Logging/Logging.hpp>
+#include <LikesProgram/Config/Config.hpp>
+
+const char* loggingVersion = LikesProgram::Logging::PackageVersion();
+const char* configVersion = LikesProgram::Config::PackageVersion();
+bool loggingAvailable = LikesProgram::Logging::PackageAvailable();
+bool configAvailable = LikesProgram::Config::PackageAvailable();
+```
+
+## 目录结构
+
+```text
+LikesProgram/
+  CMakeLists.txt                     # 总构建入口
+  AGENTS.md                          # 兼容只读根 AGENTS 的工具，指向 .agents/AGENTS.md
+  .agents/
+    AGENTS.md                        # 协作者与 Vibe Coding 工具优先读取的约束正文
+  cmake/                             # install 后给 find_package 使用的配置模板
+  docs/
+    plans/                           # 重构计划和路线说明
+    progress/                        # TASKS、进度大屏和本地服务脚本
+  packages/
+    LikesProgramCore/                # 基础包，始终构建
+    LikesProgramLogging/             # 日志扩展包，默认不构建
+    LikesProgramConfig/              # 配置扩展包，默认不构建
+  tools/
+    likesprogram-doctor/             # 发布包与外部消费方诊断工具
+```
+
+生成目录如 `build*`、`out`、`.vs` 是本地构建产物，不是源码接口的一部分。
+
+## 环境要求
+
+最低要求：
+
+- CMake 3.15 或更新版本
+- 支持 C++20 的编译器
+- Windows 推荐 Visual Studio 2022 MSVC；Linux/macOS 推荐 GCC 11+ 或 Clang 14+
+
+当前源码没有引入第三方库。Core、Logging、Config 都只依赖 C++ 标准库和系统 API。
+
+## 一分钟构建
+
+如果你只是想先确认项目能编译，按下面做。
+
+Windows PowerShell：
+
+```powershell
+cd C:\Users\TX2\Desktop\LikesProgramProjects\LikesProgram
+cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON
+cmake --build build --config Debug
+ctest --test-dir build --output-on-failure -C Debug
+```
+
+Linux/macOS：
 
 ```bash
-vcpkg install
+cd /path/to/LikesProgram
+cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-### 编译
-
-1. 确保已安装 [CMake](https://cmake.org/)（≥ 3.15），以及 C++20 语言支持
-
-2. 在项目根目录下新建一个 `build` 目录并进入：
-
-    ```bash
-    mkdir build
-    cd build
-    ```
-
-3. 运行 CMake 配置命令：
-
-    ```bash
-    cmake ..
-    ```
-
-    常用选项：
-
-    * `-DBUILD_SHARED_LIBS=[ON|OFF]` 是否生成动态库（ON）或静态库（OFF），默认：ON（动态库）。
-    * `-DENABLE_EXAMPLES=[ON|OFF]` 是否构建示例程序 `LikesProgramDemo`，默认：OFF。
-    * `-DENABLE_STRICT_WARNINGS=[ON|OFF]` 是否开启编译器严格警告，默认：ON。
-
-4. 如需修改安装路径，可编辑 `build/cmake_install.cmake` 文件，将 `CMAKE_INSTALL_PREFIX` 设置为目标安装目录。
-
-5. 编译并安装：
-- 配置
-    ```bash
-    cmake -S ./LikesProgram -B build -DBUILD_SHARED_LIBS=OFF -DENABLE_EXAMPLES=ON -DENABLE_STRICT_WARNINGS=ON -DCMAKE_CXX_COMPILER=g++-11
-    ```
-    `Windows` 可以使用以下代码，或是直接使用 `Visual Studio` 构建
-    ```bash
-    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S .\LikesProgram -B build -DBUILD_SHARED_LIBS=OFF -DENABLE_EXAMPLES=ON -DENABLE_STRICT_WARNINGS=ON
-    ```
-- 编译
-    ```bash
-    cmake --build build -j
-    ```
-
-- 安装
-    - 需要先修改 `build` 目录中的 `cmake_install.cmake` 中的安装目录 `set(CMAKE_INSTALL_PREFIX "/home/makeos/Desktop/LikesProgram/bin")`
-    ```bash
-    cmake --build build --target install
-    ```
-
-6. 安装完成后，在 `CMAKE_INSTALL_PREFIX` 目录下会看到：
-    ```
-    include/   # 头文件
-    lib/       # 库文件 (LikesProgram.lib / LikesProgram.dll 或 .a / .so)
-    ```
-
-### 使用方法
-
-1. 在项目中包含头文件：
-     ```cpp
-    #include <LikesProgram/String.hpp>
-    #include <LikesProgram/Timer.hpp>
-    // ...
-     ```
-2. 链接库：
-    * Windows (MSVC)：
-        ```cmake
-        target_link_libraries(your_target PRIVATE LikesProgram)
-        ```
-    * Linux/macOS：
-        ```bash
-        g++ main.cpp -I/path/to/include -L/path/to/lib -lLikesProgram
-        ```
-
----
-
-## 模块概览
-
-* [1. String（Unicode 字符串）](#1-stringunicode-字符串)
-* [2. StringFormat（类型安全的格式化系统）](#2-stringformat类型安全的格式化系统)
-* [3. Math（向量与数学工具）](#3-math向量与数学工具)
-* [4. Metrics（指标系统）](#4-metrics指标系统)
-* [5. Threading（线程池）](#5-threading线程池)
-* [6. Time（时间工具）](#6-time时间工具)
-* [7. Logger（日志系统）](#7-logger日志系统)
-* [8. System / Utils（系统与通用工具）](#8-system--utils系统与通用工具)
-* [9. Configuration（配置管理）](#9-configuration配置管理)
-* [10. Net（基于 Reactor 模型的网络库）](#10-net基于-reactor-模型的网络库)
-
----
-
-### 1. String（Unicode 字符串）
-
-路径：`include/LikesProgram/String.hpp`
-
-String 是 LikesProgram 的核心组件之一，提供 **工程级可用的 Unicode 字符串抽象**。
-
-特性：
-
-* 原生支持 UTF-8 / UTF-16 / UTF-32
-* 提供高效、可缓存的编码转换能力
-* Unicode 感知的 length / substr / case 转换
-* 可直接用于日志、格式化、配置、指标等模块
-
-设计目标是：
-**在真实工程中可靠使用的 Unicode 字符串，而不是演示性质的封装**。
-
-示例：
-
-* `include/test/StringTest.hpp`
-* `include/test/UnicodeTest.hpp`
-
----
-
-### 2. StringFormat（类型安全的格式化系统）
-
-路径：`include/LikesProgram/stringFormat/*`
-
-StringFormat 是一个 **与 LikesProgram::String 深度集成的格式化系统**，用于构建类型安全、可扩展的字符串格式化能力。
-
-特性：
-
-* 支持类似 `{}` 的格式化语法
-* 支持 Unicode 对齐、填充与宽度计算
-* 支持按类型、按名称注册自定义格式化器
-
-你可以为自定义类型定义格式化规则，而无需在业务代码中散落 `toString()`。
-
-示例：
-
-* `include/test/StringFormatTest.hpp`
-* 语法说明：`LikesProgram String Format 规范 v0.1.md`
-
----
-
-### 3. Math（向量与数学工具）
-
-路径：`include/LikesProgram/math/*`
-
-Math 模块提供一组 **面向工程场景的数学类型与算法**，补充 STL 未覆盖的常用能力。
-
-特性：
-
-* 向量类型：`Vector` / `Vector3` / `Vector4`
-* 完整的算术与比较运算符
-* Dot / Cross / Normalize / Rotate / Slerp 等常用操作
-* 多数计算提供 epsilon 感知的安全版本
-
-同时提供：
-
-* `PercentileSketch`：高性能分位数统计结构
-  适用于 Metrics / Summary 等统计场景
-
-示例：
-
-* `include/test/VectorTest.hpp`
-* `include/test/Vector3Test.hpp`
-* `include/test/PercentileSketchTest.hpp`
-
----
-
-### 4. Metrics（指标系统）
-
-路径：`include/LikesProgram/metrics/*`
-
-Metrics 是一个 **面向长期运行服务的工程级指标系统**，而非简单计数工具。
-
-支持的指标类型：
-
-* `Counter`：单调递增计数
-* `Gauge`：可增可减的瞬时值
-* `Histogram`：桶统计
-* `Summary`：分位数 + EMA + Min / Max
-* `Registry`：指标注册与集中管理
-
-特性：
-
-* 线程安全
-* 支持 Prometheus / JSON 导出
-* 可与 ThreadPool 等模块自然集成
-
-示例：
-
-* `include/test/MetricsTest.hpp`
-
----
-
-### 5. Threading（线程池）
-
-路径：`include/LikesProgram/threading/*`
-
-Threading 提供一个 **可观测、可配置的线程池实现**，适合用于服务端和基础设施代码。
-
-特性：
-
-* 可配置线程数与任务队列策略
-* 支持任务拒绝与回退策略
-* 内建 Metrics（任务数、拒绝数、队列长度、执行耗时）
-* 支持 Observer 机制（`IThreadPoolObserver`）
-
-这是一个面向工程可维护性的选择，而不是最小实现。
-
-示例：
-
-* `include/test/ThreadPoolTest.hpp`
-
----
-
-### 6. Time（时间工具）
-
-路径：`include/LikesProgram/time/*`
-
-Time 模块提供统一、精度明确的时间相关工具。
-
-组件：
-
-* `Time`：统一时间表示
-* `Timer`：高精度计时工具（纳秒级）
-
-常用于：
-
-* 性能统计
-* Metrics 数据采集
-* 调试与 profiling
-
-示例：
-
-* `include/test/TimerTest.hpp`
-
----
-
-### 7. Logger（日志系统）
-
-路径：`include/LikesProgram/Logger.hpp`
-
-Logger 是一个 **轻量级、可扩展的日志系统**，适合在基础设施库中使用。
-
-特性：
-
-* 多级别日志支持
-* 与 String / StringFormat 深度集成
-* 不强绑定具体后端，便于嵌入其他系统
-
-示例：
-
-* `include/test/LoggerTest.hpp`
-
----
-
-### 8. System / Utils（系统与通用工具）
-
-路径：`include/LikesProgram/system/*`
-
-System / Utils 提供一组工程中常见、但标准库未直接提供的系统级工具。
-
-包括但不限于：
-
-* 线程命名
-* UUID 生成
-* 本机 IP / MAC 信息获取
-
-这些工具用于减少重复实现，而非形成独立框架。
-
----
-
-### 9. Configuration（配置管理）
-
-路径：`include/LikesProgram/Configuration.hpp`
-
-Configuration 是一个 **结构上类似 JSON 的配置对象模型**，用于在程序运行期以统一、类型安全的方式组织和访问配置数据。
-
-特性：
-
-* 支持键值对象、数组以及基础类型（int、int64_t、double、bool、String）
-* 支持任意层级的嵌套结构
-* 提供线程安全的访问语义、显式类型转换与迭代器遍历能力
-* 内置一个 **轻量级的 JSON 序列化与反序列化实现**，适用于基础配置读写场景
-
-设计说明：
-
-* 内置 JSON 支持以简洁、可控为目标，不追求完整规范覆盖
-* 对于复杂或严格的配置解析需求，建议使用外部解析库并映射到 Configuration 对象中
-
-示例：
-
-* `include/test/ConfigurationTest.hpp`
-
----
-
-### 10. Net（基于 Reactor 模型的网络库）
-
-路径：`include/LikesProgram/net/*`
-
-Net 模块提供一套基于事件驱动 Reactor 模型的网络编程基础组件，
-用于构建 TCP 客户端、服务端、连接管理、缓冲区读写以及 TLS 传输能力。
-
-核心组件：
-
-- `Server`：服务端封装
-- `Client`：客户端封装
-- `Connection`：连接与事件处理基类
-- `Buffer`：网络读写缓冲区
-- `Transport`：传输层抽象
-- `TcpTransport`：普通 TCP 传输
-- `TlsTransport`：基于 OpenSSL 的 TLS 传输
-
-特性：
-
-- 基于事件循环的非阻塞 I/O
-- 支持连接级读写缓冲
-- 支持 TCP/TLS 传输层抽象
-- 支持 STARTTLS 类协议的连接升级场景
-- 适合服务端、客户端和长期运行网络程序
-
-示例：
-
-* `include/test/ServerTest.hpp`
-
----
-
-## 关于 include/test
-
-`include/test/*` 在 LikesProgram 中具有**非常明确的定位**：
-
-> **示例优先，其次才是测试**。
-
-它们的主要目的不是追求测试覆盖率，而是：
-
-* 展示真实、推荐的使用方式
-* 固化接口语义（行为即文档）
-* 防止接口在重构中发生“悄然变味”
-
-换句话说，`test` 目录就是 **README 的延伸部分**。
-
----
-
-## 使用示例与 test 目录的关系说明（重要）
-
-> **本 README 不再提供“可运行示例代码块”。**
-
-原因很简单，也很工程化：
-
-* LikesProgram 的接口在演进中
-* `include/test/*` 中的代码是 **唯一权威、始终与实现同步的真实用法**
-* README 中的“示例代码”一旦与 test 出现偏差，就会变成误导
-
-因此，本 README 的职责被明确限定为：
-
-* 解释每个模块**解决什么问题**
-* 指出**应该查看哪个 test 文件来学习真实用法**
-* 说明接口的**语义与设计约束**
-
-而不是重复维护一套“看起来能用、但可能已经过期”的示例。
-
----
-
-## 如何正确学习和使用 LikesProgram
-
-### 先看 test，而不是 README 示例
-
-对于任何模块，推荐的顺序是：
-
-```
-include/LikesProgram/xxx.hpp   // 接口定义
-include/test/xxxTest.hpp       // 实际用法（权威）
-README.md                      // 设计背景与模块关系
+说明：
+
+- `Core` 总是构建。
+- `Logging` 默认不构建，想使用日志包必须传入 `-DLIKESPROGRAM_BUILD_LOGGING=ON`。
+- `Config` 默认不构建，想使用配置包必须传入 `-DLIKESPROGRAM_BUILD_CONFIG=ON`。
+- 测试由 `LIKESPROGRAM_BUILD_TESTS` 控制，默认 `ON`。
+- 示例和 benchmark 由 `LIKESPROGRAM_BUILD_EXAMPLES` 控制，默认 `ON`。
+- 发布诊断工具由 `LIKESPROGRAM_BUILD_TOOLS` 控制，默认 `ON`。
+
+## 常用 CMake 选项
+
+| 选项 | 默认值 | 作用 |
+| --- | --- | --- |
+| `LIKESPROGRAM_BUILD_SHARED` | `ON` | `ON` 构建动态库，`OFF` 构建静态库 |
+| `LIKESPROGRAM_BUILD_TESTS` | `ON` | 构建并注册测试目标 |
+| `LIKESPROGRAM_BUILD_EXAMPLES` | `ON` | 构建示例程序和 benchmark |
+| `LIKESPROGRAM_BUILD_TOOLS` | `ON` | 构建并安装发布诊断工具 |
+| `LIKESPROGRAM_BUILD_LOGGING` | `OFF` | 构建 Logging 扩展包 |
+| `LIKESPROGRAM_BUILD_CONFIG` | `OFF` | 构建 Config 扩展包 |
+| `LIKESPROGRAM_BUILD_METRICS` | `OFF` | 预留选项，当前版本暂不提供 |
+| `LIKESPROGRAM_BUILD_THREADING` | `OFF` | 预留选项，当前版本暂不提供 |
+| `LIKESPROGRAM_BUILD_THREADING_METRICS` | `OFF` | 预留选项，当前版本暂不提供 |
+| `LIKESPROGRAM_BUILD_NET` | `OFF` | 预留选项，当前版本暂不提供 |
+| `LIKESPROGRAM_BUILD_NET_TLS` | `OFF` | 预留选项，当前版本暂不提供 |
+
+构建静态库：
+
+```powershell
+cmake -S . -B build-static -DLIKESPROGRAM_BUILD_SHARED=OFF -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON
+cmake --build build-static --config Release
 ```
 
-`include/test` 中的代码具备以下特性：
+只构建 Core：
 
-* 可以直接编译
-* 使用的是当前版本的真实 API
-* 展示的是**作者期望的使用方式**
+```powershell
+cmake -S . -B build-core-only -DLIKESPROGRAM_BUILD_LOGGING=OFF -DLIKESPROGRAM_BUILD_CONFIG=OFF
+cmake --build build-core-only --config Release
+```
 
----
+构建 Core + Logging，不构建测试和示例：
 
-## 为什么 README 不直接给完整示例代码
+```powershell
+cmake -S . -B build-min -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_TESTS=OFF -DLIKESPROGRAM_BUILD_EXAMPLES=OFF
+cmake --build build-min --config Release
+```
 
-这是一个**刻意的设计选择**，而不是偷懒：
+## 测试和示例目标
 
-* LikesProgram 是基础设施库，而不是单文件 header-only 工具
-* 接口往往需要与多个模块组合使用
-* 脱离 test 场景的“简化示例”容易掩盖真实约束
+开启 `LIKESPROGRAM_BUILD_TESTS=ON` 后会注册：
 
-如果你希望：
+```text
+LikesProgramCoreTests
+LikesProgramLoggingTests    # 仅在 LIKESPROGRAM_BUILD_LOGGING=ON 时存在
+LikesProgramConfigTests     # 仅在 LIKESPROGRAM_BUILD_CONFIG=ON 时存在
+```
 
-* 示例 **一定能编译**
-* 示例 **不会因为版本更新而过期**
+运行全部测试：
 
-那么 **test 就是示例本身**。
+```powershell
+ctest --test-dir build --output-on-failure -C Debug
+```
 
----
+只运行某一个测试：
 
-## 项目状态说明
+```powershell
+ctest --test-dir build -R LikesProgramLoggingTests --output-on-failure -C Debug
+```
 
-* 本项目仍在持续演进
-* `include/test` 中的用法具有最高优先级
-* README 保证描述语义与设计原则，但不承诺示例级 API 稳定
+开启 `LIKESPROGRAM_BUILD_EXAMPLES=ON` 后会生成：
 
-如果你在使用过程中发现：
+```text
+LikesProgramCoreExample
+LikesProgramCoreBenchmark
+LikesProgramLoggingExample      # 仅在 LIKESPROGRAM_BUILD_LOGGING=ON 时存在
+LikesProgramLoggingBenchmark    # 仅在 LIKESPROGRAM_BUILD_LOGGING=ON 时存在
+LikesProgramConfigExample   # 仅在 LIKESPROGRAM_BUILD_CONFIG=ON 时存在
+```
 
-* README 描述与 test 行为不一致
+这些示例就是当前 API 的可编译使用样本。README 负责解释“怎么用”和“为什么这样用”，examples/tests 负责证明代码真的能编译运行。
 
-请以 **test 为准**，README 会随后更新。
+## 发布诊断工具
 
----
+开启 `LIKESPROGRAM_BUILD_TOOLS=ON` 后会生成 `likesprogram-doctor`。它用于检查当前构建或安装后的包是否能正常被消费方使用：
 
-> LikesProgram 的文档策略是：
-> **行为在 test 中，思想在 README 中。**
+```powershell
+likesprogram-doctor
+likesprogram-doctor --format json
+likesprogram-doctor --require all
+```
 
-## 许可证
+`--require all` 会把 Core、Logging、Config 都视为必须通过的组件；如果只构建 Core，保持默认命令即可，未链接的可选包会显示为 skipped。
 
-LikesProgram 采用 **Apache License 2.0** 开源。
+工具的详细说明位于 [tools/README.md](tools/README.md)。
 
-你可以在遵守许可证条款的前提下，自由使用、复制、修改、分发本项目，
-包括用于商业项目和闭源项目。
+## 安装
+
+安装到指定目录：
+
+```powershell
+cmake -S . -B build-install -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON
+cmake --build build-install --config Release
+cmake --install build-install --prefix C:\LikesProgramInstall --config Release
+```
+
+安装后目录大致如下：
+
+```text
+C:\LikesProgramInstall\
+  bin\                         # 动态库 dll，动态构建时存在
+                               # likesprogram-doctor 也会安装到这里
+  lib\                         # import lib 或静态库
+  lib\cmake\LikesProgram\       # find_package 配置文件
+  include\LikesProgram\         # 公开头文件
+```
+
+动态库构建时，运行程序需要能找到对应 dll。Windows 上最简单的方式是把 `bin` 放到 `PATH`，或把 dll 复制到 exe 同目录。项目内测试和示例已经在 Windows 动态构建下自动复制所需 dll。
+
+## 在你的项目中使用
+
+推荐方式是先安装，然后在外部项目里使用 `find_package`。
+
+外部项目 `CMakeLists.txt`：
+
+```cmake
+cmake_minimum_required(VERSION 3.15)
+
+project(MyApp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(LikesProgram CONFIG REQUIRED)
+
+add_executable(MyApp main.cpp)
+target_link_libraries(MyApp
+    PRIVATE
+        LikesProgram::Core
+        LikesProgram::Logging
+        LikesProgram::Config
+)
+```
+
+配置外部项目时告诉 CMake 安装目录：
+
+```powershell
+cmake -S . -B build -DCMAKE_PREFIX_PATH=C:\LikesProgramInstall
+cmake --build build --config Release
+```
+
+最小 `main.cpp`：
+
+```cpp
+#include <LikesProgram/Core/String.hpp>
+#include <LikesProgram/Config/Config.hpp>
+#include <LikesProgram/Logging/Logging.hpp>
+
+#include <chrono>
+#include <source_location>
+
+int main() {
+    LikesProgram::String text = LikesProgram::String::Format(u"Hello, {}", u"LikesProgram");
+
+    auto config = LikesProgram::Config::Configuration::FromJson(
+        u"{"
+        u"\"service\":{\"name\":\"demo\",\"port\":8080},"
+        u"\"logging\":{\"level\":\"info\",\"format\":\"text\"}"
+        u"}");
+
+    auto& logger = LikesProgram::Log::Logger::Instance(true, true);
+    logger.SetLoggerName(config.GetString(u"service.name", u"unknown"));
+    logger.SetLevel(LikesProgram::Log::StringToLevel(
+        config.GetString(u"logging.level", u"info"),
+        LikesProgram::Log::Level::Info));
+    logger.AddSink(LikesProgram::Log::ConsoleSink::CreateSink());
+    logger.Log(LikesProgram::Log::Level::Info, std::source_location::current(),
+        u"{} listens on {}", text, config.GetInt64(u"service.port", 80));
+    logger.Flush(std::chrono::seconds(5));
+    logger.Shutdown();
+
+    return 0;
+}
+```
+
+## 模块怎么选
+
+只需要字符串、时间、状态返回、平台信息：链接 `LikesProgram::Core`。
+
+需要写日志：配置 LikesProgram 时先打开 `-DLIKESPROGRAM_BUILD_LOGGING=ON`，然后链接 `LikesProgram::Logging`。Logging 会自动公开依赖 Core，所以消费方通常只写 `LikesProgram::Logging` 也可以获得 Core 的 include/link 传递依赖；为了表达清楚，也可以显式同时链接 `Core`。
+
+需要读取配置文件：构建时打开 `-DLIKESPROGRAM_BUILD_CONFIG=ON`，然后链接 `LikesProgram::Config`。Config 支持 `key=value`、JSON、YAML、TOML、嵌套值树和 `ConfigSchema` 校验。
+
+需要用配置驱动日志：同时打开 `LIKESPROGRAM_BUILD_CONFIG` 和 `LIKESPROGRAM_BUILD_LOGGING`，应用层读取配置后映射到 Logging 的开放式 `LoggerConfig`。Logging 包自身仍只依赖 Core，不会反向依赖 Config。
+
+当前版本只需要按实际功能开启模块即可。只用基础能力时保持默认 Core；需要日志或配置时再分别开启 `LIKESPROGRAM_BUILD_LOGGING`、`LIKESPROGRAM_BUILD_CONFIG`。
+
+## 推荐包含方式
+
+二次开发时建议只包含安装目录中的 `LikesProgram/...` 头文件，例如：
+
+```cpp
+#include <LikesProgram/Core/String.hpp>
+#include <LikesProgram/Logging/Logging.hpp>
+#include <LikesProgram/Config/Config.hpp>
+```
+
+`src/include` 下的头文件服务于库自身构建和测试，不属于安装后的常规使用入口。外部项目使用上面的公开头即可。
+
+## ABI 和二进制兼容
+
+LikesProgram 对外提供 C++ API。C++ ABI 受编译器、标准库、运行库、架构、Debug/Release 配置影响。
+
+请保持以下条件一致：
+
+- 同一编译器系列和版本范围
+- 同一 C++ 标准，当前是 C++20
+- 同一运行库设置
+- 同一 CPU 架构
+- 同一 Debug/Release 配置
+
+跨工具链使用时建议从源码重新构建，避免运行库和标准库 ABI 不一致带来的链接或运行问题。
+
+## 编码约定
+
+`LikesProgram::String` 内部统一保存 UTF-16。对外可以从 UTF-8、UTF-16、UTF-32、`std::wstring`、GBK 等来源构造，并可再转回对应编码。
+
+建议：
+
+- 新代码优先使用 UTF-8 源文本或 `u"..."` UTF-16 字面量。
+- 日志和配置里的文本都使用 `LikesProgram::String`。
+- 非法 UTF-8/UTF-16/UTF-32 输入会按严格策略抛出异常，调用外部输入时要在边界处处理异常。
+
+## 开源协议
+
+历史工程声明 LikesProgram 使用 Apache License 2.0。你可以在遵守 Apache License 2.0 条款的前提下使用、复制、修改和分发本项目，也可以用于商业项目。
 
 需要注意：
 
-- 原始版权声明和许可证声明必须保留；
-- 修改后的文件应明确标注修改；
-- 不得使用作者、项目名或贡献者名义为衍生项目进行背书；
-- 本项目按“现状”提供，不对适用性、稳定性或安全性作任何保证；
-- 第三方依赖仍受其各自许可证约束。
+- 保留原始版权声明和许可证声明。
+- 修改后的文件应标注修改。
+- 不得使用作者、项目名或贡献者名义为衍生项目背书。
+- 本项目按“现状”提供，不承诺适用性、稳定性或安全性。
+- 第三方依赖如果未来引入，仍受其各自许可证约束。
 
-详见仓库中的 `LICENSE` 与 `NOTICE`。
+如果你的源码包或安装包中随附了 `LICENSE`、`NOTICE` 等文件，请以这些文件为准查看完整授权文本和声明信息。
