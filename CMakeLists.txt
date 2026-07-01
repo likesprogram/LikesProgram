@@ -9,6 +9,9 @@
 #   -DLIKESPROGRAM_BUILD_TOOLS=ON
 #   -DLIKESPROGRAM_BUILD_LOGGING=OFF
 #   -DLIKESPROGRAM_BUILD_CONFIG=OFF
+#   -DLIKESPROGRAM_BUILD_METRICS=OFF
+#   -DLIKESPROGRAM_BUILD_THREADING=OFF
+#   -DLIKESPROGRAM_BUILD_NET=OFF
 #
 # ======================================================
 
@@ -30,9 +33,7 @@ option(LIKESPROGRAM_BUILD_LOGGING "Build LikesProgramLogging" OFF)
 option(LIKESPROGRAM_BUILD_CONFIG "Build LikesProgramConfig" OFF)
 option(LIKESPROGRAM_BUILD_METRICS "Build LikesProgramMetrics" OFF)
 option(LIKESPROGRAM_BUILD_THREADING "Build LikesProgramThreading" OFF)
-option(LIKESPROGRAM_BUILD_THREADING_METRICS "Build LikesProgramThreadingMetrics" OFF)
 option(LIKESPROGRAM_BUILD_NET "Build LikesProgramNet" OFF)
-option(LIKESPROGRAM_BUILD_NET_TLS "Build LikesProgramNetTls" OFF)
 option(LIKESPROGRAM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(LIKESPROGRAM_ENABLE_MSVC_CODE_ANALYSIS "Enable MSVC code analysis" ON)
 
@@ -88,9 +89,7 @@ likesprogram_add_optional_package(LIKESPROGRAM_BUILD_LOGGING LikesProgramLogging
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_CONFIG LikesProgramConfig)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_METRICS LikesProgramMetrics)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_THREADING LikesProgramThreading)
-likesprogram_add_optional_package(LIKESPROGRAM_BUILD_THREADING_METRICS LikesProgramThreadingMetrics)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_NET LikesProgramNet)
-likesprogram_add_optional_package(LIKESPROGRAM_BUILD_NET_TLS LikesProgramNetTls)
 
 # =========================
 # 发布工具

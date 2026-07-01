@@ -1,5 +1,4 @@
 #pragma once
-#include <LikesProgram/Core/system/LikesProgramCoreExport.hpp>
 #include <optional>
 #include <vector>
 #include <LikesProgram/Core/String.hpp>
@@ -8,7 +7,7 @@
 namespace LikesProgram {
     namespace StringFormat {
         // 解析 String::Format 格式串，输出 literal 和 placeholder token。
-        class LIKESPROGRAM_CORE_API FormatParser {
+        class FormatParser {
         public:
             // 解析单元
             struct Token {

@@ -49,6 +49,27 @@ else()
     target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_CONFIG=0)
 endif()
 
+if (TARGET LikesProgram::Metrics)
+    target_link_libraries(LikesProgramDoctor PRIVATE LikesProgram::Metrics)
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_METRICS=1)
+else()
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_METRICS=0)
+endif()
+
+if (TARGET LikesProgram::Threading)
+    target_link_libraries(LikesProgramDoctor PRIVATE LikesProgram::Threading)
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_THREADING=1)
+else()
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_THREADING=0)
+endif()
+
+if (TARGET LikesProgram::Net)
+    target_link_libraries(LikesProgramDoctor PRIVATE LikesProgram::Net)
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_NET=1)
+else()
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_NET=0)
+endif()
+
 # =========================
 # 输出与编译策略
 # =========================
@@ -89,6 +110,9 @@ if (WIN32)
     likesprogram_doctor_copy_runtime(LikesProgramCore LikesProgram::Core)
     likesprogram_doctor_copy_runtime(LikesProgramLogging LikesProgram::Logging)
     likesprogram_doctor_copy_runtime(LikesProgramConfig LikesProgram::Config)
+    likesprogram_doctor_copy_runtime(LikesProgramMetrics LikesProgram::Metrics)
+    likesprogram_doctor_copy_runtime(LikesProgramThreading LikesProgram::Threading)
+    likesprogram_doctor_copy_runtime(LikesProgramNet LikesProgram::Net)
 endif()
 
 # =========================

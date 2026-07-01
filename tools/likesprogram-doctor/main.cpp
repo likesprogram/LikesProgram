@@ -9,6 +9,18 @@
 #define LIKESPROGRAM_DOCTOR_HAS_LOGGING 0
 #endif
 
+#ifndef LIKESPROGRAM_DOCTOR_HAS_METRICS
+#define LIKESPROGRAM_DOCTOR_HAS_METRICS 0
+#endif
+
+#ifndef LIKESPROGRAM_DOCTOR_HAS_THREADING
+#define LIKESPROGRAM_DOCTOR_HAS_THREADING 0
+#endif
+
+#ifndef LIKESPROGRAM_DOCTOR_HAS_NET
+#define LIKESPROGRAM_DOCTOR_HAS_NET 0
+#endif
+
 #if LIKESPROGRAM_DOCTOR_HAS_CONFIG
 #include <LikesProgram/Config/Config.hpp>
 #endif
@@ -21,12 +33,30 @@
 #include <source_location>
 #endif
 
+#if LIKESPROGRAM_DOCTOR_HAS_METRICS
+#include <LikesProgram/Metrics/Metrics.hpp>
+#endif
+
+#if LIKESPROGRAM_DOCTOR_HAS_THREADING
+#include <LikesProgram/Threading/Threading.hpp>
+#endif
+
+#if LIKESPROGRAM_DOCTOR_HAS_NET
+#include <LikesProgram/Net/Net.hpp>
+#endif
+
+#include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <exception>
+#include <future>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -122,7 +152,7 @@ namespace {
         return result;
     }
 
-    // 在线性小集合中查找组件名，避免为三个组件引入额外容器。
+    // 在线性小集合中查找组件名，避免为少量组件引入额外容器。
     bool Contains(const std::vector<std::string>& values, std::string_view value) {
         for (const auto& item : values) {
             if (item == value) return true;
@@ -138,7 +168,12 @@ namespace {
 
     // 判断组件名是否属于当前发布诊断工具理解的稳定集合。
     bool IsKnownComponent(std::string_view component) {
-        return component == "core" || component == "logging" || component == "config";
+        return component == "core"
+            || component == "logging"
+            || component == "config"
+            || component == "metrics"
+            || component == "threading"
+            || component == "net";
     }
 
     // 解析单个 --require 组件，all/full 会展开为全部当前稳定组件。
@@ -153,6 +188,9 @@ namespace {
             AddUnique(options.requiredComponents, "core");
             AddUnique(options.requiredComponents, "logging");
             AddUnique(options.requiredComponents, "config");
+            AddUnique(options.requiredComponents, "metrics");
+            AddUnique(options.requiredComponents, "threading");
+            AddUnique(options.requiredComponents, "net");
             return true;
         }
 
@@ -370,6 +408,192 @@ namespace {
 #endif
     }
 
+    // 检查 Metrics 包身份、基础指标采样和 Registry 导出能力。
+    CheckResult RunMetricsCheck(bool required) {
+#if LIKESPROGRAM_DOCTOR_HAS_METRICS
+        if (!LikesProgram::Metrics::PackageAvailable()) {
+            return Failed("metrics", "PackageAvailable returned false", required);
+        }
+
+        const char* packageVersion = LikesProgram::Metrics::PackageVersion(); // Metrics 包版本指针
+        if (packageVersion == nullptr) {
+            return Failed("metrics", "PackageVersion returned null", required);
+        }
+
+        if (std::string(packageVersion) != VersionText()) {
+            return Failed("metrics", "package version " + std::string(packageVersion)
+                + " does not match core version " + VersionText(), required);
+        }
+
+        LikesProgram::Metrics::Registry registry;             // 诊断专用独立注册表
+        auto counter = std::make_shared<LikesProgram::Metrics::Counter>(
+            u"doctor_requests_total",
+            u"Doctor requests",
+            std::map<LikesProgram::String, LikesProgram::String>{ { u"component", u"metrics" } });
+        auto gauge = std::make_shared<LikesProgram::Metrics::Gauge>(
+            u"doctor_workers",
+            u"Doctor workers");
+
+        counter->Increment(2.0);
+        gauge->Set(4.0);
+        registry.Register(counter);
+        registry.Register(gauge);
+
+        if (registry.Count() != 2) {
+            return Failed("metrics", "registry count mismatch after register", required);
+        }
+
+        const std::string prometheus = registry.ExportPrometheus().ToStdString(); // 导出文本快照
+        if (prometheus.find("doctor_requests_total{component=\"metrics\"} 2.000000")
+            == std::string::npos) {
+            return Failed("metrics", "Prometheus export did not include counter sample", required);
+        }
+
+        const std::string json = registry.ExportJson().ToStdString(); // JSON 导出快照
+        if (json.find("\"name\":\"doctor_workers\"") == std::string::npos) {
+            return Failed("metrics", "JSON export did not include gauge sample", required);
+        }
+
+        return Passed("metrics", "package version " + std::string(packageVersion)
+            + "; counter/gauge registry export passed", required);
+#else
+        const std::string detail =
+            "component is not linked into this tool; enable LIKESPROGRAM_BUILD_METRICS=ON"; // 未链接说明
+        return required ? Failed("metrics", detail, required)
+            : Skipped("metrics", detail, required);
+#endif
+    }
+
+    // 检查 Threading 包身份、任务提交、异常隔离和关闭链路。
+    CheckResult RunThreadingCheck(bool required) {
+#if LIKESPROGRAM_DOCTOR_HAS_THREADING
+        if (!LikesProgram::Threading::PackageAvailable()) {
+            return Failed("threading", "PackageAvailable returned false", required);
+        }
+
+        const char* packageVersion = LikesProgram::Threading::PackageVersion(); // Threading 包版本指针
+        if (packageVersion == nullptr) {
+            return Failed("threading", "PackageVersion returned null", required);
+        }
+
+        if (std::string(packageVersion) != VersionText()) {
+            return Failed("threading", "package version " + std::string(packageVersion)
+                + " does not match core version " + VersionText(), required);
+        }
+
+        std::atomic<int> posted{ 0 };                    // Post 任务完成计数
+        std::atomic<int> exceptions{ 0 };                // 异常隔离处理次数
+        LikesProgram::Threading::ThreadPool::Options options(2, 2, 32);
+        options.exceptionHandler = [&exceptions](std::exception_ptr) {
+            exceptions.fetch_add(1, std::memory_order_relaxed);
+        };
+
+        LikesProgram::Threading::ThreadPool pool(options);
+        pool.Start();
+        auto result = pool.Submit([] { return 42; });    // Submit/future 诊断任务
+        for (int i = 0; i < 8; ++i) {
+            if (!pool.Post([&posted] {
+                posted.fetch_add(1, std::memory_order_relaxed);
+            })) {
+                return Failed("threading", "Post returned false while pool was running", required);
+            }
+        }
+        if (!pool.Post([] {
+            throw std::runtime_error("doctor threading exception probe");
+        })) {
+            return Failed("threading", "throwing Post probe was rejected", required);
+        }
+
+        if (result.get() != 42) {
+            return Failed("threading", "Submit future returned wrong value", required);
+        }
+        pool.Shutdown();
+        if (!pool.AwaitTermination(std::chrono::seconds(5))) {
+            return Failed("threading", "AwaitTermination timed out", required);
+        }
+        pool.JoinAll();
+
+        const auto stats = pool.Snapshot();              // 关闭后的统计快照
+        if (posted.load(std::memory_order_relaxed) != 8) {
+            return Failed("threading", "Post completion count mismatch", required);
+        }
+        if (exceptions.load(std::memory_order_relaxed) != 1) {
+            return Failed("threading", "Post exception was not isolated exactly once", required);
+        }
+        if (stats.submitted != 10 || stats.completed != 10 || stats.active != 0) {
+            return Failed("threading", "statistics mismatch after submit/post/shutdown", required);
+        }
+        if (stats.largestPoolSize > 2) {
+            return Failed("threading", "pool exceeded configured maxThreads", required);
+        }
+
+        return Passed("threading", "package version " + std::string(packageVersion)
+            + "; submit/post/exception/shutdown checks passed", required);
+#else
+        const std::string detail =
+            "component is not linked into this tool; enable LIKESPROGRAM_BUILD_THREADING=ON"; // 未链接说明
+        return required ? Failed("threading", detail, required)
+            : Skipped("threading", detail, required);
+#endif
+    }
+
+    // 检查 Net 包身份、基础地址/缓冲能力和共享安全资源初始化入口。
+    CheckResult RunNetCheck(bool required) {
+#if LIKESPROGRAM_DOCTOR_HAS_NET
+        if (!LikesProgram::Net::PackageAvailable()) {
+            return Failed("net", "PackageAvailable returned false", required);
+        }
+
+        const char* packageVersion = LikesProgram::Net::PackageVersion(); // Net 包版本指针
+        if (packageVersion == nullptr) {
+            return Failed("net", "PackageVersion returned null", required);
+        }
+
+        if (std::string(packageVersion) != VersionText()) {
+            return Failed("net", "package version " + std::string(packageVersion)
+                + " does not match core version " + VersionText(), required);
+        }
+
+        LikesProgram::Net::Buffer buffer;                    // 诊断用连续网络缓冲
+        buffer.Append("net", 3);
+        if (buffer.AsStringView() != "net") {
+            return Failed("net", "buffer append/string view check failed", required);
+        }
+
+        LikesProgram::Net::Address loopback("127.0.0.1", 0); // 不打开 socket 的地址格式化样本
+        if (!loopback.IsValid() || loopback.ToString() != "127.0.0.1:0") {
+            return Failed("net", "loopback address formatting check failed", required);
+        }
+
+        std::atomic<int> sharedInitCount{ 0 };                // 共享安全资源初始化次数
+        LikesProgram::Net::ConnectionFactory factory(
+            [](LikesProgram::Net::SocketType, LikesProgram::Net::EventLoop*) {
+                return std::shared_ptr<LikesProgram::Net::Connection>{};
+            },
+            [&sharedInitCount]() {
+                sharedInitCount.fetch_add(1, std::memory_order_relaxed);
+                return true;
+            });
+
+        const bool firstSharedInit = factory.InitializeSharedSecureResources();   // 首次应触发用户回调
+        const bool secondSharedInit = factory.InitializeSharedSecureResources();  // 第二次应复用缓存结果
+        if (!firstSharedInit || !secondSharedInit) {
+            return Failed("net", "shared secure initializer returned false", required);
+        }
+        if (sharedInitCount.load(std::memory_order_relaxed) != 1) {
+            return Failed("net", "shared secure initializer did not run exactly once", required);
+        }
+
+        return Passed("net", "package version " + std::string(packageVersion)
+            + "; buffer/address/shared secure factory checks passed", required);
+#else
+        const std::string detail =
+            "component is not linked into this tool; enable LIKESPROGRAM_BUILD_NET=ON"; // 未链接说明
+        return required ? Failed("net", detail, required)
+            : Skipped("net", detail, required);
+#endif
+    }
+
 #if LIKESPROGRAM_DOCTOR_HAS_LOGGING
     // 诊断用 Sink，只计数不输出，避免工具污染控制台。
     class CountingSink final : public LikesProgram::Log::Sink {
@@ -490,6 +714,9 @@ namespace {
         report.checks.push_back(RunCoreCheck(IsRequired(options, "core")));
         report.checks.push_back(RunLoggingCheck(IsRequired(options, "logging")));
         report.checks.push_back(RunConfigCheck(IsRequired(options, "config")));
+        report.checks.push_back(RunMetricsCheck(IsRequired(options, "metrics")));
+        report.checks.push_back(RunThreadingCheck(IsRequired(options, "threading")));
+        report.checks.push_back(RunNetCheck(IsRequired(options, "net")));
 
         report.ok = true;
         for (const auto& check : report.checks) {
@@ -588,7 +815,7 @@ namespace {
         out << "  --format text|json         Select output format.\n";
         out << "  --text                     Shortcut for --format text.\n";
         out << "  --json                     Shortcut for --format json.\n";
-        out << "  --require NAME             Require core, logging, config, or all.\n";
+        out << "  --require NAME             Require core, logging, config, metrics, threading, net, or all.\n";
         out << "  --require=NAME[,NAME...]   Require one or more components.\n\n";
         out << "Exit codes:\n";
         out << "  0  diagnostics passed\n";

@@ -46,6 +46,8 @@ target_include_directories(LikesProgramCore
         ${CMAKE_CURRENT_SOURCE_DIR}/src/include
 )
 
+target_compile_features(LikesProgramCore PUBLIC cxx_std_20)
+
 set_target_properties(LikesProgramCore PROPERTIES
     EXPORT_NAME Core
     OUTPUT_NAME "LikesProgramCore"
@@ -64,7 +66,10 @@ endif()
 if (WIN32)
     target_compile_definitions(LikesProgramCore PUBLIC NOMINMAX)
     if (MSVC)
-        target_compile_options(LikesProgramCore PRIVATE /utf-8 /W4)
+        target_compile_options(LikesProgramCore
+            PUBLIC $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+            PRIVATE /W4
+        )
     endif()
 else()
     target_compile_options(LikesProgramCore PRIVATE -Wall -Wextra -Wpedantic)

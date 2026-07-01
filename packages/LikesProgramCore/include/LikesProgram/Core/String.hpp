@@ -204,6 +204,11 @@ namespace LikesProgram {
         String& Append(char32_t c);
         // 直接拼接 UTF-16 视图，避免临时 String。
         String& Append(std::u16string_view str);
+        // 直接拼接 UTF-16 字面量，消除指针和 view 重载之间的二义性。
+        template <size_t N>
+        String& Append(const char16_t(&str)[N]) {
+            return Append(std::u16string_view(str, N > 0 ? N - 1 : 0));
+        }
         // 直接拼接 wchar_t 视图，按平台 wchar_t 宽度转换。
         String& Append(std::wstring_view str);
         // std 风格小写别名，方便迁移 basic_string 调用习惯。

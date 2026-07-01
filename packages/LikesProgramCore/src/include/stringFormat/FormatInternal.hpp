@@ -1,5 +1,4 @@
 #pragma once
-#include <LikesProgram/Core/system/LikesProgramCoreExport.hpp>
 #include <LikesProgram/Core/String.hpp>
 #include <stringFormat/FormatParser.hpp>
 #include <stringFormat/FormatSpec.hpp>
@@ -14,7 +13,7 @@ namespace LikesProgram {
     namespace StringFormat {
         using UserFormatter = std::function<String(const Any&, const FormatSpec&)>;
         // 格式化运行时核心，维护注册表、解析缓存和内建类型格式化路径。
-        class LIKESPROGRAM_CORE_API FormatInternal {
+        class FormatInternal {
         public:
             // 公开构造函数，以同时支持 单例模式 和 多例模式
             FormatInternal();

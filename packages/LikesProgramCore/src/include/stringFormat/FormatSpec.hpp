@@ -1,12 +1,11 @@
 #pragma once
-#include <LikesProgram/Core/system/LikesProgramCoreExport.hpp>
 #include <optional>
 #include <LikesProgram/Core/String.hpp>
 
 namespace LikesProgram {
     namespace StringFormat {
         // 格式化规格 : {[index]:[fill][align][sign][#][0][width][.precision][type][typeExpand]}
-        class LIKESPROGRAM_CORE_API FormatSpec {
+        class FormatSpec {
         public:
             // 构造默认规格，等价于 "{}"。
             FormatSpec();

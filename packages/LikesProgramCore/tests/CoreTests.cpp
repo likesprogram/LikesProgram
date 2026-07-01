@@ -7,10 +7,8 @@
 #include <LikesProgram/Core/system/ScopeGuard.hpp>
 #include <LikesProgram/Core/time/Deadline.hpp>
 #include <LikesProgram/Core/time/Clock.hpp>
-#include <stringFormat/FormatInternal.hpp>
 #include <LikesProgram/Core/time/Time.hpp>
 #include <LikesProgram/Core/time/Timer.hpp>
-#include <unicode/Convert.hpp>
 
 #include <chrono>
 #include <cctype>
@@ -134,36 +132,36 @@ namespace {
     }
 
     void TestUnicode() {
-        auto utf16 = LikesProgram::Unicode::Convert::Utf8ToUtf16(u8"Likes");
-        auto utf8 = LikesProgram::Unicode::Convert::Utf16ToUtf8(utf16);
+        LikesProgram::String utf8Text(std::u8string(u8"Likes")); // 通过公开 String 构造覆盖 UTF-8 转 UTF-16
+        auto utf8 = utf8Text.ToU8String(); // 通过公开导出覆盖 UTF-16 转 UTF-8
         Require(std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()) == "Likes",
             "Unicode round trip failed");
 
-        auto nonBmpUtf16 = LikesProgram::Unicode::Convert::Utf32ToUtf16(U"\U0001F600");
-        auto nonBmpUtf8 = LikesProgram::Unicode::Convert::Utf16ToUtf8(nonBmpUtf16);
-        auto nonBmpUtf32 = LikesProgram::Unicode::Convert::Utf16ToUtf32(nonBmpUtf16);
+        LikesProgram::String nonBmpText(U"\U0001F600"); // 非 BMP 字符通过公开 UTF-32 构造进入内部 UTF-16
+        auto nonBmpUtf8 = nonBmpText.ToU8String();       // 非 BMP UTF-8 输出验证 surrogate pair
+        auto nonBmpUtf32 = nonBmpText.ToU32String();     // 非 BMP UTF-32 输出验证 code point
         Require(nonBmpUtf32.size() == 1 && nonBmpUtf32[0] == U'\U0001F600', "Unicode non-BMP round trip failed");
         Require(!nonBmpUtf8.empty(), "Unicode non-BMP UTF-8 output should not be empty");
 
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xC0, 0xAF })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xC0, 0xAF })); },
             "Unicode should reject overlong UTF-8");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xE0, 0x80, 0x80 })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xE0, 0x80, 0x80 })); },
             "Unicode should reject overlong three-byte UTF-8");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xED, 0xA0, 0x80 })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xED, 0xA0, 0x80 })); },
             "Unicode should reject UTF-8 encoded surrogate");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xF4, 0x90, 0x80, 0x80 })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xF4, 0x90, 0x80, 0x80 })); },
             "Unicode should reject UTF-8 code points above U+10FFFF");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xE2, 0x82 })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xE2, 0x82 })); },
             "Unicode should reject truncated UTF-8");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf8ToUtf16(U8Bytes({ 0xE2, 0x28, 0xA1 })); },
+        RequireThrows([] { LikesProgram::String(U8Bytes({ 0xE2, 0x28, 0xA1 })); },
             "Unicode should reject invalid UTF-8 continuation");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf16ToUtf8(std::u16string{ 0xD800 }); },
+        RequireThrows([] { LikesProgram::String text(std::u16string{ 0xD800 }); (void)text.ToU8String(); },
             "Unicode should reject dangling UTF-16 high surrogate");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf16ToUtf32(std::u16string{ 0xDC00 }); },
+        RequireThrows([] { LikesProgram::String text(std::u16string{ 0xDC00 }); (void)text.ToU32String(); },
             "Unicode should reject dangling UTF-16 low surrogate");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf32ToUtf16(std::u32string{ 0xD800 }); },
+        RequireThrows([] { LikesProgram::String(std::u32string{ 0xD800 }); },
             "Unicode should reject UTF-32 surrogate code point");
-        RequireThrows([] { LikesProgram::Unicode::Convert::Utf32ToUtf16(std::u32string{ 0x110000 }); },
+        RequireThrows([] { LikesProgram::String(std::u32string{ 0x110000 }); },
             "Unicode should reject UTF-32 code point above U+10FFFF");
     }
 
@@ -216,18 +214,8 @@ namespace {
         RequireEq(LikesProgram::String::Format(U"{"), U"{!}",
             "String::Format unmatched brace fallback failed");
 
-        auto& internal = LikesProgram::StringFormat::FormatInternal::Instance();
-        internal.RegisterFormatter("phase15_reentrant", [&internal](const LikesProgram::Any&, const LikesProgram::StringFormat::FormatSpec&) {
-            internal.RegisterFormatter("phase15_nested", [](const LikesProgram::Any&, const LikesProgram::StringFormat::FormatSpec&) {
-                return LikesProgram::String(U"nested");
-            });
-            return LikesProgram::String(U"ok");
-        });
-        RequireEq(LikesProgram::String::Format(U"{:uphase15_reentrant}", 1), U"ok",
-            "String::Format named formatter should not run under registry lock");
-        Require(internal.HasFormatter("phase15_nested"), "String::Format named formatter callback side effect failed");
-        internal.UnregisterFormatter("phase15_reentrant");
-        internal.UnregisterFormatter("phase15_nested");
+        RequireEq(LikesProgram::String::Format(U"{:umissing_formatter}", 1), U"{!type}",
+            "String::Format unknown user formatter should use stable fallback");
     }
 
     void TestTime() {

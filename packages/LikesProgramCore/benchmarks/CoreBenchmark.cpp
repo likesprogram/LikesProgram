@@ -8,7 +8,6 @@
 #include <LikesProgram/Core/StringView.hpp>
 #include <LikesProgram/Core/time/Deadline.hpp>
 #include <LikesProgram/Core/time/Clock.hpp>
-#include <unicode/Convert.hpp>
 
 #include <chrono>
 #include <codecvt>
@@ -265,10 +264,8 @@ int main() {
         std::uint64_t total = 0;
         auto utf8 = largeLikes.ToStdString();
         for (int i = 0; i < 200; ++i) {
-            auto utf16 = LikesProgram::Unicode::Convert::Utf8ToUtf16(
-                std::u8string(reinterpret_cast<const char8_t*>(utf8.data()),
-                    reinterpret_cast<const char8_t*>(utf8.data() + utf8.size())));
-            total += utf16.size() + Probe();
+            LikesProgram::String utf16Text(std::string_view(utf8.data(), utf8.size())); // 公开 UTF-8 构造覆盖内部 UTF-16 转换
+            total += utf16Text.Length() + Probe();
         }
         return total;
     });
