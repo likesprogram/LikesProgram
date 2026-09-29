@@ -1,5 +1,5 @@
 #include <LikesProgram/Net/Address.hpp>
-#include "net/SocketOps.hpp"
+#include "net/platform/SocketOps.hpp"
 #include <array>
 #include <cstring>
 #include <stdexcept>

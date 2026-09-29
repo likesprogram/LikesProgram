@@ -2,7 +2,7 @@
 #include <optional>
 #include <vector>
 #include <LikesProgram/Core/String.hpp>
-#include <stringFormat/FormatSpec.hpp>
+#include "stringFormat/FormatSpec.hpp"
 
 namespace LikesProgram {
     namespace StringFormat {

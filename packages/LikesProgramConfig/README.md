@@ -1,12 +1,12 @@
 # LikesProgramConfig 使用手册
 
-`LikesProgramConfig` 是 LikesProgram 的配置扩展包。它只依赖 `LikesProgramCore`，提供一棵拥有型配置值树，并支持轻量 `key=value`、JSON、YAML、TOML 解析与序列化，以及 `ConfigSchema` 校验和默认值注入。
+`LikesProgramConfig` 是 LikesProgram 的配置扩展包。它只依赖 `LikesProgramCore`，提供一棵拥有型配置值树，并支持轻量 `key=value`、JSON5、YAML、TOML 解析与序列化，以及 `ConfigSchema` 校验和默认值注入。
 
-当前实现不引入第三方 JSON/YAML/TOML 库，适合这些场景：
+当前实现不引入第三方 JSON5/YAML/TOML 库，适合这些场景：
 
 - 读取服务启动配置。
 - 在模块之间传递配置快照。
-- 使用 JSON/YAML/TOML 表达嵌套对象、数组和标量。
+- 使用 JSON5/YAML/TOML 表达嵌套对象、数组和标量。
 - 用 dotted path 快速读取常见嵌套字段。
 - 在启动阶段校验必填字段、类型约束和默认值。
 
@@ -40,7 +40,7 @@ target_link_libraries(MyApp PRIVATE LikesProgram::Config)
 #include <iostream>
 
 int main() {
-    auto config = LikesProgram::Config::Configuration::FromJson(
+    auto config = LikesProgram::Config::Configuration::FromJson5(
         u"{"
         u"\"service\":{\"name\":\"orders\",\"port\":8080},"
         u"\"feature\":{\"enabled\":true}"
@@ -272,22 +272,22 @@ LikesProgram::String out = config.ToKeyValueLines();
 
 - 每个配置项一行，格式为 `key=value\n`。
 - 嵌套对象会以 dotted path 展平。
-- 不做 JSON/YAML/TOML 转义。
+- 不做 JSON5/YAML/TOML 转义。
 - 不自动排序，通常按写入顺序输出。
 
-## JSON
+## JSON5
 
-解析 JSON：
+解析 JSON5：
 
 ```cpp
-auto config = LikesProgram::Config::Configuration::FromJson(
-    u"{\"service\":{\"name\":\"orders\",\"port\":8080},\"items\":[\"api\",2,false]}");
+auto config = LikesProgram::Config::Configuration::FromJson5(
+    u"{/* service */ service:{name:'orders',port:+0x1F,},items:['api',2,false,]}");
 ```
 
 不抛异常的解析：
 
 ```cpp
-auto result = LikesProgram::Config::Configuration::TryFromJson(u"{\"a\": [1,}");
+auto result = LikesProgram::Config::Configuration::TryFromJson5(u"{a: [1,}");
 if (!result.IsOk()) {
     auto message = result.GetStatus().ToString();
 }
@@ -296,11 +296,11 @@ if (!result.IsOk()) {
 序列化：
 
 ```cpp
-LikesProgram::String pretty = config.ToJson(2);
-LikesProgram::String compact = config.ToJson(-1);
+LikesProgram::String pretty = config.ToJson5(2);
+LikesProgram::String compact = config.ToJson5(-1);
 ```
 
-支持对象、数组、字符串、整数、浮点、布尔、null、常见转义和 Unicode surrogate pair。解析错误会携带行列诊断。
+支持注释、单引号字符串、无引号 IdentifierName key、尾逗号、十六进制整数、前导或尾随小数点、`Infinity`、`NaN`、字符串续行、常见转义和 Unicode surrogate pair。严格 JSON 是 JSON5 子集；原有 `FromJson`、`TryFromJson`、`ToJson` 入口继续保留并使用相同实现。解析错误会携带行列诊断。
 
 ## YAML
 
@@ -362,7 +362,7 @@ LikesProgram::String toml = config.ToToml();
 ```cpp
 auto config = LikesProgram::Config::Configuration::FromToml(tomlText);
 
-LikesProgram::String json = config.ToJson(-1);
+LikesProgram::String json5 = config.ToJson5(-1);
 LikesProgram::String yaml = config.ToYaml();
 LikesProgram::String toml = config.ToToml();
 ```
@@ -374,7 +374,7 @@ LikesProgram::String toml = config.ToToml();
 `ConfigSchema` 支持必填字段、可选字段、数组元素约束、类型约束、未知字段控制和默认值注入。
 
 ```cpp
-auto config = LikesProgram::Config::Configuration::FromJson(
+auto config = LikesProgram::Config::Configuration::FromJson5(
     u"{\"service\":{\"name\":\"orders\",\"port\":8080},\"feature\":{}}\n");
 
 auto serviceSchema = LikesProgram::Config::ConfigSchema::ObjectType()
@@ -465,13 +465,13 @@ config.Set(key, value);
 #include <fstream>
 #include <sstream>
 
-LikesProgram::Config::Configuration LoadJsonConfigFile(const std::string& path) {
+LikesProgram::Config::Configuration LoadJson5ConfigFile(const std::string& path) {
     std::ifstream file(path, std::ios::binary);
     std::ostringstream buffer;
     buffer << file.rdbuf();
 
     LikesProgram::String text(buffer.str(), LikesProgram::String::Encoding::UTF8);
-    return LikesProgram::Config::Configuration::FromJson(text);
+    return LikesProgram::Config::Configuration::FromJson5(text);
 }
 ```
 
@@ -490,7 +490,7 @@ auto config = result.MoveValue();
 
 `GetString(key, default)` 遇到空字符串会返回默认值。如果你需要区分“存在但为空”和“不存在”，先用 `Contains(key)` 或 `Get(key).Raw()`。
 
-`FromKeyValueLines` 会修剪 value 前后 ASCII 空白。需要保留首尾空格时，建议使用 JSON/YAML/TOML 字符串。
+`FromKeyValueLines` 会修剪 value 前后 ASCII 空白。需要保留首尾空格时，建议使用 JSON5/YAML/TOML 字符串。
 
 `Configuration::ToToml()` 只对对象根生成 TOML 文档；非对象根会返回空文档。
 
@@ -501,5 +501,6 @@ auto config = result.MoveValue();
 ## 更多可运行样例
 
 - `examples/ConfigExample.cpp`：包身份和 key=value 解析基础用法。
-- `tests/ConfigPackageTests.cpp`：完整行为测试，覆盖 key=value、JSON、YAML、TOML、Schema、格式往返、错误输入和兼容别名。
+- `tests/ConfigPackageTests.cpp`：完整行为测试，覆盖 key=value、JSON5、YAML、TOML、Schema、格式往返、错误输入和兼容别名。
 - `benchmarks/ConfigBenchmark.cpp`：Release 场景下的配置构建、解析和序列化开销观察样例。
+- `benchmarks/ConfigReferenceBenchmark.cpp`：显式开启 `LIKESPROGRAM_BUILD_CONFIG_REFERENCE_BENCHMARKS` 后，以相同文档和预转换原生输入对标 nlohmann/json、RapidJSON 与 yaml-cpp；参考库不进入产品依赖或安装导出。

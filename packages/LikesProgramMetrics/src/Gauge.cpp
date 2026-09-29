@@ -1,5 +1,5 @@
 #include <LikesProgram/Metrics/Gauge.hpp>
-#include <metrics/MetricsInternal.hpp>
+#include "metrics/MetricsInternal.hpp"
 
 #include <atomic>
 #include <cmath>
@@ -64,13 +64,33 @@ namespace LikesProgram {
             m_impl->m_value.store(value, std::memory_order_relaxed);
         }
 
+        void Gauge::Increment() {
+            if (!m_impl) return;
+            Internal::AddFiniteUnit(m_impl->m_value, 1.0);
+        }
+
         void Gauge::Increment(double value) {
-            if (!m_impl || !std::isfinite(value)) return;
+            if (!m_impl) return;
+            if (value == 1.0) {
+                Internal::AddFiniteUnit(m_impl->m_value, 1.0);
+                return;
+            }
+            if (!std::isfinite(value)) return;
             Internal::AddFiniteSaturating(m_impl->m_value, value);
         }
 
+        void Gauge::Decrement() {
+            if (!m_impl) return;
+            Internal::AddFiniteUnit(m_impl->m_value, -1.0);
+        }
+
         void Gauge::Decrement(double value) {
-            if (!m_impl || !std::isfinite(value)) return;
+            if (!m_impl) return;
+            if (value == 1.0) {
+                Internal::AddFiniteUnit(m_impl->m_value, -1.0);
+                return;
+            }
+            if (!std::isfinite(value)) return;
             Internal::AddFiniteSaturating(m_impl->m_value, -value);
         }
 
@@ -101,13 +121,13 @@ namespace LikesProgram {
         }
 
         LikesProgram::String Gauge::ToPrometheus() const {
-            const auto labels = LabelsCopy();          // 标签快照保证本次导出自洽
+            const LikesProgram::String labels = PrometheusLabels();
             LikesProgram::String result = u"# HELP ";
 
             result.Append(m_name).Append(u" ").Append(m_help).Append(u"\n");
             result.Append(u"# TYPE ").Append(m_name).Append(u" ").Append(Type()).Append(u"\n");
-            result.Append(m_name).Append(FormatLabels(labels)).Append(u" ")
-                .Append(LikesProgram::String::Format(u"{:.6f}", Value())).Append(u"\n");
+            result.Append(m_name).Append(labels).Append(u" ")
+                .Append(Internal::FormatFixedSix(Value())).Append(u"\n");
             return result;
         }
 
@@ -129,7 +149,7 @@ namespace LikesProgram {
             }
 
             json.Append(u"},\"value\":")
-                .Append(LikesProgram::String::Format(u"{:.6f}", Value()))
+                .Append(Internal::FormatFixedSix(Value()))
                 .Append(u"}");
             return json;
         }

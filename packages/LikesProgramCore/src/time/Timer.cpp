@@ -96,9 +96,7 @@ namespace LikesProgram {
             m_impl->m_lastNs.store(elapsedNs, std::memory_order_relaxed);
             m_impl->m_accumulatedNs.fetch_add(elapsedNs, std::memory_order_relaxed);
 
-            if (m_parent && m_parent->m_impl && m_parent->m_impl != m_impl) {
-                m_parent->m_impl->m_accumulatedNs.fetch_add(elapsedNs, std::memory_order_relaxed);
-            }
+            if (m_parent && m_parent->m_impl && m_parent->m_impl != m_impl) m_parent->m_impl->m_accumulatedNs.fetch_add(elapsedNs, std::memory_order_relaxed);
 
             // Stop 成功后置为非运行，重复 Stop 返回 0。
             // Duration 使用 chrono 类型返回，单位保持纳秒。
@@ -131,22 +129,20 @@ namespace LikesProgram {
             return m_impl->m_running.load(std::memory_order_relaxed);
         }
 
-        uint64_t Timer::NowNs()
-        {
+        uint64_t Timer::NowNs() {
 #if defined(_WIN32)
             static LARGE_INTEGER frequency = [] { // 每进程缓存的高精度计时器频率
                 LARGE_INTEGER freq; // QueryPerformanceCounter 每秒 tick 数
                 QueryPerformanceFrequency(&freq);
                 return freq;
-                }();
+            }();
             LARGE_INTEGER counter; // 当前高精度 tick 值
             QueryPerformanceCounter(&counter);
             return static_cast<uint64_t>(counter.QuadPart) * 1'000'000'000ULL / frequency.QuadPart;
 #else
             timespec ts; // CLOCK_MONOTONIC_RAW 当前时间
             clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-            return static_cast<uint64_t>(ts.tv_sec) * 1'000'000'000ULL
-                + static_cast<uint64_t>(ts.tv_nsec);
+            return static_cast<uint64_t>(ts.tv_sec) * 1'000'000'000ULL + static_cast<uint64_t>(ts.tv_nsec);
 #endif
         }
     }

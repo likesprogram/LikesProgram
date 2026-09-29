@@ -1,36 +1,73 @@
-#include <LikesProgram/Config/ConfigurationInternal.hpp>
+#include "LikesProgram/Config/ConfigurationInternal.hpp"
 
 namespace LikesProgram {
     namespace Config {
         namespace {
             // 判断实际配置节点是否满足 schema 声明的基础类型。
-            bool TypeMatches(ConfigSchemaType expected, const ConfigValue& value) {
+            bool TypeMatches(ConfigSchemaType expected, const Internal::ConfigNode& value) {
                 switch (expected) {
-                case ConfigSchemaType::Any: return true;
-                case ConfigSchemaType::Null: return value.IsNull();
-                case ConfigSchemaType::String: return value.IsString();
-                case ConfigSchemaType::Int64: return value.IsInt64();
-                case ConfigSchemaType::Double: return value.IsDouble();
-                case ConfigSchemaType::Bool: return value.IsBool();
-                case ConfigSchemaType::Number: return value.IsNumber();
-                case ConfigSchemaType::Array: return value.IsArray();
-                case ConfigSchemaType::Object: return value.IsObject();
+                    case ConfigSchemaType::Any: return true;
+                    case ConfigSchemaType::Null: return Internal::NodeIs(value, ConfigValueType::Null);
+                    case ConfigSchemaType::String: return Internal::NodeIs(value, ConfigValueType::String);
+                    case ConfigSchemaType::Int64: return Internal::NodeIs(value, ConfigValueType::Int64);
+                    case ConfigSchemaType::Double: return Internal::NodeIs(value, ConfigValueType::Double);
+                    case ConfigSchemaType::Bool: return Internal::NodeIs(value, ConfigValueType::Bool);
+                    case ConfigSchemaType::Number: return Internal::NodeIs(value, ConfigValueType::Int64) || Internal::NodeIs(value, ConfigValueType::Double);
+                    case ConfigSchemaType::Array: return Internal::NodeIs(value, ConfigValueType::Array);
+                    case ConfigSchemaType::Object: return Internal::NodeIs(value, ConfigValueType::Object);
                 }
                 return false;
+            }
+
+            // 将内部节点类型转为公开诊断中的稳定名称。
+            String NodeTypeName(const Internal::ConfigNode& value) {
+                switch (Internal::NodeType(value)) {
+                    case ConfigValueType::Null: return u"null";
+                    case ConfigValueType::String: return u"string";
+                    case ConfigValueType::Int64: return u"int64";
+                    case ConfigValueType::Double: return u"double";
+                    case ConfigValueType::Bool: return u"bool";
+                    case ConfigValueType::Array: return u"array";
+                    case ConfigValueType::Object: return u"object";
+                }
+                return u"unknown";
+            }
+
+            // 按 ConfigValue Get/Contains 规则借用对象字段，直接 key 优先于 dotted path。
+            const Internal::ConfigNode* FindSchemaNode(const Internal::ConfigNode& value, const String& key) {
+                const auto* object = ConfigValueAccess::Object(value); // 当前对象分支
+                if (!object) return nullptr;
+                if (const auto* entry = Internal::FindObjectEntry(*object, key)) return &entry->value;
+                if (!Internal::HasDot(key)) return nullptr;
+
+                const Internal::ConfigNode* current = &value; // dotted path 当前节点
+                for (const auto& part : Internal::SplitDottedPath(key)) {
+                    const auto* currentObject = ConfigValueAccess::Object(*current);
+                    if (!currentObject) return nullptr;
+                    const auto* entry = Internal::FindObjectEntry(*currentObject, part); // 当前字段
+                    if (!entry) return nullptr;
+                    current = &entry->value;
+                }
+                return current;
+            }
+
+            // 可写查找与只读规则相同，用于默认值直接写入内部树。
+            Internal::ConfigNode* FindSchemaNode(Internal::ConfigNode& value, const String& key) {
+                return const_cast<Internal::ConfigNode*>(FindSchemaNode(static_cast<const Internal::ConfigNode&>(value), key));
             }
 
             // 将 schema 类型转为错误报告中的稳定小写名称。
             String SchemaTypeName(ConfigSchemaType type) {
                 switch (type) {
-                case ConfigSchemaType::Any: return u"any";
-                case ConfigSchemaType::Null: return u"null";
-                case ConfigSchemaType::String: return u"string";
-                case ConfigSchemaType::Int64: return u"int64";
-                case ConfigSchemaType::Double: return u"double";
-                case ConfigSchemaType::Bool: return u"bool";
-                case ConfigSchemaType::Number: return u"number";
-                case ConfigSchemaType::Array: return u"array";
-                case ConfigSchemaType::Object: return u"object";
+                    case ConfigSchemaType::Any: return u"any";
+                    case ConfigSchemaType::Null: return u"null";
+                    case ConfigSchemaType::String: return u"string";
+                    case ConfigSchemaType::Int64: return u"int64";
+                    case ConfigSchemaType::Double: return u"double";
+                    case ConfigSchemaType::Bool: return u"bool";
+                    case ConfigSchemaType::Number: return u"number";
+                    case ConfigSchemaType::Array: return u"array";
+                    case ConfigSchemaType::Object: return u"object";
                 }
                 return u"unknown";
             }
@@ -41,19 +78,15 @@ namespace LikesProgram {
         };
 
         // 创建空校验结果，默认表示校验通过。
-        ConfigValidationResult::ConfigValidationResult()
-            : m_impl(new ConfigValidationResultImpl{}) {
-        }
+        ConfigValidationResult::ConfigValidationResult() : m_impl(new ConfigValidationResultImpl{}) { }
 
         // 深拷贝错误列表，避免结果对象之间共享可变状态。
-        ConfigValidationResult::ConfigValidationResult(const ConfigValidationResult& other)
-            : m_impl(new ConfigValidationResultImpl{}) {
+        ConfigValidationResult::ConfigValidationResult(const ConfigValidationResult& other) : m_impl(new ConfigValidationResultImpl{}) {
             if (other.m_impl) m_impl->m_errors = other.m_impl->m_errors;
         }
 
         // 移动接管结果实现对象，源对象置空后仍可析构。
-        ConfigValidationResult::ConfigValidationResult(ConfigValidationResult&& other) noexcept
-            : m_impl(other.m_impl) {
+        ConfigValidationResult::ConfigValidationResult(ConfigValidationResult&& other) noexcept : m_impl(other.m_impl) {
             other.m_impl = nullptr;
         }
 
@@ -135,8 +168,7 @@ namespace LikesProgram {
         };
 
         // 构造 Any schema，默认不限制类型。
-        ConfigSchema::ConfigSchema() : m_impl(new ConfigSchemaImpl{}) {
-        }
+        ConfigSchema::ConfigSchema() : m_impl(new ConfigSchemaImpl{}) { }
 
         // 深拷贝 schema 规则，字段子 schema 通过 shared_ptr 保持值语义快照。
         ConfigSchema::ConfigSchema(const ConfigSchema& other) : m_impl(new ConfigSchemaImpl{}) {
@@ -221,9 +253,7 @@ namespace LikesProgram {
         // 声明必填字段，缺失时 Validate 会产生错误。
         ConfigSchema& ConfigSchema::Required(const String& key, const ConfigSchema& schema) {
             EnsureImpl();
-            m_impl->m_fields.push_back(ConfigSchemaImpl::FieldRule{
-                key, std::make_shared<ConfigSchema>(schema), true, false, ConfigValue()
-            });
+            m_impl->m_fields.push_back(ConfigSchemaImpl::FieldRule{ key, std::make_shared<ConfigSchema>(schema), true, false, ConfigValue() });
             m_impl->m_type = ConfigSchemaType::Object;
             return *this;
         }
@@ -231,9 +261,7 @@ namespace LikesProgram {
         // 声明可选字段，并在非 null 默认值存在时支持 ApplyDefaults 写入。
         ConfigSchema& ConfigSchema::Optional(const String& key, const ConfigSchema& schema, const ConfigValue& defaultValue) {
             EnsureImpl();
-            m_impl->m_fields.push_back(ConfigSchemaImpl::FieldRule{
-                key, std::make_shared<ConfigSchema>(schema), false, !defaultValue.IsNull(), defaultValue
-            });
+            m_impl->m_fields.push_back(ConfigSchemaImpl::FieldRule{ key, std::make_shared<ConfigSchema>(schema), false, !defaultValue.IsNull(), defaultValue });
             m_impl->m_type = ConfigSchemaType::Object;
             return *this;
         }
@@ -273,55 +301,72 @@ namespace LikesProgram {
             ConfigValidationResult& result) const {
             if (!m_impl) return;
 
-            if (!TypeMatches(m_impl->m_type, value)) {
-                result.AddError(String::Format(u"{} expected {}, got {}",
-                    path, SchemaTypeName(m_impl->m_type), value.TypeName()));
-                return;
-            }
-
-            if (m_impl->m_hasItemSchema && m_impl->m_itemSchema && value.IsArray()) {
-                for (size_t i = 0; i < value.Size(); ++i) {
-                    m_impl->m_itemSchema->ValidateRecursive(value.At(i),
-                        String::Format(u"{}[{}]", path, i), result);
+            // 成员上下文内的递归 lambda 可访问每个子 schema 的私有规则而不包装公开值。
+            auto validateNode = [&](auto&& self, const ConfigSchema& schema,
+                const Internal::ConfigNode& node, const String& currentPath) -> void {
+                if (!schema.m_impl) return;
+                if (!TypeMatches(schema.m_impl->m_type, node)) {
+                    result.AddError(String::Format(u"{} expected {}, got {}", currentPath, SchemaTypeName(schema.m_impl->m_type), NodeTypeName(node)));
+                    return;
                 }
-            }
 
-            if (!m_impl->m_fields.empty() && value.IsObject()) {
-                for (const auto& field : m_impl->m_fields) {
-                    ConfigValue child = value.Get(field.m_key); // 当前字段的配置值，缺失时为 null 节点
-                    String childPath = path == u"$" ? String(u"$.") + field.m_key : path + u"." + field.m_key; // 子字段错误路径
-                    if (child.IsNull() && !value.Contains(field.m_key)) {
+                if (schema.m_impl->m_hasItemSchema && schema.m_impl->m_itemSchema) {
+                    if (const auto* array = ConfigValueAccess::Array(node)) {
+                        for (size_t i = 0; i < array->size(); ++i) {
+                            self(self, *schema.m_impl->m_itemSchema, (*array)[i], String::Format(u"{}[{}]", currentPath, i));
+                        }
+                    }
+                }
+
+                const auto* object = ConfigValueAccess::Object(node); // 对象字段规则的当前存储
+                if (!object || schema.m_impl->m_fields.empty()) return;
+                for (const auto& field : schema.m_impl->m_fields) {
+                    const auto* child = FindSchemaNode(node, field.m_key); // 只借用目标字段
+                    String childPath = currentPath == u"$" ? String(u"$.") + field.m_key : currentPath + u"." + field.m_key;
+                    if (!child) {
                         if (field.m_required) result.AddError(String::Format(u"{} is required", childPath));
                         continue;
                     }
-                    if (field.m_schema) field.m_schema->ValidateRecursive(child, childPath, result);
+                    if (field.m_schema) self(self, *field.m_schema, *child, childPath);
                 }
 
-                if (!m_impl->m_allowUnknownKeys) {
-                    Internal::ForEachObjectEntry(value, [&](const String& key, const ConfigValue&) {
-                        bool known = std::any_of(m_impl->m_fields.begin(), m_impl->m_fields.end(),
-                            [&key](const ConfigSchemaImpl::FieldRule& rule) {
-                                return rule.m_key == key;
-                            });
+                if (!schema.m_impl->m_allowUnknownKeys) {
+                    for (const auto& entry : *object) {
+                        const String& key = entry.key.AsString(); // 未知字段诊断 key
+                        bool known = std::any_of(
+                            schema.m_impl->m_fields.begin(), schema.m_impl->m_fields.end(),
+                            [&key](const ConfigSchemaImpl::FieldRule& rule) { return rule.m_key == key; }
+                        );
                         if (!known) result.AddError(String::Format(u"$.{} is not allowed", key));
-                    });
+                    }
                 }
-            }
+            };
+
+            validateNode(validateNode, *this, ConfigValueAccess::Node(value), path);
         }
 
         // 递归写入可选字段默认值，写回父对象保证子对象变更可见。
         void ConfigSchema::ApplyDefaultsRecursive(ConfigValue& value) const {
-            if (!m_impl || !value.IsObject()) return;
+            if (!m_impl) return;
 
-            for (const auto& field : m_impl->m_fields) {
-                if (!value.Contains(field.m_key) && field.m_hasDefault) {
-                    value.Set(field.m_key, field.m_defaultValue);
+            // 默认值直接写入唯一内部树，避免 Get/Set 先深克隆子树再写回。
+            auto applyNode = [&](auto&& self, const ConfigSchema& schema,
+                Internal::ConfigNode& node) -> void {
+                if (!schema.m_impl) return;
+                auto* object = ConfigValueAccess::Object(node); // 只有对象节点接受字段默认值
+                if (!object) return;
+
+                for (const auto& field : schema.m_impl->m_fields) {
+                    auto* child = FindSchemaNode(node, field.m_key); // 当前字段或 dotted path
+                    if (!child && field.m_hasDefault) {
+                        object->push_back(Internal::ConfigObjectEntry{ Internal::ConfigText(field.m_key), Internal::CloneNode(ConfigValueAccess::Node(field.m_defaultValue)) });
+                        child = &object->back().value;
+                    }
+                    if (child && field.m_schema) self(self, *field.m_schema, *child);
                 }
+            };
 
-                ConfigValue child = value.Get(field.m_key); // 递归处理前的字段副本
-                if (field.m_schema) field.m_schema->ApplyDefaultsRecursive(child);
-                if (value.Contains(field.m_key)) value.Set(field.m_key, child);
-            }
+            applyNode(applyNode, *this, ConfigValueAccess::Node(value));
         }
     }
 }

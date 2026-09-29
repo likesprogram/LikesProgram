@@ -7,7 +7,7 @@
 // To regenerate this file, run CreateUnicodeCaseMap.py with a Python environment.
 
 
-#include <unicode/Case.hpp>
+#include "unicode/Case.hpp"
 #include <cstddef>
 
 namespace LikesProgram {

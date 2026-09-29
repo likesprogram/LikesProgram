@@ -16,12 +16,47 @@ namespace LikesProgram {
     using Any = std::any;
 
     namespace StringFormat {
+        // 格式化快路径只枚举可直接写入最终缓冲的内建参数类型。
+        enum class FormatArgKind {
+            Other,
+            SignedInt,
+            SignedShort,
+            SignedLong,
+            SignedLongLong,
+            UnsignedInt,
+            UnsignedShort,
+            UnsignedLong,
+            UnsignedLongLong,
+            Utf32Pointer,
+            Utf32View,
+            Utf16View
+        };
+
         // 零拷贝格式化参数视图，延迟到需要回退时再 materialize 为 Any。
         struct FormatArgView {
             const void* value = nullptr;             // 参数对象地址，不拥有生命周期
             std::type_index type{ typeid(void) };    // 参数的运行时类型标识
             Any(*makeAny)(const void*) = nullptr;    // 兼容旧 Any 路径的惰性构造函数
+            size_t extent = 0;                       // 数组字面量元素数，0 表示需要运行时确定
+            FormatArgKind kind = FormatArgKind::Other; // 无 Any 快路径的直接分派种类
         };
+
+        // 编译期识别当前快路径支持的参数种类，未知类型继续走既有 Any 回退。
+        template <typename T>
+        constexpr FormatArgKind GetFormatArgKind() {
+            if constexpr (std::is_same_v<T, int>) return FormatArgKind::SignedInt;
+            else if constexpr (std::is_same_v<T, short>) return FormatArgKind::SignedShort;
+            else if constexpr (std::is_same_v<T, long>) return FormatArgKind::SignedLong;
+            else if constexpr (std::is_same_v<T, long long>) return FormatArgKind::SignedLongLong;
+            else if constexpr (std::is_same_v<T, unsigned int>) return FormatArgKind::UnsignedInt;
+            else if constexpr (std::is_same_v<T, unsigned short>) return FormatArgKind::UnsignedShort;
+            else if constexpr (std::is_same_v<T, unsigned long>) return FormatArgKind::UnsignedLong;
+            else if constexpr (std::is_same_v<T, unsigned long long>) return FormatArgKind::UnsignedLongLong;
+            else if constexpr (std::is_same_v<T, const char32_t*>) return FormatArgKind::Utf32Pointer;
+            else if constexpr (std::is_same_v<T, std::u32string_view>) return FormatArgKind::Utf32View;
+            else if constexpr (std::is_same_v<T, std::u16string_view>) return FormatArgKind::Utf16View;
+            else return FormatArgKind::Other;
+        }
 
         // 非指针参数按值复制到 Any，保证注册表回调拿到稳定对象。
         template <typename T>
@@ -32,12 +67,8 @@ namespace LikesProgram {
         // 指针参数保留原始指针值，避免把指向内容误复制为对象。
         template <typename P>
         Any MakePointerFormatArgAny(const void* value) {
-            if constexpr (std::is_const_v<std::remove_pointer_t<P>>) {
-                return Any(reinterpret_cast<P>(value));
-            }
-            else {
-                return Any(reinterpret_cast<P>(const_cast<void*>(value)));
-            }
+            if constexpr (std::is_const_v<std::remove_pointer_t<P>>) return Any(reinterpret_cast<P>(value));
+            else return Any(reinterpret_cast<P>(const_cast<void*>(value)));
         }
 
         // 为 Format 快路径构造参数视图，数组/指针和对象引用分开处理。
@@ -45,22 +76,35 @@ namespace LikesProgram {
         FormatArgView MakeFormatArgView(T&& value) {
             using Raw = std::remove_reference_t<T>;  // 保留数组信息用于识别字面量
             using Decayed = std::decay_t<T>;         // 传入格式化器的稳定类型标识
-            if constexpr (std::is_array_v<Raw> || std::is_pointer_v<Decayed>) {
+            if constexpr (std::is_array_v<Raw>) {
                 return FormatArgView{
                     static_cast<const void*>(value),
                     std::type_index(typeid(Decayed)),
-                    &MakePointerFormatArgAny<Decayed>
+                    &MakePointerFormatArgAny<Decayed>,
+                    std::extent_v<Raw> - 1,
+                    GetFormatArgKind<Decayed>()
+                };
+            }
+            else if constexpr (std::is_pointer_v<Decayed>) {
+                return FormatArgView{
+                    static_cast<const void*>(value),
+                    std::type_index(typeid(Decayed)),
+                    &MakePointerFormatArgAny<Decayed>,
+                    0, GetFormatArgKind<Decayed>()
                 };
             }
             else {
                 return FormatArgView{
                     static_cast<const void*>(std::addressof(value)),
                     std::type_index(typeid(Decayed)),
-                    &MakeFormatArgAny<Decayed>
+                    &MakeFormatArgAny<Decayed>,
+                    0, GetFormatArgKind<Decayed>()
                 };
             }
         }
     }
+
+    class StringView;
 
     // UTF-16 存储的 Unicode 字符串，公共索引按 code point 语义暴露。
     class LIKESPROGRAM_CORE_API String {
@@ -86,8 +130,8 @@ namespace LikesProgram {
         String(const char32_t* s);
         // 深拷贝另一个 String 的内容、编码标识和可用缓存状态。
         String(const String& other);
-        // 移动接管另一个 String 的实现对象，并把源对象重置为空串。
-        String(String&& other) noexcept;
+        // 移动接管另一个 String 的实现对象；源对象复用进程内只读空状态，不产生额外堆分配。
+        String(String&& other);
         // 按指定窄字符编码构造单字符字符串，默认按 UTF-8 单字节输入。
         String(const char c, Encoding enc = Encoding::UTF8);
         // 构造单个 UTF-8 code unit 字符串，适用于 ASCII/单字节字面量。
@@ -135,8 +179,8 @@ namespace LikesProgram {
 
         // 从另一个 String 拷贝赋值。
         String& operator=(const String& other);
-        // 从另一个 String 移动赋值。
-        String& operator=(String&& other) noexcept;
+        // 从另一个 String 移动赋值；源对象复用进程内只读空状态并保持可复用。
+        String& operator=(String&& other);
         // 从 UTF-8/指定编码 C 字符串赋值。
         String& operator=(const char* s);
         // 从 UTF-8 char8_t C 字符串赋值。
@@ -170,9 +214,9 @@ namespace LikesProgram {
         size_t Size() const;
         // UTF-16 code unit 数，与内部存储长度一致。
         size_t Length() const;
-        // std 兼容入口：返回 UTF-16 code unit 数，不等同于 Unicode code point 数。
-        size_t size() const { return Length(); }
-        // std 兼容入口：与 size() 一致，保留 basic_string 迁移语义。
+        // 小写兼容入口：返回 Unicode code point 数，与 Size() 一致。
+        size_t size() const { return Size(); }
+        // 小写兼容入口：返回 UTF-16 code unit 数，与 Length() 一致。
         size_t length() const { return Length(); }
         // 判断是否没有任何 UTF-16 code unit。
         bool Empty() const;
@@ -206,9 +250,7 @@ namespace LikesProgram {
         String& Append(std::u16string_view str);
         // 直接拼接 UTF-16 字面量，消除指针和 view 重载之间的二义性。
         template <size_t N>
-        String& Append(const char16_t(&str)[N]) {
-            return Append(std::u16string_view(str, N > 0 ? N - 1 : 0));
-        }
+        String& Append(const char16_t(&str)[N]) { return Append(std::u16string_view(str, N > 0 ? N - 1 : 0)); }
         // 直接拼接 wchar_t 视图，按平台 wchar_t 宽度转换。
         String& Append(std::wstring_view str);
         // std 风格小写别名，方便迁移 basic_string 调用习惯。
@@ -346,23 +388,28 @@ namespace LikesProgram {
         // 使用 UTF-16 字面量格式串，自动剔除末尾 NUL。
         template <size_t N, typename... Args>
         static String Format(const char16_t(&fmt)[N], Args&&... args) {
-            return Format(std::u16string_view(fmt, N > 0 ? N - 1 : 0), std::forward<Args>(args)...);
+            std::array<StringFormat::FormatArgView, sizeof...(Args)> views{ {
+                StringFormat::MakeFormatArgView(args)...
+            } };
+            return FormatLiteralViews(CachedFormatLiteral(fmt, N > 0 ? N - 1 : 0),
+                views.data(), views.size(), fmt);
         }
 
         // 使用 UTF-32 字面量格式串，自动剔除末尾 NUL。
         template <size_t N, typename... Args>
         static String Format(const char32_t(&fmt)[N], Args&&... args) {
-            return Format(std::u32string_view(fmt, N > 0 ? N - 1 : 0), std::forward<Args>(args)...);
+            std::array<StringFormat::FormatArgView, sizeof...(Args)> views{ {
+                StringFormat::MakeFormatArgView(args)...
+            } };
+            return FormatLiteralViews(CachedFormatLiteral(fmt, N > 0 ? N - 1 : 0), views.data(), views.size(), fmt);
         }
 
         // 将常见标量、可转换文本或可流输出类型转换为 String，失败返回空串。
         template <typename T>
         static String ToString(const T& value) {
             try {
-                if constexpr (std::is_convertible_v<T, String>) {
-                    // 如果类型可直接转换为 String，直接返回
-                    return String(value);
-                }
+                // 如果类型可直接转换为 String，直接返回
+                if constexpr (std::is_convertible_v<T, String>) return String(value);
                 else if constexpr (
                     std::is_integral_v<T> ||
                     std::is_floating_point_v<T> ||
@@ -376,17 +423,25 @@ namespace LikesProgram {
                     ss << value;
                     return String(ss.str());
                 }
-            }
-            catch (const std::exception&) {
+            } catch (const std::exception&) {
                 // 如果所有转换方法都失败，返回空字符串
                 return String();
             }
         }
 
     private:
+        friend class StringView;
+
+        // 只建立可析构 PImpl，供可能抛异常的公开构造函数安全委托。
+        struct UninitializedTag { };
+        explicit String(UninitializedTag);
+
         // PImpl 隐藏存储、缓存和同步细节，保持 ABI 稳定。
         struct StringImpl;
         StringImpl* m_impl = nullptr; // 唯一拥有的实现对象，析构时释放
+
+        // 移动源共享该不可变空状态；任何后续写入都会先替换为独占实现。
+        static StringImpl* SharedMovedFromImpl();
 
         // 将 code point 索引转换为 UTF-16 code unit 偏移。
         size_t CodePointOffset(size_t index) const;
@@ -403,10 +458,17 @@ namespace LikesProgram {
         static String FormatAny(const String& fmt, const std::vector<Any>& args);
         // 快路径格式化入口，避免每个参数都构造 std::any。
         static String FormatViews(const String& fmt, const StringFormat::FormatArgView* args, size_t argCount);
+        // 字面量快路径使用稳定源码地址跳过重复格式串比较。
+        static String FormatLiteralViews(const String& fmt, const StringFormat::FormatArgView* args,
+            size_t argCount, const void* literalKey);
         // 缓存 UTF-16 字面量格式串，避免重复构造 String。
         static const String& CachedFormatString(std::u16string_view fmt);
         // 缓存 UTF-32 字面量格式串，避免重复构造 String。
         static const String& CachedFormatString(std::u32string_view fmt);
+        // 通过稳定 UTF-16 字面量地址缓存格式串。
+        static const String& CachedFormatLiteral(const char16_t* fmt, size_t length);
+        // 通过稳定 UTF-32 字面量地址缓存格式串。
+        static const String& CachedFormatLiteral(const char32_t* fmt, size_t length);
     };
 }
 

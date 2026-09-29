@@ -271,7 +271,7 @@ namespace {
             queue.reserve(threadCount * perThread);
             std::vector<std::thread> threads;
             for (int t = 0; t < threadCount; ++t) {
-                threads.emplace_back([&queue, &mutex, &total, t] {
+                threads.emplace_back([&queue, &mutex, &total, perThread, t] {
                     for (int i = 0; i < perThread; ++i) {
                         auto line = std::string("thread ") + std::to_string(t) +
                             " item " + std::to_string(i);

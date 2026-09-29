@@ -5,8 +5,10 @@
 #include <source_location>
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -105,45 +107,209 @@ namespace LikesProgram {
             static void SetRequestId(const String& requestId);
 
             // 格式化并提交一条日志记录，调用点由 source_location 捕获。
+            void Log(Level level, const std::source_location& loc, const String& message) {
+                if (!Detail::IsLevelEnabledFast(level)) return;
+
+                LogMessageString(level, message,
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
             template <typename... Args>
+                requires (sizeof...(Args) > 0)
             void Log(Level level, const std::source_location& loc, const String& format, Args&&... args) {
                 if (!Detail::IsLevelEnabledFast(level)) return;
 
-                if constexpr (sizeof...(args) == 0) {
-                    LogMessageString(level, format, loc.file_name(), loc.line(), loc.function_name());
-                }
-                else {
-                    LogMessageString(level, String::Format(format, std::forward<Args>(args)...),
-                        loc.file_name(), loc.line(), loc.function_name());
-                }
+                LogMessageString(level, String::Format(format, std::forward<Args>(args)...),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
+            // 可变 UTF-16 数组必须按调用时内容建立异步快照，不能按地址缓存。
+            template <size_t N>
+            void Log(Level level, const std::source_location& loc,
+                char16_t(&message)[N]) {
+                if (!Detail::IsLevelEnabledFast(level)) return;
+
+                LogMessageString(level,
+                    String(std::u16string_view(message, N > 0 ? N - 1 : 0)),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
+            // const UTF-16 数组按地址和调用点共享不可变文本快照。
+            template <size_t N>
+            void Log(Level level, const std::source_location& loc,
+                const char16_t(&message)[N]) {
+                if (!Detail::IsLevelEnabledFast(level)) return;
+
+                LogMessageLiteral(level,
+                    std::u16string_view(message, N > 0 ? N - 1 : 0), message,
+                    loc.file_name(), loc.line(), loc.function_name());
             }
 
             // UTF-16 字面量入口先过滤级别，再构造 String，避免禁用日志产生格式文本分配。
             template <typename... Args>
+                requires (sizeof...(Args) > 0)
             void Log(Level level, const std::source_location& loc, const char16_t* format, Args&&... args) {
                 if (!Detail::IsLevelEnabledFast(level)) return;
 
                 std::u16string_view view(format ? format : u""); // 格式串视图，不拥有调用方字面量
-                if constexpr (sizeof...(args) == 0) {
-                    LogMessageString(level, String(view), loc.file_name(), loc.line(), loc.function_name());
-                }
-                else {
-                    LogMessageString(level, String::Format(view, std::forward<Args>(args)...),
-                        loc.file_name(), loc.line(), loc.function_name());
-                }
+                LogMessageString(level, String::Format(view, std::forward<Args>(args)...),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
+            template <typename Pointer>
+                requires (std::is_same_v<std::remove_cvref_t<Pointer>, const char16_t*> ||
+                    std::is_same_v<std::remove_cvref_t<Pointer>, char16_t*>)
+            void Log(Level level, const std::source_location& loc, Pointer&& message) {
+                if (!Detail::IsLevelEnabledFast(level)) return;
+
+                LogMessageString(level, String(std::u16string_view(message ? message : u"")),
+                    loc.file_name(), loc.line(), loc.function_name());
             }
 
             // UTF-16 view 入口服务缓存格式串和外部缓冲，禁用级别不复制格式文本。
+            void Log(Level level, const std::source_location& loc, std::u16string_view message) {
+                if (!Detail::IsLevelEnabledFast(level)) return;
+
+                LogMessageString(level, String(message),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
             template <typename... Args>
+                requires (sizeof...(Args) > 0)
             void Log(Level level, const std::source_location& loc, std::u16string_view format, Args&&... args) {
                 if (!Detail::IsLevelEnabledFast(level)) return;
 
-                if constexpr (sizeof...(args) == 0) {
-                    LogMessageString(level, String(format), loc.file_name(), loc.line(), loc.function_name());
-                }
-                else {
-                    LogMessageString(level, String::Format(format, std::forward<Args>(args)...),
+                LogMessageString(level, String::Format(format, std::forward<Args>(args)...),
+                    loc.file_name(), loc.line(), loc.function_name());
+            }
+
+            // 同步分发到当前 Sink 快照，不要求 Start、不进入队列，也不调度失败重试。
+            // 消息构造或任一符合条件的 Sink 写入失败时返回 false。
+            template <typename... Args>
+            bool LogSync(Level level, const std::source_location& loc,
+                const String& format, Args&&... args) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    if constexpr (sizeof...(args) == 0) {
+                        return LogMessageStringSync(level, format,
+                            loc.file_name(), loc.line(), loc.function_name());
+                    }
+                    return LogMessageStringSync(level,
+                        String::Format(format, std::forward<Args>(args)...),
                         loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
+                }
+            }
+
+            // 可变 UTF-16 数组每次校验当前内容，覆盖同一地址原位更新。
+            template <size_t N>
+            bool LogSync(Level level, const std::source_location& loc,
+                char16_t(&message)[N]) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    return LogMessageViewSync(level,
+                        std::u16string_view(message, N > 0 ? N - 1 : 0),
+                        loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
+                }
+            }
+
+            // const UTF-16 数组同步入口沿用相同过滤、格式化和失败统计语义。
+            template <size_t N>
+            bool LogSync(Level level, const std::source_location& loc,
+                const char16_t(&message)[N]) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    return LogMessageLiteralSync(level,
+                        std::u16string_view(message, N > 0 ? N - 1 : 0), message,
+                        loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
+                }
+            }
+
+            // UTF-16 指针和带格式参数入口保留内容检查，不能假定外部缓冲不可变。
+            template <typename... Args>
+                requires (sizeof...(Args) > 0)
+            bool LogSync(Level level, const std::source_location& loc,
+                const char16_t* format, Args&&... args) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    std::u16string_view view(format ? format : u""); // 不拥有调用方格式串
+                    if constexpr (sizeof...(args) == 0) {
+                        return LogMessageViewSync(level, view,
+                            loc.file_name(), loc.line(), loc.function_name());
+                    }
+                    return LogMessageStringSync(level,
+                        String::Format(view, std::forward<Args>(args)...),
+                        loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
+                }
+            }
+
+            // 普通 UTF-16 指针不具备字面量生命周期保证，按当前内容执行同步分发。
+            template <typename Pointer>
+                requires (std::is_same_v<std::remove_cvref_t<Pointer>, const char16_t*> ||
+                    std::is_same_v<std::remove_cvref_t<Pointer>, char16_t*>)
+            bool LogSync(Level level, const std::source_location& loc, Pointer&& message) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    return LogMessageViewSync(level,
+                        std::u16string_view(message ? message : u""),
+                        loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
+                }
+            }
+
+            // UTF-16 view 同步入口允许外部缓冲按值快照后直接分发。
+            template <typename... Args>
+            bool LogSync(Level level, const std::source_location& loc,
+                std::u16string_view format, Args&&... args) {
+                if (!Detail::IsLevelEnabledFast(level)) return true;
+
+                try {
+                    if constexpr (sizeof...(args) == 0) {
+                        return LogMessageViewSync(level, format,
+                            loc.file_name(), loc.line(), loc.function_name());
+                    }
+                    return LogMessageStringSync(level,
+                        String::Format(format, std::forward<Args>(args)...),
+                        loc.file_name(), loc.line(), loc.function_name());
+                }
+                catch (const std::exception& ex) {
+                    return RecordSynchronousConstructionFailure(ex.what());
+                }
+                catch (...) {
+                    return RecordSynchronousConstructionFailure(nullptr);
                 }
             }
 
@@ -178,6 +344,38 @@ namespace LikesProgram {
 
             // 将临时格式化文本送入队列，右值入口直接移动进消息快照。
             void LogMessageString(Level level, String&& msg, const char* file, int line, const char* func);
+
+            // UTF-16 数组入口以地址加内容命中缓存，异步队列共享其物化结果。
+            void LogMessageLiteral(Level level, std::u16string_view msg, const void* literalKey,
+                const char* file, int line, const char* func);
+
+            // 动态文本和字面量共用紧凑异步快照入口。
+            void LogMessageAsync(Level level, String* ownedMessage, std::u16string_view literal,
+                const void* literalKey, const char* file, int line, const char* func);
+
+            // 将左值消息复制后同步分发到当前 Sink 快照。
+            bool LogMessageStringSync(Level level, const String& msg,
+                const char* file, int line, const char* func);
+
+            // 将临时消息直接同步分发到当前 Sink 快照。
+            bool LogMessageStringSync(Level level, String&& msg,
+                const char* file, int line, const char* func);
+
+            // 无格式参数 UTF-16 入口直接复用 view，避免热路径先构造临时 String。
+            bool LogMessageViewSync(Level level, std::u16string_view msg,
+                const char* file, int line, const char* func);
+
+            // UTF-16 数组以地址和内容命中缓存，避免栈地址复用返回旧消息。
+            bool LogMessageLiteralSync(Level level, std::u16string_view msg, const void* literalKey,
+                const char* file, int line, const char* func);
+
+            // 三种同步文本入口共用缓存和分发实现；movable 非空时允许转移文本所有权。
+            bool LogMessageSync(Level level, const String* msg, String* movable,
+                std::u16string_view view, const void* literalKey, bool useView,
+                const char* file, int line, const char* func);
+
+            // 记录同步消息构造失败并转换为稳定的 false 返回值。
+            bool RecordSynchronousConstructionFailure(const char* reason) noexcept;
 
             // 快速判断日志级别是否会通过过滤，避免禁用级别提前格式化参数。
             bool IsLevelEnabled(Level level) const;

@@ -13,29 +13,23 @@ SMP_CPP = os.path.join(BASE_DIR, "CaseSMP.cpp")
 
 # ---------------------- 下载 Unicode 数据 ----------------------
 print("Downloading UnicodeData.txt ...")
-with urllib.request.urlopen(UNICODE_URL) as response:
-    unicode_data = response.read().decode("utf-8")
+with urllib.request.urlopen(UNICODE_URL) as response: unicode_data = response.read().decode("utf-8")
 
 bmp_upper, bmp_lower, smp_upper, smp_lower = {}, {}, {}, {}
 
 for line in unicode_data.splitlines():
     fields = line.strip().split(";")
-    if len(fields) < 14:
-        continue
+    if len(fields) < 14: continue
     cp = int(fields[0], 16)
     upper = int(fields[12], 16) if fields[12] else None
     lower = int(fields[13], 16) if fields[13] else None
 
     if cp <= 0xFFFF:
-        if upper is not None and upper != cp:
-            bmp_upper[cp] = upper
-        if lower is not None and lower != cp:
-            bmp_lower[cp] = lower
+        if upper is not None and upper != cp: bmp_upper[cp] = upper
+        if lower is not None and lower != cp: bmp_lower[cp] = lower
     else:
-        if upper is not None and upper != cp:
-            smp_upper[cp] = upper
-        if lower is not None and lower != cp:
-            smp_lower[cp] = lower
+        if upper is not None and upper != cp: smp_upper[cp] = upper
+        if lower is not None and lower != cp: smp_lower[cp] = lower
 
 # ---------------------- 版权声明 ----------------------
 HEADER_COMMENT = """\
@@ -63,8 +57,7 @@ def write_bmp_cpp(filename, upper_map, lower_map):
             if len(line_elements) == 12:
                 f.write("                " + ", ".join(line_elements) + ",\n")
                 line_elements = []
-        if line_elements:
-            f.write("                " + ", ".join(line_elements) + "\n")
+        if line_elements: f.write("                " + ", ".join(line_elements) + "\n")
         f.write("            };\n\n")
         f.write("            uint16_t BMPToUpper(uint16_t c) { return BMPUpperTable[c]; }\n\n")
 
@@ -76,8 +69,7 @@ def write_bmp_cpp(filename, upper_map, lower_map):
             if len(line_elements) == 12:
                 f.write("                " + ", ".join(line_elements) + ",\n")
                 line_elements = []
-        if line_elements:
-            f.write("                " + ", ".join(line_elements) + "\n")
+        if line_elements: f.write("                " + ", ".join(line_elements) + "\n")
         f.write("            };\n\n")
         f.write("            uint16_t BMPToLower(uint16_t c) { return BMPLowerTable[c]; }\n")
         f.write("        }\n")
@@ -102,8 +94,7 @@ def emit_smp_table(f, name, mapping_upper, mapping_lower):
         if len(line_elements) == 6:
             f.write("                " + ", ".join(line_elements) + ",\n")
             line_elements = []
-    if line_elements:
-        f.write("                " + ", ".join(line_elements) + "\n")
+    if line_elements: f.write("                " + ", ".join(line_elements) + "\n")
     f.write("            };\n\n")
     return len(codes)
 

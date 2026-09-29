@@ -1,6 +1,7 @@
 #pragma once
 #include <LikesProgram/Logging/system/LikesProgramLoggingExport.hpp>
 #include <LikesProgram/Logging/LoggerType.hpp>
+#include <string>
 
 namespace LikesProgram {
     namespace Log {
@@ -21,6 +22,13 @@ namespace LikesProgram {
         protected:
             // 按统一格式生成日志文本，供控制台、文件和自定义 Sink 复用。
             const String FormatLogMessage(const Message& message);
+
+            // 文件等字节 Sink 可直接取得目标编码结果；UTF-8 文本路径避免 String 往返转换。
+            std::string FormatLogMessageBytes(const Message& message, String::Encoding encoding);
+
+            // 复用调用方缓冲区生成字节结果，连续写入时避免逐条分配。
+            void FormatLogMessageBytes(const Message& message, String::Encoding encoding,
+                std::string& output);
 
         private:
             String m_sinkName; // 输出目标展示名，随 Sink 生命周期保存

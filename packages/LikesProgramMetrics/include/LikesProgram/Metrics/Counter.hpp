@@ -20,8 +20,10 @@ namespace LikesProgram {
             // 释放 Counter 实现对象。
             ~Counter() override;
 
-            // 增加计数值，负值会被忽略以保持 Counter 单调语义。
-            void Increment(double value = 1.0);
+            // 以单位步长增加计数值。
+            void Increment();
+            // 增加指定计数值，负值会被忽略以保持 Counter 单调语义。
+            void Increment(double value);
             // 返回当前计数值。
             double Value() const;
 

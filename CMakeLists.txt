@@ -12,6 +12,8 @@
 #   -DLIKESPROGRAM_BUILD_METRICS=OFF
 #   -DLIKESPROGRAM_BUILD_THREADING=OFF
 #   -DLIKESPROGRAM_BUILD_NET=OFF
+#   -DLIKESPROGRAM_BUILD_QUIC=OFF
+#   -DLIKESPROGRAM_BUILD_HTTP=OFF
 #
 # ======================================================
 
@@ -34,8 +36,11 @@ option(LIKESPROGRAM_BUILD_CONFIG "Build LikesProgramConfig" OFF)
 option(LIKESPROGRAM_BUILD_METRICS "Build LikesProgramMetrics" OFF)
 option(LIKESPROGRAM_BUILD_THREADING "Build LikesProgramThreading" OFF)
 option(LIKESPROGRAM_BUILD_NET "Build LikesProgramNet" OFF)
+option(LIKESPROGRAM_BUILD_QUIC "Build LikesProgramQuic" OFF)
+option(LIKESPROGRAM_BUILD_HTTP "Build LikesProgramHttp" OFF)
 option(LIKESPROGRAM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(LIKESPROGRAM_ENABLE_MSVC_CODE_ANALYSIS "Enable MSVC code analysis" ON)
+option(LIKESPROGRAM_BUILD_CONFIG_REFERENCE_BENCHMARKS "Build Config benchmarks against mature parsers" OFF)
 
 # =========================
 # 设置 C++ 标准
@@ -48,7 +53,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # 严格编译/审查策略
 # =========================
 if (MSVC)
-    add_compile_options(/utf-8 /W4)
+    add_compile_options(/utf-8 /W4 /EHsc)
     if (LIKESPROGRAM_WARNINGS_AS_ERRORS)
         add_compile_options(/WX)
     endif()
@@ -90,6 +95,11 @@ likesprogram_add_optional_package(LIKESPROGRAM_BUILD_CONFIG LikesProgramConfig)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_METRICS LikesProgramMetrics)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_THREADING LikesProgramThreading)
 likesprogram_add_optional_package(LIKESPROGRAM_BUILD_NET LikesProgramNet)
+if (LIKESPROGRAM_BUILD_QUIC AND NOT LIKESPROGRAM_BUILD_NET)
+    message(FATAL_ERROR "LIKESPROGRAM_BUILD_QUIC requires LIKESPROGRAM_BUILD_NET=ON")
+endif()
+likesprogram_add_optional_package(LIKESPROGRAM_BUILD_QUIC LikesProgramQuic)
+likesprogram_add_optional_package(LIKESPROGRAM_BUILD_HTTP LikesProgramHttp)
 
 # =========================
 # 发布工具

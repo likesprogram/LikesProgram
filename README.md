@@ -11,7 +11,9 @@ LikesProgram 是一个 C++20 基础组件库。它采用“Core + 可选扩展�
 | LikesProgramConfig | `LikesProgram::Config` | 否，需要手动开启 | `key=value`、JSON、YAML、TOML、值树、类型安全读取、默认值回退和 Schema 校验 | [packages/LikesProgramConfig/README.md](packages/LikesProgramConfig/README.md) |
 | LikesProgramMetrics | `LikesProgram::Metrics` | 否，需要手动开启 | Counter、Gauge、Histogram、Summary、Registry 与 Prometheus/JSON 导出 | [packages/LikesProgramMetrics/README.md](packages/LikesProgramMetrics/README.md) |
 | LikesProgramThreading | `LikesProgram::Threading` | 否，需要手动开启 | ThreadPool、有界队列、拒绝策略、关闭策略、统计快照与观察者事件 | [packages/LikesProgramThreading/README.md](packages/LikesProgramThreading/README.md) |
-| LikesProgramNet | `LikesProgram::Net` | 否，需要手动开启 | TCP/UDP Server/Client、EventLoop、Connection、可继承 TcpTransport/UdpTransport 与用户自定义 TLS/SSL 扩展点 | [packages/LikesProgramNet/README.md](packages/LikesProgramNet/README.md) |
+| LikesProgramNet | `LikesProgram::Net` | 否，需要手动开启 | completion-native TCP/UDP、EventLoop、连接池、背压与用户自定义 TLS/DTLS Engine 扩展点 | [packages/LikesProgramNet/README.md](packages/LikesProgramNet/README.md) |
+| LikesProgramQuic | `LikesProgram::Quic` | 否，需要同时开启 Net | QUIC wire、stream、流控、恢复、拥塞与 caller-owned TLS 1.3/包保护交接 | [packages/LikesProgramQuic/README.md](packages/LikesProgramQuic/README.md) |
+| LikesProgramHttp | `LikesProgram::Http` | 否，需要手动开启 | HTTP/1、HTTP/2、HTTP/3 sans-I/O codec/session、QPACK 与网站通用语义 | [packages/LikesProgramHttp/README.md](packages/LikesProgramHttp/README.md) |
 
 首轮未纳入新架构的能力已在 [legacy/README.md](legacy/README.md) 中登记边界；未来如需恢复，应重新按独立包规则设计、实现和验收。
 
@@ -40,21 +42,25 @@ if (LikesProgram::Version::IsAtLeast(1, 0, 0)) {
 #include <LikesProgram/Metrics/Metrics.hpp>
 #include <LikesProgram/Threading/Threading.hpp>
 #include <LikesProgram/Net/Net.hpp>
+#include <LikesProgram/Quic/Quic.hpp>
+#include <LikesProgram/Http/Http.hpp>
 
 const char* loggingVersion = LikesProgram::Logging::PackageVersion();
 const char* configVersion = LikesProgram::Config::PackageVersion();
 const char* metricsVersion = LikesProgram::Metrics::PackageVersion();
 const char* threadingVersion = LikesProgram::Threading::PackageVersion();
 const char* netVersion = LikesProgram::Net::PackageVersion();
+const char* quicVersion = LikesProgram::Quic::PackageVersion();
+const char* httpVersion = LikesProgram::Http::PackageVersion();
 ```
 
 ## 环境要求
 
 - CMake 3.15 或更新版本。
 - 支持 C++20 的编译器。
-- Windows 推荐 Visual Studio 2022 MSVC；Linux/macOS 推荐 GCC 11+ 或 Clang 14+。
+- 当前已验收 Windows（Visual Studio 2022 MSVC）和 Linux（GCC 11+）；macOS/BSD kqueue 后端尚未纳入 1.0 支持范围。
 
-当前源码没有引入第三方库。Core、Logging、Config、Metrics、Threading、Net 都只依赖 C++ 标准库和系统 API；Net 只提供可继承的 TCP/UDP transport 扩展点，TLS/SSL 由用户派生实现，不链接 OpenSSL。
+默认构建没有引入第三方库。Core、Logging、Config、Metrics、Threading、Net、Quic、Http 都只依赖 C++ 标准库、系统 API 和已声明的内部包；Net 的 TLS/DTLS Engine 与 Quic 的 TLS 1.3、AEAD/header-protection provider 由用户选择实现，产品不链接 OpenSSL、SChannel、mbedTLS 等具体实现。Linux 可显式启用 `io_uring` 路径并只在该配置下链接 `liburing`。Http 是 sans-I/O 协议层，HTTP/3 QPACK 已内建，HTTP/2 HPACK wire codec 仍是工业级完整性待补项。
 
 首轮 1.0 版本不迁入宽泛 Math 聚合、Vector 系列或半成品 TLS Context Manager。`PercentileSketch` 已作为 Metrics 私有实现服务 `Summary`，不作为公共 Math API 导出。
 
@@ -64,7 +70,7 @@ Windows PowerShell：
 
 ```powershell
 cd C:\Users\TX2\Desktop\LikesProgramProjects\LikesProgram
-cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON -DLIKESPROGRAM_BUILD_METRICS=ON -DLIKESPROGRAM_BUILD_THREADING=ON -DLIKESPROGRAM_BUILD_NET=ON
+cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON -DLIKESPROGRAM_BUILD_METRICS=ON -DLIKESPROGRAM_BUILD_THREADING=ON -DLIKESPROGRAM_BUILD_NET=ON -DLIKESPROGRAM_BUILD_QUIC=ON -DLIKESPROGRAM_BUILD_HTTP=ON
 cmake --build build --config Debug
 ctest --test-dir build --output-on-failure -C Debug
 ```
@@ -73,7 +79,7 @@ Linux/macOS：
 
 ```bash
 cd /path/to/LikesProgram
-cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON -DLIKESPROGRAM_BUILD_METRICS=ON -DLIKESPROGRAM_BUILD_THREADING=ON -DLIKESPROGRAM_BUILD_NET=ON
+cmake -S . -B build -DLIKESPROGRAM_BUILD_LOGGING=ON -DLIKESPROGRAM_BUILD_CONFIG=ON -DLIKESPROGRAM_BUILD_METRICS=ON -DLIKESPROGRAM_BUILD_THREADING=ON -DLIKESPROGRAM_BUILD_NET=ON -DLIKESPROGRAM_BUILD_QUIC=ON -DLIKESPROGRAM_BUILD_HTTP=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
@@ -86,6 +92,8 @@ ctest --test-dir build --output-on-failure
 - `Metrics` 默认不构建，想使用指标包必须传入 `-DLIKESPROGRAM_BUILD_METRICS=ON`。
 - `Threading` 默认不构建，想使用线程池包必须传入 `-DLIKESPROGRAM_BUILD_THREADING=ON`。
 - `Net` 默认不构建，想使用 TCP/UDP 网络包必须传入 `-DLIKESPROGRAM_BUILD_NET=ON`。
+- `Quic` 默认不构建，想使用 QUIC 包必须同时传入 `-DLIKESPROGRAM_BUILD_NET=ON -DLIKESPROGRAM_BUILD_QUIC=ON`。
+- `Http` 默认不构建，想使用 HTTP/1、HTTP/2、HTTP/3 sans-I/O 能力必须传入 `-DLIKESPROGRAM_BUILD_HTTP=ON`。
 - 测试由 `LIKESPROGRAM_BUILD_TESTS` 控制，默认 `ON`。
 - 示例和 benchmark 由 `LIKESPROGRAM_BUILD_EXAMPLES` 控制，默认 `ON`。
 - 发布诊断工具由 `LIKESPROGRAM_BUILD_TOOLS` 控制，默认 `ON`。
@@ -100,9 +108,12 @@ ctest --test-dir build --output-on-failure
 | `LIKESPROGRAM_BUILD_TOOLS` | `ON` | 构建并安装发布诊断工具 |
 | `LIKESPROGRAM_BUILD_LOGGING` | `OFF` | 构建 Logging 扩展包 |
 | `LIKESPROGRAM_BUILD_CONFIG` | `OFF` | 构建 Config 扩展包 |
+| `LIKESPROGRAM_BUILD_CONFIG_REFERENCE_BENCHMARKS` | `OFF` | 构建仅用于验收的 Config 成熟解析器对标目标；需要 nlohmann/json、RapidJSON 和 yaml-cpp |
 | `LIKESPROGRAM_BUILD_METRICS` | `OFF` | 构建 Metrics 扩展包 |
 | `LIKESPROGRAM_BUILD_THREADING` | `OFF` | 构建 Threading 扩展包 |
 | `LIKESPROGRAM_BUILD_NET` | `OFF` | 构建 Net 扩展包，提供 TCP/UDP 与可继承安全层扩展点 |
+| `LIKESPROGRAM_BUILD_QUIC` | `OFF` | 构建 Quic 扩展包；要求同时启用 Net |
+| `LIKESPROGRAM_BUILD_HTTP` | `OFF` | 构建 Http 扩展包，提供 HTTP/1、HTTP/2、HTTP/3 sans-I/O codec/session |
 
 ## 测试和示例目标
 
@@ -115,6 +126,8 @@ LikesProgramConfigTests     # 仅在 LIKESPROGRAM_BUILD_CONFIG=ON 时存在
 LikesProgramMetricsTests    # 仅在 LIKESPROGRAM_BUILD_METRICS=ON 时存在
 LikesProgramThreadingTests  # 仅在 LIKESPROGRAM_BUILD_THREADING=ON 时存在
 LikesProgramNetTests        # 仅在 LIKESPROGRAM_BUILD_NET=ON 时存在
+LikesProgramQuicTests       # 仅在 LIKESPROGRAM_BUILD_QUIC=ON 时存在
+LikesProgramHttpTests       # 仅在 LIKESPROGRAM_BUILD_HTTP=ON 时存在
 ```
 
 开启 `LIKESPROGRAM_BUILD_EXAMPLES=ON` 后会生成：
@@ -128,6 +141,7 @@ LikesProgramConfigExample       # 仅在 LIKESPROGRAM_BUILD_CONFIG=ON 时存在
 LikesProgramMetricsExample      # 仅在 LIKESPROGRAM_BUILD_METRICS=ON 时存在
 LikesProgramThreadingExample    # 仅在 LIKESPROGRAM_BUILD_THREADING=ON 时存在
 LikesProgramNetExample          # 仅在 LIKESPROGRAM_BUILD_NET=ON 时存在
+LikesProgramHttpExample         # 仅在 LIKESPROGRAM_BUILD_HTTP=ON 时存在
 ```
 
 这些示例就是当前 API 的可编译使用样本。README 负责解释“怎么用”和“为什么这样用”，examples/tests 负责证明代码真的能编译运行。
@@ -155,6 +169,8 @@ target_link_libraries(MyApp
         LikesProgram::Metrics
         LikesProgram::Threading
         LikesProgram::Net
+        LikesProgram::Quic
+        LikesProgram::Http
 )
 ```
 
@@ -177,7 +193,11 @@ cmake --build build --config Release
 
 需要线程池：构建时打开 `-DLIKESPROGRAM_BUILD_THREADING=ON`，然后链接 `LikesProgram::Threading`。
 
-需要 TCP/UDP 网络：构建时打开 `-DLIKESPROGRAM_BUILD_NET=ON`，然后链接 `LikesProgram::Net`。Net 支持 `Server` / `Client` 选择 `TransportKind::Tcp` 或 `TransportKind::Udp`；TLS/SSL 由用户继承 `TcpTransport` 或 `UdpTransport`，重写安全层初始化、升级、握手和读写函数，并通过 factory 注入。
+需要底层网络通信：构建时打开 `-DLIKESPROGRAM_BUILD_NET=ON`，然后链接 `LikesProgram::Net`。当前支持 Windows IOCP 与 Linux io_uring/epoll completion 后端、TCP/UDP、连接池、背压、TLS/DTLS Engine 和 STARTTLS；具体 TLS/DTLS 实现由用户通过 Engine/Factory 注入，macOS/BSD kqueue 尚未纳入 1.0。
+
+需要 QUIC：同时打开 `-DLIKESPROGRAM_BUILD_NET=ON -DLIKESPROGRAM_BUILD_QUIC=ON`，然后链接 `LikesProgram::Quic`。Quic 包拥有 QUIC transport wire、stream、流控、恢复与拥塞边界；TLS 1.3、AEAD/header protection、UDP 调度适配器继续由用户选择实现。
+
+需要 HTTP 协议能力：构建时打开 `-DLIKESPROGRAM_BUILD_HTTP=ON`，然后链接 `LikesProgram::Http`。当前 Http 提供 HTTP/1、HTTP/2、HTTP/3 sans-I/O codec/session、QPACK、流式正文、资源约束及现代网站通用语义；socket、TLS、QUIC 和内容解压 provider 由用户组合，HTTP/2 HPACK wire codec 尚待补齐。
 
 需要用配置驱动日志：同时打开 `LIKESPROGRAM_BUILD_CONFIG` 和 `LIKESPROGRAM_BUILD_LOGGING`，应用层读取配置后映射到 Logging 的开放式 `LoggerConfig`。Logging 包自身仍只依赖 Core，不会反向依赖 Config。
 

@@ -7,6 +7,8 @@ namespace LikesProgram {
     namespace Metrics {
         struct Metric::MetricImpl {
             std::map<LikesProgram::String, LikesProgram::String> m_labels; // 指标标签，按 key 稳定排序
+            LikesProgram::String m_prometheusLabels; // 构造后不变指标的预格式化标签块
+            bool m_prometheusLabelsCacheable = true; // MutableLabels 暴露后退回实时格式化
         };
 
         const char* PackageName() noexcept {
@@ -29,6 +31,7 @@ namespace LikesProgram {
             : m_name(name), m_help(help), m_impl(new MetricImpl{}) {
             // 构造阶段统一复制标签，保证后续导出顺序由 std::map 固定。
             m_impl->m_labels = labels;
+            m_impl->m_prometheusLabels = FormatLabels(labels);
         }
 
         Metric::~Metric() {
@@ -40,7 +43,10 @@ namespace LikesProgram {
         Metric::Metric(const Metric& other)
             : m_name(other.m_name), m_help(other.m_help), m_impl(new MetricImpl{}) {
             // 源对象可能是 moved-from，空实现时保留空标签。
-            if (other.m_impl) m_impl->m_labels = other.m_impl->m_labels;
+            if (other.m_impl) {
+                m_impl->m_labels = other.m_impl->m_labels;
+                m_impl->m_prometheusLabels = FormatLabels(m_impl->m_labels);
+            }
         }
 
         Metric& Metric::operator=(const Metric& other) {
@@ -48,9 +54,9 @@ namespace LikesProgram {
 
             m_name = other.m_name;
             m_help = other.m_help;
-            MutableLabels() = other.m_impl
+            SetLabels(other.m_impl
                 ? other.m_impl->m_labels
-                : std::map<LikesProgram::String, LikesProgram::String>{};
+                : std::map<LikesProgram::String, LikesProgram::String>{});
             return *this;
         }
 
@@ -100,6 +106,8 @@ namespace LikesProgram {
         std::map<LikesProgram::String, LikesProgram::String>& Metric::MutableLabels() {
             // moved-from 对象被再次赋值时，延迟恢复标签容器。
             if (!m_impl) m_impl = new MetricImpl{};
+            // 派生类可长期持有该引用，因此之后不能再假定缓存与容器同步。
+            m_impl->m_prometheusLabelsCacheable = false;
             return m_impl->m_labels;
         }
 
@@ -109,9 +117,19 @@ namespace LikesProgram {
             return m_impl->m_labels;
         }
 
+        LikesProgram::String Metric::PrometheusLabels() const {
+            if (!m_impl) return {};
+            return m_impl->m_prometheusLabelsCacheable
+                ? m_impl->m_prometheusLabels
+                : FormatLabels(m_impl->m_labels);
+        }
+
         void Metric::SetLabels(const std::map<LikesProgram::String, LikesProgram::String>& labels) {
             // 统一替换标签，用于构造和复制恢复。
-            MutableLabels() = labels;
+            if (!m_impl) m_impl = new MetricImpl{};
+            m_impl->m_labels = labels;
+            m_impl->m_prometheusLabels = FormatLabels(labels);
+            m_impl->m_prometheusLabelsCacheable = true;
         }
     }
 }

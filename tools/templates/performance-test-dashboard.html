@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>原始性能测试总看板</title>
+  <link rel="icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+      --bg: #f3f5f7;
+      --surface: #ffffff;
+      --text: #17202a;
+      --muted: #5f6b76;
+      --line: #d8dee4;
+      --primary: #005ea8;
+      --pass: #19794d;
+      --fail: #a23b3b;
+      --focus: #f3b61f;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    button, select { font: inherit; letter-spacing: 0; }
+    a { color: var(--primary); }
+    header { background: #18212b; color: #ffffff; border-bottom: 4px solid var(--focus); }
+    .header-inner, main { width: min(1440px, 100%); margin: 0 auto; }
+    .header-inner { padding: 24px 28px 20px; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.2; }
+    .snapshot { margin: 8px 0 0; color: #cbd5df; font-size: 13px; }
+    main { padding: 0 28px 48px; }
+    section { margin: 0 -28px; padding: 22px 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
+    section + section { margin-top: 12px; border-top: 1px solid var(--line); }
+    h2 { margin: 0 0 14px; font-size: 18px; line-height: 1.3; }
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 0; }
+    .metric { min-height: 72px; padding: 8px 18px; border-left: 3px solid var(--line); }
+    .metric:first-child { border-left-color: var(--primary); }
+    .metric-value { display: block; font-size: 26px; font-weight: 700; line-height: 1.2; }
+    .metric-label { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .filters { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)) auto; gap: 12px; align-items: end; }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    select, button { min-height: 42px; border: 1px solid #aeb8c2; border-radius: 4px; background: #ffffff; color: var(--text); }
+    select { width: 100%; padding: 8px 34px 8px 10px; }
+    button { padding: 8px 14px; cursor: pointer; }
+    button:hover { border-color: var(--primary); }
+    button:focus-visible, select:focus-visible, tr:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .exports { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 13px; }
+    .table-scroll { overflow: auto; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #e5e9ed; text-align: left; vertical-align: top; white-space: nowrap; }
+    th { position: sticky; top: 0; z-index: 1; background: #eef2f5; color: #34404c; font-size: 12px; }
+    tbody tr { background: #ffffff; }
+    tbody tr:hover { background: #f3f8fc; }
+    tbody tr[aria-selected="true"] { background: #e7f2fa; box-shadow: inset 4px 0 0 var(--primary); }
+    .outcome { font-weight: 700; }
+    .outcome-passed { color: var(--pass); }
+    .outcome-failed { color: var(--fail); }
+    .detail-header { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-bottom: 12px; }
+    .detail-meta { color: var(--muted); font-size: 13px; }
+    .source-links { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 13px; }
+    .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+    .pager button { min-width: 86px; }
+    .pager button:disabled { cursor: default; color: #87919b; background: #eef1f3; }
+    .empty { padding: 28px 12px; color: var(--muted); text-align: center; }
+    .raw-table td { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .raw-table th:first-child, .raw-table td:first-child { min-width: 128px; }
+
+    @media (max-width: 960px) {
+      .metrics { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+      .filters { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .filters button { width: 100%; }
+    }
+
+    @media (max-width: 720px) {
+      .header-inner { padding: 18px 16px 16px; }
+      h1 { font-size: 23px; }
+      main { padding: 0 12px 32px; }
+      section { margin: 0 -12px; padding: 18px 12px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric { min-height: 64px; padding: 7px 10px; }
+      .metric-value { font-size: 22px; }
+      .filters { grid-template-columns: 1fr; }
+      select, button { min-height: 44px; }
+      .detail-header { display: block; }
+      .detail-meta { margin-top: 6px; }
+      .records-table { min-width: 980px; }
+      .raw-table { min-width: 760px; }
+      .pager { justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>原始性能测试总看板</h1>
+      <p class="snapshot">生成时间 __GENERATED_AT__ · 无效或未完整执行轮次 __REJECTED_COUNT__</p>
+    </div>
+  </header>
+  <main>
+    <section aria-labelledby="summary-title">
+      <h2 id="summary-title">当前记录范围</h2>
+      <div class="metrics">
+        <div class="metric"><span class="metric-value" id="record-count">0</span><span class="metric-label">完整测试轮次</span></div>
+        <div class="metric"><span class="metric-value" id="failed-count">0</span><span class="metric-label">完整失败/不达标轮次</span></div>
+        <div class="metric"><span class="metric-value" id="version-count">0</span><span class="metric-label">版本</span></div>
+        <div class="metric"><span class="metric-value" id="type-count">0</span><span class="metric-label">测试类型</span></div>
+        <div class="metric"><span class="metric-value" id="sample-count">0</span><span class="metric-label">原始数据行</span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="filter-title">
+      <h2 id="filter-title">筛选</h2>
+      <div class="filters">
+        <label>版本<select id="version-filter"><option value="">全部</option></select></label>
+        <label>测试类型<select id="test-type-filter"><option value="">全部</option></select></label>
+        <label>平台<select id="platform-filter"><option value="">全部</option></select></label>
+        <label>后端<select id="backend-filter"><option value="">全部</option></select></label>
+        <label>结果<select id="outcome-filter"><option value="">全部</option></select></label>
+        <button id="reset-filters" type="button">重置</button>
+      </div>
+      <nav class="exports" aria-label="原始记录导出">
+        <a href="test-records.csv" download>轮次 CSV</a>
+        <a href="test-samples.csv" download>原始行 CSV</a>
+        <a href="test-records.json" download>轮次 JSON</a>
+        <a href="test-samples.json" download>原始行 JSON</a>
+        <a href="rejected-records.json" download>无效轮次诊断 JSON</a>
+      </nav>
+    </section>
+
+    <section aria-labelledby="records-title">
+      <div class="detail-header">
+        <h2 id="records-title">测试轮次</h2>
+        <span class="detail-meta" id="visible-record-count">0 条</span>
+      </div>
+      <div class="table-scroll">
+        <table class="records-table" aria-label="完整测试轮次">
+          <thead><tr><th>轮次</th><th>版本</th><th>类型</th><th>平台</th><th>后端</th><th>结果</th><th>开始</th><th>结束</th></tr></thead>
+          <tbody id="records-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="raw-title">
+      <div class="detail-header">
+        <h2 id="raw-title">原始数据</h2>
+        <span class="detail-meta" id="selected-record">未选择轮次</span>
+      </div>
+      <div class="source-links" id="source-links"></div>
+      <div class="table-scroll" id="raw-table-wrap"></div>
+      <div class="pager">
+        <button id="previous-page" type="button">上一页</button>
+        <span id="page-status">0 / 0</span>
+        <button id="next-page" type="button">下一页</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="application/json" id="records-data">__RECORDS_DATA__</script>
+  <script type="application/json" id="samples-data">__SAMPLES_DATA__</script>
+  <script>
+    // 数据直接嵌入页面，保证离线打开时不依赖 fetch。
+    const records = JSON.parse(document.getElementById('records-data').textContent);
+    const samples = JSON.parse(document.getElementById('samples-data').textContent);
+    const pageSize = 200;
+    const filterFields = [
+      ['version-filter', 'version', 'version'],
+      ['test-type-filter', 'test_type', 'test-type'],
+      ['platform-filter', 'platform', 'platform'],
+      ['backend-filter', 'backend', 'backend'],
+      ['outcome-filter', 'outcome', 'outcome'],
+    ];
+    let selectedRecordId = '';
+    let currentPage = 0;
+    let visibleRecords = [];
+
+    // 所有动态文本先转义，原始值只展示、不执行。
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // 初始化筛选选项并从 URL 恢复可分享状态。
+    function initializeFilters() {
+      const params = new URLSearchParams(location.search);
+      for (const [elementId, field, queryKey] of filterFields) {
+        const select = document.getElementById(elementId);
+        const values = [...new Set(records.map((record) => String(record[field] ?? '')).filter(Boolean))].sort();
+        for (const value of values) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          select.append(option);
+        }
+        if (values.includes(params.get(queryKey))) select.value = params.get(queryKey);
+        select.addEventListener('change', applyFilters);
+      }
+    }
+
+    // 把当前筛选写入 URL，并刷新轮次与原始数据。
+    function applyFilters() {
+      const params = new URLSearchParams();
+      visibleRecords = records.filter((record) => filterFields.every(([elementId, field, queryKey]) => {
+        const value = document.getElementById(elementId).value;
+        if (value) params.set(queryKey, value);
+        return !value || String(record[field] ?? '') === value;
+      }));
+      if (location.protocol !== 'file:') {
+        history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}${location.hash}`);
+      }
+      if (!visibleRecords.some((record) => record.record_id === selectedRecordId)) {
+        selectedRecordId = visibleRecords[0]?.record_id ?? '';
+        currentPage = 0;
+      }
+      renderSummary();
+      renderRecords();
+      renderSamples();
+    }
+
+    // 首屏统计只计算当前筛选范围，不隐藏失败轮次。
+    function renderSummary() {
+      const visibleIds = new Set(visibleRecords.map((record) => record.record_id));
+      document.getElementById('record-count').textContent = visibleRecords.length;
+      document.getElementById('failed-count').textContent = visibleRecords.filter((record) => record.outcome !== 'passed').length;
+      document.getElementById('version-count').textContent = new Set(visibleRecords.map((record) => record.version)).size;
+      document.getElementById('type-count').textContent = new Set(visibleRecords.map((record) => record.test_type)).size;
+      document.getElementById('sample-count').textContent = samples.filter((sample) => visibleIds.has(sample.record_id)).length;
+      document.getElementById('visible-record-count').textContent = `${visibleRecords.length} 条`;
+    }
+
+    // 轮次表承担版本/类型对比，并支持键盘选择。
+    function renderRecords() {
+      const body = document.getElementById('records-body');
+      if (!visibleRecords.length) {
+        body.innerHTML = '<tr><td class="empty" colspan="8">当前筛选没有完整测试轮次</td></tr>';
+        return;
+      }
+      body.innerHTML = visibleRecords.map((record) => {
+        const selected = record.record_id === selectedRecordId;
+        const outcomeClass = record.outcome === 'passed' ? 'outcome-passed' : 'outcome-failed';
+        return `<tr tabindex="0" data-record-id="${escapeHtml(record.record_id)}" aria-selected="${selected}">`
+          + `<td>${escapeHtml(record.record_id)}</td><td>${escapeHtml(record.version)}</td>`
+          + `<td>${escapeHtml(record.test_type)}</td><td>${escapeHtml(record.platform)}</td>`
+          + `<td>${escapeHtml(record.backend)}</td><td class="outcome ${outcomeClass}">${escapeHtml(record.outcome)}</td>`
+          + `<td>${escapeHtml(record.started_at)}</td><td>${escapeHtml(record.finished_at)}</td></tr>`;
+      }).join('');
+    }
+
+    // 选中轮次只分页显示原始行，CSV/JSON 下载仍包含全部数据。
+    function renderSamples() {
+      const record = records.find((item) => item.record_id === selectedRecordId);
+      const selectedSamples = samples.filter((sample) => sample.record_id === selectedRecordId);
+      const totalPages = Math.max(1, Math.ceil(selectedSamples.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages - 1);
+      const pageSamples = selectedSamples.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+      const fields = [...new Set(selectedSamples.flatMap((sample) => Object.keys(sample.fields)))];
+      document.getElementById('selected-record').textContent = record ? `${record.record_id} · ${selectedSamples.length} 行` : '未选择轮次';
+      document.getElementById('source-links').innerHTML = record
+        ? (record.raw_files ?? []).map((file) => `<a href="${escapeHtml(`${record.raw_href_path ?? record.record_path}/${file}`)}">${escapeHtml(file)}</a>`).join('')
+        : '';
+
+      const wrap = document.getElementById('raw-table-wrap');
+      if (!record || !selectedSamples.length) {
+        wrap.innerHTML = '<div class="empty">该轮次没有可展示的原始 CSV 行</div>';
+      } else {
+        const head = ['原始文件', '行号', ...fields].map((field) => `<th>${escapeHtml(field)}</th>`).join('');
+        const rows = pageSamples.map((sample) => {
+          const values = fields.map((field) => `<td>${escapeHtml(sample.fields[field] ?? '')}</td>`).join('');
+          return `<tr><td>${escapeHtml(sample.source_file)}</td><td>${sample.row_number}</td>${values}</tr>`;
+        }).join('');
+        wrap.innerHTML = `<table class="raw-table" aria-label="选中轮次原始数据"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+      }
+      document.getElementById('page-status').textContent = selectedSamples.length ? `${currentPage + 1} / ${totalPages}` : '0 / 0';
+      document.getElementById('previous-page').disabled = currentPage <= 0;
+      document.getElementById('next-page').disabled = currentPage >= totalPages - 1 || !selectedSamples.length;
+    }
+
+    document.getElementById('records-body').addEventListener('click', (event) => {
+      const row = event.target.closest('tr[data-record-id]');
+      if (!row) return;
+      selectedRecordId = row.dataset.recordId;
+      currentPage = 0;
+      renderRecords();
+      renderSamples();
+    });
+    document.getElementById('records-body').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.target.click();
+    });
+    document.getElementById('previous-page').addEventListener('click', () => { currentPage -= 1; renderSamples(); });
+    document.getElementById('next-page').addEventListener('click', () => { currentPage += 1; renderSamples(); });
+    document.getElementById('reset-filters').addEventListener('click', () => {
+      for (const [elementId] of filterFields) document.getElementById(elementId).value = '';
+      applyFilters();
+    });
+
+    initializeFilters();
+    applyFilters();
+    document.documentElement.dataset.renderReady = 'true';
+  </script>
+</body>
+</html>

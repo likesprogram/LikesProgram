@@ -18,12 +18,10 @@ namespace LikesProgram {
     class ScopeGuard {
     public:
         // 保存退出回调并启用 guard。
-        explicit ScopeGuard(F&& fn) noexcept(std::is_nothrow_move_constructible_v<F>)
-            : m_fn(std::forward<F>(fn)), m_active(true) { }
+        explicit ScopeGuard(F&& fn) noexcept(std::is_nothrow_move_constructible_v<F>) : m_fn(std::forward<F>(fn)), m_active(true) { }
 
         // 移动 guard，原 guard 失效。
-        ScopeGuard(ScopeGuard&& other) noexcept(std::is_nothrow_move_constructible_v<F>)
-            : m_fn(std::move(other.m_fn)), m_active(other.m_active) {
+        ScopeGuard(ScopeGuard&& other) noexcept(std::is_nothrow_move_constructible_v<F>) : m_fn(std::move(other.m_fn)), m_active(other.m_active) {
             other.Dismiss();
         }
 
@@ -34,18 +32,13 @@ namespace LikesProgram {
         // 析构时执行回调；回调异常会被吞掉以避免析构抛出。
         ~ScopeGuard() noexcept {
             if (!m_active) return;
-            try {
-                m_fn();
-            }
-            catch (...) {
+            try { m_fn(); } catch (...) {
                 // 清理回调不得让析构路径继续抛出。
             }
         }
 
         // 取消退出回调。
-        void Dismiss() noexcept {
-            m_active = false;
-        }
+        void Dismiss() noexcept { m_active = false; }
 
     private:
         F m_fn;              // 退出时执行的回调

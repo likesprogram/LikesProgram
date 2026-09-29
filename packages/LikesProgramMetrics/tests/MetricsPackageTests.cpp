@@ -1,6 +1,6 @@
 #include <LikesProgram/Metrics/Metrics.hpp>
 #include <LikesProgram/Core/Version.hpp>
-#include <metrics/PercentileSketch.hpp>
+#include "metrics/PercentileSketch.hpp"
 
 #include <cmath>
 #include <cstring>
@@ -29,6 +29,15 @@ namespace {
     bool Contains(const LikesProgram::String& text, const std::string& needle) {
         return text.ToStdString().find(needle) != std::string::npos;
     }
+
+    class MutableLabelCounter : public LikesProgram::Metrics::Counter {
+    public:
+        using LikesProgram::Metrics::Counter::Counter;
+
+        void ReplaceLabel(const LikesProgram::String& key, const LikesProgram::String& value) {
+            MutableLabels()[key] = value;
+        }
+    };
 
     void TestPackageIdentity() {
         const char* packageName = LikesProgram::Metrics::PackageName(); // Metrics 包名指针
@@ -62,6 +71,22 @@ namespace {
         counter.Increment(std::numeric_limits<double>::max());
         counter.Increment(std::numeric_limits<double>::max());
         Require(std::isfinite(counter.Value()), "Counter should saturate overflow to finite value");
+    }
+
+    void TestPrometheusLabelCache() {
+        LikesProgram::Metrics::Counter source(
+            u"cache_copy_total", u"Cache copy", { { u"zone", u"source" } });
+        LikesProgram::Metrics::Counter assigned(
+            u"cache_old_total", u"Cache old", { { u"zone", u"old" } });
+        assigned = source;
+        Require(Contains(assigned.ToPrometheus(), "cache_copy_total{zone=\"source\"}"),
+            "Counter copy assignment should refresh Prometheus label cache");
+
+        MutableLabelCounter mutableCounter(
+            u"cache_mutable_total", u"Cache mutable", { { u"zone", u"before" } });
+        mutableCounter.ReplaceLabel(u"zone", u"after");
+        Require(Contains(mutableCounter.ToPrometheus(), "cache_mutable_total{zone=\"after\"}"),
+            "MutableLabels should bypass stale Prometheus label cache");
     }
 
     void TestGauge() {
@@ -185,15 +210,26 @@ namespace {
         registry.Register(counter);
 
         std::atomic<bool> stop{ false };     // 导出线程停止标志
+        std::atomic<bool> exporterReady{ false }; // 导出线程已开始运行
+        std::atomic<bool> exporterObserved{ false }; // 至少完成一次有效导出
         std::atomic<int> exportCount{ 0 };   // 成功导出次数
         std::thread exporter([&] {
+            exporterReady.store(true, std::memory_order_release);
             while (!stop.load(std::memory_order_relaxed)) {
                 const auto text = registry.ExportPrometheus(); // 无锁外部导出快照
                 if (Contains(text, "registry_concurrent_total")) {
                     exportCount.fetch_add(1, std::memory_order_relaxed);
+                    exporterObserved.store(true, std::memory_order_release);
                 }
             }
         });
+
+        while (!exporterReady.load(std::memory_order_acquire)) {
+            std::this_thread::yield(); // 等待导出线程进入循环，避免调度导致假失败
+        }
+        while (!exporterObserved.load(std::memory_order_acquire)) {
+            std::this_thread::yield(); // 首次有效快照后再开始注册表写入压力
+        }
 
         for (int i = 0; i < 5000; ++i) {
             counter->Increment();
@@ -274,6 +310,7 @@ int main() {
     try {
         TestPackageIdentity();
         TestCounter();
+        TestPrometheusLabelCache();
         TestGauge();
         TestHistogram();
         TestSummary();

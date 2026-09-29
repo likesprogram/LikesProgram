@@ -81,11 +81,11 @@ namespace LikesProgram {
         // 返回当前操作系统名称。
         inline constexpr std::string_view OperatingSystemName() noexcept {
             switch (CurrentOperatingSystem) {
-            case OperatingSystem::Windows: return "Windows";
-            case OperatingSystem::Linux: return "Linux";
-            case OperatingSystem::MacOS: return "MacOS";
-            case OperatingSystem::Unix: return "Unix";
-            case OperatingSystem::Unknown: return "Unknown";
+                case OperatingSystem::Windows: return "Windows";
+                case OperatingSystem::Linux: return "Linux";
+                case OperatingSystem::MacOS: return "MacOS";
+                case OperatingSystem::Unix: return "Unix";
+                case OperatingSystem::Unknown: return "Unknown";
             }
             return "Unknown";
         }
@@ -93,12 +93,12 @@ namespace LikesProgram {
         // 返回当前 CPU 架构名称。
         inline constexpr std::string_view ArchitectureName() noexcept {
             switch (CurrentArchitecture) {
-            case Architecture::X86: return "x86";
-            case Architecture::X64: return "x64";
-            case Architecture::Arm: return "arm";
-            case Architecture::Arm64: return "arm64";
-            case Architecture::Wasm: return "wasm";
-            case Architecture::Unknown: return "unknown";
+                case Architecture::X86: return "x86";
+                case Architecture::X64: return "x64";
+                case Architecture::Arm: return "arm";
+                case Architecture::Arm64: return "arm64";
+                case Architecture::Wasm: return "wasm";
+                case Architecture::Unknown: return "unknown";
             }
             return "unknown";
         }
@@ -106,10 +106,10 @@ namespace LikesProgram {
         // 返回当前编译器名称。
         inline constexpr std::string_view CompilerName() noexcept {
             switch (CurrentCompiler) {
-            case Compiler::MSVC: return "MSVC";
-            case Compiler::Clang: return "Clang";
-            case Compiler::GCC: return "GCC";
-            case Compiler::Unknown: return "Unknown";
+                case Compiler::MSVC: return "MSVC";
+                case Compiler::Clang: return "Clang";
+                case Compiler::GCC: return "GCC";
+                case Compiler::Unknown: return "Unknown";
             }
             return "Unknown";
         }
@@ -122,13 +122,11 @@ namespace LikesProgram {
         // 判断当前是否为类 Unix 平台。
         inline constexpr bool IsUnixLike() noexcept {
             switch (CurrentOperatingSystem) {
-            case OperatingSystem::Linux:
-            case OperatingSystem::MacOS:
-            case OperatingSystem::Unix:
-                return true;
-            case OperatingSystem::Windows:
-            case OperatingSystem::Unknown:
-                return false;
+                case OperatingSystem::Linux:
+                case OperatingSystem::MacOS:
+                case OperatingSystem::Unix: return true;
+                case OperatingSystem::Windows:
+                case OperatingSystem::Unknown: return false;
             }
             return false;
         }

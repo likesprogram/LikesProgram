@@ -19,9 +19,7 @@ namespace LikesProgram {
         inline constexpr std::string_view VersionString = "1.0.0";     // 语义化版本文本
 
         // 返回当前版本三元组。
-        inline constexpr Info Current() noexcept {
-            return Info{ Major, Minor, Patch, Suffix };
-        }
+        inline constexpr Info Current() noexcept { return Info{ Major, Minor, Patch, Suffix }; }
 
         // 判断当前版本是否至少达到指定版本。
         inline constexpr bool IsAtLeast(int major, int minor, int patch) noexcept {
@@ -31,8 +29,6 @@ namespace LikesProgram {
         }
 
         // 返回可展示的版本字符串。
-        inline constexpr std::string_view CurrentString() noexcept {
-            return VersionString;
-        }
+        inline constexpr std::string_view CurrentString() noexcept { return VersionString; }
     }
 }

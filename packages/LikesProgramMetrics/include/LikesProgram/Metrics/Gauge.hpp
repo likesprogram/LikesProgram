@@ -22,10 +22,14 @@ namespace LikesProgram {
 
             // 设置 Gauge 当前值。
             void Set(double value);
+            // 以单位步长增加 Gauge 当前值。
+            void Increment();
             // 增加 Gauge 当前值。
-            void Increment(double value = 1.0);
+            void Increment(double value);
+            // 以单位步长减少 Gauge 当前值。
+            void Decrement();
             // 减少 Gauge 当前值。
-            void Decrement(double value = 1.0);
+            void Decrement(double value);
             // 返回当前值。
             double Value() const;
 

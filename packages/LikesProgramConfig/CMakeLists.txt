@@ -30,6 +30,12 @@ if (LIKESPROGRAM_BUILD_SHARED)
         PUBLIC LIKESPROGRAM_CONFIG_SHARED
         PRIVATE LIKESPROGRAM_CONFIG_EXPORTS
     )
+    if (NOT WIN32)
+        set_target_properties(LikesProgramConfig PROPERTIES
+            CXX_VISIBILITY_PRESET hidden
+            VISIBILITY_INLINES_HIDDEN YES
+        )
+    endif()
 else()
     add_library(LikesProgramConfig STATIC ${LP_CONFIG_SOURCES})
 endif()
@@ -138,6 +144,49 @@ if (LIKESPROGRAM_BUILD_EXAMPLES)
                 $<TARGET_FILE:LikesProgramConfig>
                 $<TARGET_FILE_DIR:LikesProgramConfigBenchmark>
         )
+    endif()
+
+    if (LIKESPROGRAM_BUILD_CONFIG_REFERENCE_BENCHMARKS)
+        find_package(nlohmann_json CONFIG REQUIRED)
+        find_package(yaml-cpp CONFIG REQUIRED)
+        find_path(RAPIDJSON_INCLUDE_DIR rapidjson/document.h REQUIRED)
+
+        if (TARGET yaml-cpp::yaml-cpp)
+            set(LIKESPROGRAM_YAML_CPP_TARGET yaml-cpp::yaml-cpp)
+        elseif (TARGET yaml-cpp)
+            set(LIKESPROGRAM_YAML_CPP_TARGET yaml-cpp)
+        else()
+            message(FATAL_ERROR "yaml-cpp package does not export a supported target")
+        endif()
+
+        add_executable(LikesProgramConfigReferenceBenchmark
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/ConfigReferenceBenchmark.cpp
+        )
+        target_link_libraries(LikesProgramConfigReferenceBenchmark PRIVATE
+            LikesProgram::Config
+            nlohmann_json::nlohmann_json
+            ${LIKESPROGRAM_YAML_CPP_TARGET}
+        )
+        target_include_directories(LikesProgramConfigReferenceBenchmark SYSTEM PRIVATE
+            ${RAPIDJSON_INCLUDE_DIR}
+        )
+        target_compile_definitions(LikesProgramConfigReferenceBenchmark PRIVATE
+            LIKESPROGRAM_YAML_CPP_VERSION="${yaml-cpp_VERSION}"
+        )
+        if (MSVC)
+            target_compile_options(LikesProgramConfigReferenceBenchmark PRIVATE /utf-8 /W4)
+        endif()
+
+        if (WIN32 AND LIKESPROGRAM_BUILD_SHARED)
+            add_custom_command(TARGET LikesProgramConfigReferenceBenchmark POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:LikesProgramCore>
+                    $<TARGET_FILE_DIR:LikesProgramConfigReferenceBenchmark>
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:LikesProgramConfig>
+                    $<TARGET_FILE_DIR:LikesProgramConfigReferenceBenchmark>
+            )
+        endif()
     endif()
 endif()
 

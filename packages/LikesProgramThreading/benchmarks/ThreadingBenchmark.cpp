@@ -101,21 +101,14 @@ namespace {
             done = true;
         }
         cv.notify_all();
-        for (auto& worker : workers) {
-            worker.join();
-        }
+        for (auto& worker : workers) worker.join();
 
         const double safeElapsed = elapsed > 0.0 ? elapsed : 1e-12;
-        return Measurement{ "std function queue", elapsed,
-            static_cast<double>(tasks) / safeElapsed };
+        return Measurement{ "std function queue", elapsed, static_cast<double>(tasks) / safeElapsed };
     }
 
     void Print(const Measurement& value) {
-        std::cout << std::left << std::setw(28) << value.name
-            << " " << std::right << std::setw(12)
-            << static_cast<int64_t>(value.opsPerSecond)
-            << " ops/s (" << std::fixed << std::setprecision(6)
-            << value.seconds << "s)" << std::endl;
+        std::cout << std::left << std::setw(28) << value.name  << " " << std::right << std::setw(12) << static_cast<int64_t>(value.opsPerSecond) << " ops/s (" << std::fixed << std::setprecision(6) << value.seconds << "s)" << std::endl;
     }
 }
 
@@ -128,8 +121,7 @@ int main() {
 
         Print(threading);
         Print(baseline);
-        std::cout << "ThreadPool/std ratio: " << std::fixed
-            << std::setprecision(4) << ratio << std::endl;
+        std::cout << "ThreadPool/std ratio: " << std::fixed << std::setprecision(4) << ratio << std::endl;
 
         if (threading.opsPerSecond <= 0.0 || baseline.opsPerSecond <= 0.0) return 2;
         if (ratio < 0.10) return 3;

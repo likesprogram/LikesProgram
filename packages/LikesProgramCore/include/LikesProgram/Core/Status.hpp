@@ -24,20 +24,20 @@ namespace LikesProgram {
     // 返回状态码的稳定文本名称。
     inline String StatusCodeName(StatusCode code) {
         switch (code) {
-        case StatusCode::Ok: return u"Ok";
-        case StatusCode::Cancelled: return u"Cancelled";
-        case StatusCode::InvalidArgument: return u"InvalidArgument";
-        case StatusCode::NotFound: return u"NotFound";
-        case StatusCode::AlreadyExists: return u"AlreadyExists";
-        case StatusCode::PermissionDenied: return u"PermissionDenied";
-        case StatusCode::ResourceExhausted: return u"ResourceExhausted";
-        case StatusCode::FailedPrecondition: return u"FailedPrecondition";
-        case StatusCode::OutOfRange: return u"OutOfRange";
-        case StatusCode::Unimplemented: return u"Unimplemented";
-        case StatusCode::Internal: return u"Internal";
-        case StatusCode::Unavailable: return u"Unavailable";
-        case StatusCode::DeadlineExceeded: return u"DeadlineExceeded";
-        case StatusCode::Unknown: return u"Unknown";
+            case StatusCode::Ok: return u"Ok";
+            case StatusCode::Cancelled: return u"Cancelled";
+            case StatusCode::InvalidArgument: return u"InvalidArgument";
+            case StatusCode::NotFound: return u"NotFound";
+            case StatusCode::AlreadyExists: return u"AlreadyExists";
+            case StatusCode::PermissionDenied: return u"PermissionDenied";
+            case StatusCode::ResourceExhausted: return u"ResourceExhausted";
+            case StatusCode::FailedPrecondition: return u"FailedPrecondition";
+            case StatusCode::OutOfRange: return u"OutOfRange";
+            case StatusCode::Unimplemented: return u"Unimplemented";
+            case StatusCode::Internal: return u"Internal";
+            case StatusCode::Unavailable: return u"Unavailable";
+            case StatusCode::DeadlineExceeded: return u"DeadlineExceeded";
+            case StatusCode::Unknown: return u"Unknown";
         }
         return u"Unknown";
     }
@@ -49,15 +49,12 @@ namespace LikesProgram {
         Status() = default;
 
         // 使用状态码和可选消息构造状态。
-        Status(StatusCode code, const String& message = String())
-            : m_code(code) {
+        Status(StatusCode code, const String& message = String()) : m_code(code) {
             if (!message.Empty()) m_message = message;
         }
 
         // 构造成功状态。
-        static Status OkStatus() {
-            return Status();
-        }
+        static Status OkStatus() { return Status(); }
 
         // 构造非法参数状态。
         static Status InvalidArgument(const String& message) {
@@ -80,19 +77,13 @@ namespace LikesProgram {
         }
 
         // 当前状态是否成功。
-        bool IsOk() const {
-            return m_code == StatusCode::Ok;
-        }
+        bool IsOk() const { return m_code == StatusCode::Ok; }
 
         // 允许在 if(status) 中表达成功判断。
-        explicit operator bool() const {
-            return IsOk();
-        }
+        explicit operator bool() const { return IsOk(); }
 
         // 返回状态码。
-        StatusCode Code() const {
-            return m_code;
-        }
+        StatusCode Code() const { return m_code; }
 
         // 返回状态消息。
         const String& Message() const {

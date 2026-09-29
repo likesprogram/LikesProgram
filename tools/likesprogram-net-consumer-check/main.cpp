@@ -1,125 +1,284 @@
 #include <LikesProgram/Net/Net.hpp>
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 
 namespace {
-    class ConsumerSecureTcpTransport final : public LikesProgram::Net::TcpTransport {
+    class ConsumerTlsEngine final : public LikesProgram::Net::TlsEngine {
     public:
-        // 外部消费方继承 TCP transport 扩展点，不需要 Net 提供 OpenSSL 实现。
-        explicit ConsumerSecureTcpTransport(LikesProgram::Net::SocketType fd)
-            : TcpTransport(fd) {
+        // 外部 Engine 可产生握手密文，不需要接触 Net 持有的 socket。
+        LikesProgram::Net::TlsResult StartHandshake(
+            LikesProgram::Net::BufferChain&) override {
+            return { LikesProgram::Net::TlsAction::NeedCiphertext, 0 };
         }
 
-        // 初始化每连接安全层资源，外部消费方可在这里绑定自有 TLS 会话。
-        LikesProgram::Net::IoResult InitializeSecureLayer() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
+        // 外部 Engine 通过 BufferChain 消费 socket completion 密文。
+        LikesProgram::Net::TlsResult ConsumeCiphertext(
+            LikesProgram::Net::BufferChain& ciphertextInput,
+            LikesProgram::Net::BufferChain&,
+            LikesProgram::Net::BufferChain&) override {
+            ciphertextInput.Consume(ciphertextInput.ReadableBytes());
+            m_state = LikesProgram::Net::TlsState::Active;
+            return { LikesProgram::Net::TlsAction::None, 0 };
         }
-        // 用户主动升级通信时进入自定义安全层，本检查只验证扩展点可用。
-        LikesProgram::Net::IoResult UpgradeCommunication() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
-        }
-        // 当前检查不需要握手态，真实 TLS 实现可按状态返回 true。
-        bool NeedHandshake() const override { return false; }
-        // 推进安全层握手，外部实现可在这里调用 SSL_do_handshake 等能力。
-        LikesProgram::Net::IoResult Handshake() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
-        }
-        // 模拟安全层仍有读兴趣，验证接口可被外部工程覆盖。
-        bool RemainWantRead() const override { return true; }
-        // 当前检查不保留写兴趣，避免示例引入额外状态。
-        bool RemainWantWrite() const override { return false; }
 
-    protected:
-        // 明文 socket 钩子仍可由派生类接管，公共 ReadSome/WriteSome 保持框架统一调度。
-        LikesProgram::Net::IoResult ReadSocketSome(LikesProgram::Net::Buffer&) override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::WouldBlock, 0, 0 };
+        // 外部 Engine 通过 BufferChain 接收业务明文并产生密文。
+        LikesProgram::Net::TlsResult ConsumePlaintext(
+            LikesProgram::Net::BufferChain& plaintextInput,
+            LikesProgram::Net::BufferChain&) override {
+            plaintextInput.Consume(plaintextInput.ReadableBytes());
+            return { LikesProgram::Net::TlsAction::CiphertextReady, 0 };
         }
-        LikesProgram::Net::IoResult WriteSocketSome(const std::uint8_t*, std::size_t len) override {
-            return LikesProgram::Net::IoResult{
-                LikesProgram::Net::IoStatus::Ok,
-                static_cast<std::int64_t>(len),
-                0
-            };
+
+        // 外部 Engine 决定何时请求关闭底层 transport。
+        LikesProgram::Net::TlsResult Shutdown(
+            LikesProgram::Net::BufferChain&) override {
+            m_state = LikesProgram::Net::TlsState::Closed;
+            return { LikesProgram::Net::TlsAction::CloseTransport, 0 };
         }
-        void ShutdownSocketWrite() override {}
-        void CloseSocket() override { (void)DetachFd(); }
+
+        // 返回当前外部 Engine 状态。
+        LikesProgram::Net::TlsState State() const noexcept override {
+            return m_state;
+        }
+
+        // 当前检查不协商 ALPN。
+        const char* NegotiatedProtocol() const noexcept override {
+            return "";
+        }
+
+    private:
+        LikesProgram::Net::TlsState m_state = LikesProgram::Net::TlsState::Handshaking; // 外部会话状态
     };
 
-    class ConsumerSecureUdpTransport final : public LikesProgram::Net::UdpTransport {
+    class ConsumerDtlsEngine final : public LikesProgram::Net::DtlsEngine {
     public:
-        // 外部消费方继承 UDP transport 扩展点，可在应用侧封装自定义安全层。
-        explicit ConsumerSecureUdpTransport(LikesProgram::Net::SocketType fd)
-            : UdpTransport(fd) {
+        LikesProgram::Net::DtlsResult StartHandshake(
+            LikesProgram::Net::DtlsDatagramBatch& ciphertextOutput) override {
+            LikesProgram::Net::Buffer flight(0); // 安装态完整 ciphertext 数据报
+            flight.Append("dtls", 4);
+            ciphertextOutput.Append(std::move(flight));
+            return { LikesProgram::Net::DtlsAction::CiphertextReady, 0, 0 };
         }
 
-        // 初始化每连接安全层资源，UDP 场景可在此准备 DTLS 会话。
-        LikesProgram::Net::IoResult InitializeSecureLayer() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
+        LikesProgram::Net::DtlsResult ConsumeCiphertext(
+            LikesProgram::Net::Buffer& input,
+            LikesProgram::Net::DtlsDatagramBatch&,
+            LikesProgram::Net::DtlsDatagramBatch&) override {
+            input.RetrieveAll();
+            m_state = LikesProgram::Net::DtlsState::Active;
+            return {};
         }
-        // 用户主动升级 UDP 通信时进入自定义安全层握手。
-        LikesProgram::Net::IoResult UpgradeCommunication() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
+
+        LikesProgram::Net::DtlsResult ConsumePlaintext(
+            LikesProgram::Net::Buffer& input,
+            LikesProgram::Net::DtlsDatagramBatch&) override {
+            input.RetrieveAll();
+            return {};
         }
-        // 当前检查不进入握手态，只确认外部覆盖点可见。
-        bool NeedHandshake() const override { return false; }
-        // 推进 UDP/DTLS 风格握手，真实实现由消费方提供。
-        LikesProgram::Net::IoResult Handshake() override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::Ok, 0, 0 };
+
+        LikesProgram::Net::DtlsResult HandleTimeout(
+            LikesProgram::Net::DtlsDatagramBatch&) override {
+            return {};
         }
-        // 保留读兴趣用于覆盖 secure transport 查询接口。
-        bool RemainWantRead() const override { return true; }
-        // 不保留写兴趣，避免检查程序依赖平台 socket 状态。
-        bool RemainWantWrite() const override { return false; }
+
+        LikesProgram::Net::DtlsResult Shutdown(
+            LikesProgram::Net::DtlsDatagramBatch&) override {
+            m_state = LikesProgram::Net::DtlsState::Closed;
+            return { LikesProgram::Net::DtlsAction::CloseSession, 0, 0 };
+        }
+
+        LikesProgram::Net::DtlsState State() const noexcept override { return m_state; }
+        const char* NegotiatedProtocol() const noexcept override { return "consumer-dtls"; }
+
+    private:
+        LikesProgram::Net::DtlsState m_state = LikesProgram::Net::DtlsState::Handshaking; // 外部 peer 状态
+    };
+
+    class ConsumerBackpressureConnection : public LikesProgram::Net::Connection {
+    public:
+        // 外部消费方通过继承 Connection 接收写队列水位事件。
+        ConsumerBackpressureConnection(
+            LikesProgram::Net::SocketType fd,
+            LikesProgram::Net::EventLoop* loop)
+            : Connection(fd, loop) {
+        }
 
     protected:
-        // 明文 UDP socket 钩子保持可继承，安全层只在用户主动升级后接管。
-        LikesProgram::Net::IoResult ReadSocketSome(LikesProgram::Net::Buffer&) override {
-            return LikesProgram::Net::IoResult{ LikesProgram::Net::IoStatus::WouldBlock, 0, 0 };
+        // 高水位暂停读，低水位再恢复，形成 TCP 连接级背压。
+        void OnWriteHighWatermark(std::size_t) override {
+            PauseReading();
         }
-        LikesProgram::Net::IoResult WriteSocketSome(const std::uint8_t*, std::size_t len) override {
-            return LikesProgram::Net::IoResult{
-                LikesProgram::Net::IoStatus::Ok,
-                static_cast<std::int64_t>(len),
-                0
-            };
+        void OnWriteLowWatermark(std::size_t) override {
+            ResumeReading();
         }
-        void ShutdownSocketWrite() override {}
-        void CloseSocket() override { (void)DetachFd(); }
+        void OnWriteQueueOverflow(std::size_t) override {
+            ForceClose();
+        }
     };
 }
 
 int main() {
     LikesProgram::Net::Buffer buffer;
-    buffer.Append("net", 3);
+    std::uint8_t* writeBegin = buffer.PrepareWrite(3);
+    writeBegin[0] = 'n';
+    writeBegin[1] = 'e';
+    writeBegin[2] = 't';
+    buffer.HasWritten(3);
 
-    ConsumerSecureTcpTransport secureTcp(LikesProgram::Net::kInvalidSocket);
-    ConsumerSecureUdpTransport secureUdp(LikesProgram::Net::kInvalidSocket);
+    ConsumerBackpressureConnection backpressureConnection(LikesProgram::Net::kInvalidSocket, nullptr);
+    backpressureConnection.SetWriteWatermark(64 * 1024, 16 * 1024);
+    backpressureConnection.SetMaxPendingWriteBytes(4 * 1024 * 1024);
+    backpressureConnection.SetTlsHandshakeTimeout(std::chrono::seconds(5));
+    LikesProgram::Net::EventLoopGroup workerGroup(2);
 
-    if (secureTcp.Kind() != LikesProgram::Net::TransportKind::Tcp) return 1;
-    if (secureUdp.Kind() != LikesProgram::Net::TransportKind::Udp) return 2;
     if (buffer.AsStringView() != "net") return 3;
-    if (secureTcp.InitializeSecureLayer().status != LikesProgram::Net::IoStatus::Ok) return 4;
-    if (secureUdp.UpgradeCommunication().status != LikesProgram::Net::IoStatus::Ok) return 5;
+    if (!backpressureConnection.IsConnected()) return 6;
+    if (workerGroup.Size() != 2 || workerGroup.IsRunning()) return 7;
 
-    std::atomic<int> sharedInitCount{ 0 }; // 验证共享安全资源初始化只随工厂状态执行一次
+    workerGroup.Start();
+    LikesProgram::Net::EventLoop* firstWorker = workerGroup.NextLoop();  // 外部消费方可轮询取得 worker loop
+    LikesProgram::Net::EventLoop* secondWorker = workerGroup.NextLoop(); // 2 worker 场景应分发到不同 loop
+    if (!workerGroup.IsRunning()) return 8;
+    if (firstWorker == nullptr || secondWorker == nullptr || firstWorker == secondWorker) return 9;
+    workerGroup.Shutdown();
+    if (workerGroup.IsRunning()) return 10;
+
+    auto poller = LikesProgram::Net::CreateDefaultPoller(nullptr); // 外部消费方可观察默认 Poller 后端
+    if (!poller || poller->BackendName() == nullptr) return 20;
+#if defined(__linux__)
+    const bool ioUringBackend = std::strcmp(
+        poller->BackendName(),
+        "io_uring-multishot-provided-buffer") == 0;
+    const bool epollBackend = std::strcmp(
+        poller->BackendName(),
+        "epoll-level-completion") == 0;
+    if (!ioUringBackend && !epollBackend) return 21;
+    const char* requestedBackend = std::getenv("LIKESPROGRAM_NET_BACKEND");
+    const bool forcedEpoll = requestedBackend != nullptr
+        && std::strcmp(requestedBackend, "epoll") == 0;
+    if (forcedEpoll ? !epollBackend : !ioUringBackend) return 21;
+    const LikesProgram::Net::CompletionStats completionStats = poller->GetCompletionStats(); // 安装态诊断池规格
+    if (epollBackend) {
+        if (completionStats.providedBufferCount != 0
+            || completionStats.providedBufferSize != 0
+            || completionStats.currentAvailableBuffers != 0
+            || completionStats.receiveBundleEnabled
+            || completionStats.datagramMultishotEnabled
+            || completionStats.datagramProvidedBufferCount != 0
+            || completionStats.datagramActiveBufferLeases != 0) return 28;
+    }
+    else {
+        if (completionStats.providedBufferCount == 0
+            || completionStats.providedBufferSize == 0) return 28;
+        if (completionStats.currentAvailableBuffers
+            != completionStats.providedBufferCount) return 29;
+    }
+    if (completionStats.receiveBundleCompletions != 0
+        || completionStats.receiveBundleBuffers != 0
+        || completionStats.maximumReceiveBundleBuffers != 0) return 30;
+#elif defined(_WIN32)
+    if (std::strcmp(poller->BackendName(), "iocp-overlapped") != 0) return 21;
+    const LikesProgram::Net::CompletionStats completionStats = poller->GetCompletionStats(); // 安装态诊断池规格
+    if (completionStats.providedBufferCount != 0
+        || completionStats.providedBufferSize != 0
+        || completionStats.currentAvailableBuffers != 0
+        || completionStats.receiveBundleEnabled
+        || completionStats.datagramMultishotEnabled
+        || completionStats.datagramProvidedBufferCount != 0
+        || completionStats.datagramActiveBufferLeases != 0
+        || completionStats.receiveBundleCompletions != 0
+        || completionStats.receiveBundleBuffers != 0
+        || completionStats.maximumReceiveBundleBuffers != 0) return 28;
+#else
+    return 21;
+#endif
+
+    LikesProgram::Net::ConnectionPoolOptions poolOptions;
+    poolOptions.remoteAddress = LikesProgram::Net::Address("127.0.0.1", 9);
+    poolOptions.transportKind = LikesProgram::Net::TransportKind::Udp;
+    bool poolRejectedUdp = false; // 连接池是 TCP-only 子能力，UDP 必须在构造期被拒绝。
+    try {
+        LikesProgram::Net::ConnectionPool pool(poolOptions);
+        (void)pool;
+    }
+    catch (const std::invalid_argument&) {
+        poolRejectedUdp = true;
+    }
+    if (!poolRejectedUdp) return 11;
+
     LikesProgram::Net::ConnectionFactory factory(
         [](LikesProgram::Net::SocketType, LikesProgram::Net::EventLoop*) {
             return std::shared_ptr<LikesProgram::Net::Connection>{};
+        });
+    if (!factory) return 14;
+
+    std::atomic<int> tlsSharedInitCount{ 0 }; // TLS Factory 复制时共享初始化状态
+    LikesProgram::Net::TlsEngineFactory tlsFactory(
+        []() {
+            return std::make_unique<ConsumerTlsEngine>();
         },
-        [&sharedInitCount]() {
-            sharedInitCount.fetch_add(1);
+        [&tlsSharedInitCount]() {
+            tlsSharedInitCount.fetch_add(1);
             return true;
         });
+    LikesProgram::Net::TlsEngineFactory copiedTlsFactory(tlsFactory); // 外部用户无需实现 Factory 子类
+    backpressureConnection.SetTlsEngineFactory(copiedTlsFactory); // Connection 只接收 Engine Factory，不接收 Transport
+    if (!backpressureConnection.HasTlsEngineFactory()) return 27;
+    if (!tlsFactory.InitializeSharedResources()) return 22;
+    if (!copiedTlsFactory.InitializeSharedResources()) return 23;
+    if (tlsSharedInitCount.load() != 1) return 24;
 
-    if (!factory.InitializeSharedSecureResources()) return 6;
-    if (!factory.InitializeSharedSecureResources()) return 7;
-    if (sharedInitCount.load() != 1) return 8;
+    auto tlsEngine = copiedTlsFactory.Create(); // 每个连接取得独立 TLS 会话对象
+    if (!tlsEngine) return 25;
+    LikesProgram::Net::BufferChain tlsCiphertext; // Engine 与 Net 之间只交换 BufferChain
+    const LikesProgram::Net::TlsResult tlsStart = tlsEngine->StartHandshake(tlsCiphertext);
+    if (!tlsStart.Succeeded()
+        || !tlsStart.HasAction(LikesProgram::Net::TlsAction::NeedCiphertext)) {
+        return 26;
+    }
 
-    const std::uint8_t payload[] = { 'o', 'k' }; // 通过公共入口确认默认仍走明文 socket 钩子
-    if (secureTcp.WriteSome(payload, sizeof(payload)).nbytes != 2) return 9;
-    if (secureUdp.WriteSome(payload, sizeof(payload)).nbytes != 2) return 10;
+    std::atomic<int> dtlsSharedInitCount{ 0 }; // 复制 Server Factory 共享一次性资源状态
+    LikesProgram::Net::DtlsEngineFactory dtlsFactory(
+        LikesProgram::Net::DtlsRole::Server,
+        [](const LikesProgram::Net::Address&, const LikesProgram::Net::Address&, std::size_t) {
+            return std::make_unique<ConsumerDtlsEngine>();
+        },
+        [&dtlsSharedInitCount]() {
+            dtlsSharedInitCount.fetch_add(1);
+            return true;
+        });
+    LikesProgram::Net::DtlsEngineFactory copiedDtlsFactory(dtlsFactory); // 安装态 PImpl 复制
+    if (!dtlsFactory.InitializeSharedResources()
+        || !copiedDtlsFactory.InitializeSharedResources()
+        || dtlsSharedInitCount.load() != 1
+        || copiedDtlsFactory.Role() != LikesProgram::Net::DtlsRole::Server) return 31;
+    auto dtlsEngine = copiedDtlsFactory.Create(
+        LikesProgram::Net::Address(), LikesProgram::Net::Address(), 1200);
+    if (!dtlsEngine) return 32;
+    LikesProgram::Net::DtlsDatagramBatch dtlsCiphertext; // 安装态数据报边界容器
+    const auto dtlsStart = dtlsEngine->StartHandshake(dtlsCiphertext);
+    if (!dtlsStart.HasAction(LikesProgram::Net::DtlsAction::CiphertextReady)
+        || dtlsCiphertext.Count() != 1 || dtlsCiphertext.At(0).AsStringView() != "dtls") return 33;
+    LikesProgram::Net::Buffer taken(0);
+    if (!dtlsCiphertext.TakeFront(taken) || taken.AsStringView() != "dtls"
+        || !dtlsCiphertext.Empty()) return 34;
+    LikesProgram::Net::Connection dtlsConnection(
+        LikesProgram::Net::kInvalidSocket,
+        nullptr,
+        LikesProgram::Net::TransportKind::Udp);
+    dtlsConnection.SetDtlsEngineFactory(copiedDtlsFactory);
+    dtlsConnection.SetDtlsMaximumCiphertextDatagramBytes(1200);
+    dtlsConnection.SetDtlsHandshakeTimeout(std::chrono::seconds(30));
+    dtlsConnection.SetDtlsSessionIdleTimeout(std::chrono::minutes(5));
+    dtlsConnection.SetDtlsSessionLimits(1024, 256, 256 * 1024);
+    if (!dtlsConnection.HasDtlsEngineFactory()) return 35;
+
 
     std::cout << LikesProgram::Net::PackageName()
         << " consumer check passed\n";

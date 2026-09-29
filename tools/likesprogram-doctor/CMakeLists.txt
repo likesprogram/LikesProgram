@@ -70,6 +70,20 @@ else()
     target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_NET=0)
 endif()
 
+if (TARGET LikesProgram::Quic)
+    target_link_libraries(LikesProgramDoctor PRIVATE LikesProgram::Quic)
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_QUIC=1)
+else()
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_QUIC=0)
+endif()
+
+if (TARGET LikesProgram::Http)
+    target_link_libraries(LikesProgramDoctor PRIVATE LikesProgram::Http)
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_HTTP=1)
+else()
+    target_compile_definitions(LikesProgramDoctor PRIVATE LIKESPROGRAM_DOCTOR_HAS_HTTP=0)
+endif()
+
 # =========================
 # 输出与编译策略
 # =========================
@@ -113,6 +127,8 @@ if (WIN32)
     likesprogram_doctor_copy_runtime(LikesProgramMetrics LikesProgram::Metrics)
     likesprogram_doctor_copy_runtime(LikesProgramThreading LikesProgram::Threading)
     likesprogram_doctor_copy_runtime(LikesProgramNet LikesProgram::Net)
+    likesprogram_doctor_copy_runtime(LikesProgramQuic LikesProgram::Quic)
+    likesprogram_doctor_copy_runtime(LikesProgramHttp LikesProgram::Http)
 endif()
 
 # =========================
@@ -121,6 +137,38 @@ endif()
 if ((DEFINED LIKESPROGRAM_BUILD_TESTS AND LIKESPROGRAM_BUILD_TESTS)
     OR (DEFINED BUILD_TESTING AND BUILD_TESTING))
     add_test(NAME LikesProgramDoctorSmoke COMMAND LikesProgramDoctor --format text)
+    if (TARGET LikesProgramNet)
+        if (WIN32)
+            add_test(
+                NAME LikesProgramDoctorNetForcedIocp
+                COMMAND LikesProgramDoctor --require net --format text
+            )
+            set_tests_properties(LikesProgramDoctorNetForcedIocp PROPERTIES
+                ENVIRONMENT "LIKESPROGRAM_NET_BACKEND=iocp-overlapped"
+            )
+        elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            add_test(
+                NAME LikesProgramDoctorNetForcedEpoll
+                COMMAND LikesProgramDoctor --require net --format text
+            )
+            set_tests_properties(LikesProgramDoctorNetForcedEpoll PROPERTIES
+                ENVIRONMENT "LIKESPROGRAM_NET_BACKEND=epoll"
+            )
+            add_test(
+                NAME LikesProgramDoctorNetForcedIoUring
+                COMMAND LikesProgramDoctor --require net --format text
+            )
+            set_tests_properties(LikesProgramDoctorNetForcedIoUring PROPERTIES
+                ENVIRONMENT "LIKESPROGRAM_NET_BACKEND=io_uring"
+            )
+        endif()
+    endif()
+    if (TARGET LikesProgramQuic)
+        add_test(
+            NAME LikesProgramDoctorQuic
+            COMMAND LikesProgramDoctor --require quic --format text
+        )
+    endif()
 endif()
 
 install(TARGETS LikesProgramDoctor

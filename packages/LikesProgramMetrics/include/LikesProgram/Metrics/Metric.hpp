@@ -52,6 +52,8 @@ namespace LikesProgram {
             std::map<LikesProgram::String, LikesProgram::String>& MutableLabels();
             // 返回标签副本，调用方可以安全跨线程读取。
             std::map<LikesProgram::String, LikesProgram::String> LabelsCopy() const;
+            // 返回缓存的 Prometheus 标签块；通过 MutableLabels 修改时自动退回实时格式化。
+            LikesProgram::String PrometheusLabels() const;
             // 替换指标标签，构造和赋值路径共用。
             void SetLabels(const std::map<LikesProgram::String, LikesProgram::String>& labels);
         private:

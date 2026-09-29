@@ -78,14 +78,23 @@ namespace LikesProgram {
             // 导出 key=value 文本，嵌套对象以 dotted path 展平。
             String ToKeyValueLines() const;
 
-            // 尝试从 JSON 文档构造配置。
+            // 尝试从 JSON5 文档构造配置；严格 JSON 仍作为 JSON5 子集接受。
             static Result<Configuration> TryFromJson(const String& text);
 
-            // 从 JSON 文档构造配置，失败时抛出异常。
+            // 从 JSON5 文档构造配置，失败时抛出异常。
             static Configuration FromJson(const String& text);
 
-            // 导出 JSON 文档，indent < 0 时输出紧凑格式。
+            // 导出 JSON5 文档，indent < 0 时输出紧凑格式。
             String ToJson(int indent = 2) const;
+
+            // 尝试从 JSON5 文档构造配置，是 TryFromJson 的显式命名别名。
+            static Result<Configuration> TryFromJson5(const String& text);
+
+            // 从 JSON5 文档构造配置，是 FromJson 的显式命名别名。
+            static Configuration FromJson5(const String& text);
+
+            // 导出 JSON5 文档，是 ToJson 的显式命名别名。
+            String ToJson5(int indent = 2) const;
 
             // 尝试从 YAML 文档构造配置。
             static Result<Configuration> TryFromYaml(const String& text);
@@ -120,5 +129,5 @@ namespace LikesProgram {
         };
     }
 
-    using Configuration = Config::Configuration;
+    using Configuration = Config::Configuration; // Config::Configuration
 }

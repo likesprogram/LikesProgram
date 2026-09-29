@@ -13,18 +13,19 @@ namespace LikesProgram {
         static constexpr size_t npos = static_cast<size_t>(-1); // 表示一直截取到末尾
 
         // 构造空字节视图。
-        ConstByteSpan() = default;
+        constexpr ConstByteSpan() noexcept = default;
+
+        // 从字节指针构造只读视图，保留 constexpr 视图路径。
+        constexpr ConstByteSpan(const std::byte* data, size_t size) noexcept : m_data(data), m_size(data ? size : 0) { }
 
         // 从任意原始内存构造只读视图。
-        ConstByteSpan(const void* data, size_t size) noexcept
-            : m_data(static_cast<const std::byte*>(data)), m_size(data ? size : 0) { }
+        ConstByteSpan(const void* data, size_t size) noexcept : m_data(static_cast<const std::byte*>(data)), m_size(data ? size : 0) { }
 
         // 从标准 span 构造只读视图。
-        ConstByteSpan(std::span<const std::byte> span) noexcept
-            : m_data(span.data()), m_size(span.size()) { }
+        constexpr ConstByteSpan(std::span<const std::byte> span) noexcept : m_data(span.data()), m_size(span.size()) { }
 
         // 返回字节指针。
-        const std::byte* Data() const noexcept {
+        constexpr const std::byte* Data() const noexcept {
             return m_data;
         }
 
@@ -34,17 +35,17 @@ namespace LikesProgram {
         }
 
         // 返回字节数。
-        size_t Size() const noexcept {
+        constexpr size_t Size() const noexcept {
             return m_size;
         }
 
         // 判断视图是否为空。
-        bool Empty() const noexcept {
+        constexpr bool Empty() const noexcept {
             return m_size == 0;
         }
 
         // 创建子视图，越界时抛出异常。
-        ConstByteSpan SubSpan(size_t offset, size_t count = npos) const {
+        constexpr ConstByteSpan SubSpan(size_t offset, size_t count = npos) const {
             if (offset > m_size) throw std::out_of_range("ByteSpan offset out of range");
             size_t actualCount = count == npos ? m_size - offset : count; // 实际截取字节数
             if (actualCount > m_size - offset) throw std::out_of_range("ByteSpan count out of range");
@@ -53,13 +54,13 @@ namespace LikesProgram {
         }
 
         // 按字节访问，越界时抛出异常。
-        std::byte At(size_t index) const {
+        constexpr std::byte At(size_t index) const {
             if (index >= m_size) throw std::out_of_range("ByteSpan index out of range");
             return m_data[index];
         }
 
         // 按字节访问，调用方保证不越界。
-        std::byte operator[](size_t index) const noexcept {
+        constexpr std::byte operator[](size_t index) const noexcept {
             return m_data[index];
         }
 
@@ -86,18 +87,19 @@ namespace LikesProgram {
         static constexpr size_t npos = ConstByteSpan::npos; // 表示一直截取到末尾
 
         // 构造空可写视图。
-        ByteSpan() = default;
+        constexpr ByteSpan() noexcept = default;
+
+        // 从字节指针构造可写视图，保留 constexpr 视图路径。
+        constexpr ByteSpan(std::byte* data, size_t size) noexcept : m_data(data), m_size(data ? size : 0) { }
 
         // 从任意原始内存构造可写视图。
-        ByteSpan(void* data, size_t size) noexcept
-            : m_data(static_cast<std::byte*>(data)), m_size(data ? size : 0) { }
+        ByteSpan(void* data, size_t size) noexcept : m_data(static_cast<std::byte*>(data)), m_size(data ? size : 0) { }
 
         // 从标准 span 构造可写视图。
-        ByteSpan(std::span<std::byte> span) noexcept
-            : m_data(span.data()), m_size(span.size()) { }
+        constexpr ByteSpan(std::span<std::byte> span) noexcept : m_data(span.data()), m_size(span.size()) { }
 
         // 返回可写字节指针。
-        std::byte* Data() const noexcept {
+        constexpr std::byte* Data() const noexcept {
             return m_data;
         }
 
@@ -107,22 +109,22 @@ namespace LikesProgram {
         }
 
         // 返回字节数。
-        size_t Size() const noexcept {
+        constexpr size_t Size() const noexcept {
             return m_size;
         }
 
         // 判断视图是否为空。
-        bool Empty() const noexcept {
+        constexpr bool Empty() const noexcept {
             return m_size == 0;
         }
 
         // 转换为只读字节视图。
-        ConstByteSpan AsConst() const noexcept {
+        constexpr ConstByteSpan AsConst() const noexcept {
             return ConstByteSpan(m_data, m_size);
         }
 
         // 创建可写子视图，越界时抛出异常。
-        ByteSpan SubSpan(size_t offset, size_t count = npos) const {
+        constexpr ByteSpan SubSpan(size_t offset, size_t count = npos) const {
             if (offset > m_size) throw std::out_of_range("ByteSpan offset out of range");
             size_t actualCount = count == npos ? m_size - offset : count; // 实际截取字节数
             if (actualCount > m_size - offset) throw std::out_of_range("ByteSpan count out of range");
@@ -137,13 +139,13 @@ namespace LikesProgram {
         }
 
         // 按字节访问，越界时抛出异常。
-        std::byte& At(size_t index) const {
+        constexpr std::byte& At(size_t index) const {
             if (index >= m_size) throw std::out_of_range("ByteSpan index out of range");
             return m_data[index];
         }
 
         // 按字节访问，调用方保证不越界。
-        std::byte& operator[](size_t index) const noexcept {
+        constexpr std::byte& operator[](size_t index) const noexcept {
             return m_data[index];
         }
 

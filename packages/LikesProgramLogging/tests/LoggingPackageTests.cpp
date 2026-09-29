@@ -58,6 +58,36 @@ namespace {
         }
     };
 
+    class FlushCountingSink : public LikesProgram::Log::Sink {
+    public:
+        FlushCountingSink() : Sink(u"FlushCountingSink") {}
+
+        void Write(const LikesProgram::Log::Message&) override {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            ++m_writes;
+        }
+
+        void Flush() override {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            ++m_flushes;
+        }
+
+        size_t Writes() const {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_writes;
+        }
+
+        size_t Flushes() const {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_flushes;
+        }
+
+    private:
+        mutable std::mutex m_mutex; // 保护同步写入和 Flush 观察计数
+        size_t m_writes = 0;        // 已同步接收的消息数
+        size_t m_flushes = 0;       // 已显式刷新的次数
+    };
+
     class FlakySink : public LikesProgram::Log::Sink {
     public:
         explicit FlakySink(size_t failuresBeforeSuccess)
@@ -270,6 +300,19 @@ namespace {
         Require(logger.Flush(std::chrono::seconds(5)), "Flush should complete after disabled log");
         Require(sink->Count() == 0, "Disabled log should not reach sinks");
         logger.Shutdown(true);
+    }
+
+    void TestImmediateStartShutdownHandshake() {
+        auto& logger = LikesProgram::Log::Logger::Instance(false, false);
+        ResetLogger(logger);
+
+        for (size_t iteration = 0; iteration < 256; ++iteration) {
+            Require(logger.Start(), "immediate lifecycle start should succeed");
+            Require(logger.Shutdown(std::chrono::seconds(5), false),
+                "immediate lifecycle shutdown should not lose a worker wakeup");
+        }
+
+        logger.ClearSinks();
     }
 
     void TestLoggerFileSink() {
@@ -488,6 +531,56 @@ namespace {
         auto stats = logger.Stats();
         Require(stats.droppedMessages > before.droppedMessages, "DropOldest should drop older messages");
         Require(stats.currentQueueSize == 0, "DropOldest queue should be empty after Flush");
+        logger.Shutdown(true);
+    }
+
+    void TestQueueRingUnboundedGrowthAndWrap() {
+        auto& logger = LikesProgram::Log::Logger::Instance(false, false);
+        ResetLogger(logger);
+
+        LikesProgram::Log::LoggerOptions options;
+        options.maxQueueSize = 0;
+        options.overflowPolicy = LikesProgram::Log::QueueOverflowPolicy::Block;
+        logger.Configure(options);
+        auto blocking = std::make_shared<BlockingSink>();
+        auto counting = std::make_shared<CountingSink>();
+        logger.AddSink(blocking);
+        logger.AddSink(counting);
+
+        Require(logger.Start(), "Logger should start for unbounded ring growth test");
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), u"ring growth first");
+        Require(blocking->WaitStarted(std::chrono::seconds(5)),
+            "BlockingSink should hold the worker during ring growth");
+        for (int index = 0; index < 600; ++index) {
+            logger.Log(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"ring growth {}", index);
+        }
+        blocking->Release();
+        Require(logger.Flush(std::chrono::seconds(5)),
+            "Flush should drain the grown unbounded ring");
+        Require(counting->Count() == 601,
+            "Unbounded ring growth should preserve every queued message");
+
+        logger.SetSinks({ counting });
+        options.maxQueueSize = 32;
+        options.enqueueTimeout = std::chrono::seconds(5);
+        logger.Configure(options);
+        const auto beforeWrap = logger.Stats();
+        for (int round = 0; round < 12; ++round) {
+            for (int index = 0; index < 100; ++index) {
+                logger.Log(LikesProgram::Log::Level::Info,
+                    std::source_location::current(), u"ring wrap {} {}", round, index);
+            }
+            Require(logger.Flush(std::chrono::seconds(5)),
+                "Flush should drain each bounded ring wrap round");
+        }
+        const auto afterWrap = logger.Stats();
+        Require(counting->Count() == 1801,
+            "Bounded ring wrap should preserve every accepted message");
+        Require(afterWrap.droppedMessages == beforeWrap.droppedMessages &&
+                afterWrap.enqueueTimeouts == beforeWrap.enqueueTimeouts,
+            "Bounded ring wrap should not drop or time out with a healthy consumer");
         logger.Shutdown(true);
     }
 
@@ -920,6 +1013,8 @@ namespace {
             "Text diagnostics should include overflow policy");
         Require(text.Find(u"retry_queue_high_watermark") != LikesProgram::String::npos,
             "Text diagnostics should include retry queue high watermark");
+        Require(text.Find(u"synchronous_messages=") != LikesProgram::String::npos,
+            "Text diagnostics should include synchronous message count");
         Require(text.Find(u"sink_count=1") != LikesProgram::String::npos,
             "Text diagnostics should include sink count");
 
@@ -940,6 +1035,8 @@ namespace {
             "Json diagnostics should include numeric sink count");
         Require(json.Find(u"\"retry_queue_size\":0") != LikesProgram::String::npos,
             "Json diagnostics should include retry queue size");
+        Require(json.Find(u"\"synchronous_messages\":") != LikesProgram::String::npos,
+            "Json diagnostics should include synchronous message count");
         Require(json.Find(u"\"running\":true") != LikesProgram::String::npos,
             "Json diagnostics should include running flag");
 
@@ -1095,38 +1192,265 @@ namespace {
         logger.Shutdown(true);
         LikesProgram::Log::Logger::ClearContext();
     }
+
+    void TestSynchronousDispatch() {
+        auto& logger = LikesProgram::Log::Logger::Instance(false, false);
+        ResetLogger(logger);
+        logger.SetLevel(LikesProgram::Log::Level::Info);
+        logger.SetLoggerName(u"sync-logger");
+        LikesProgram::Log::Logger::SetModule(u"sync-module");
+
+        auto counting = std::make_shared<CountingSink>();
+        auto throwing = std::make_shared<ThrowingSink>();
+        logger.AddSink(counting);
+        logger.AddSink(throwing);
+        const auto beforeFailure = logger.Stats();
+        Require(!logger.LogSync(LikesProgram::Log::Level::Warn,
+                std::source_location::current(), u"sync {}", 1),
+            "LogSync should report an eligible Sink failure");
+        const auto afterFailure = logger.Stats();
+        Require(counting->Count() == 1,
+            "LogSync should deliver to healthy Sinks despite another failure");
+        Require(afterFailure.acceptedMessages == beforeFailure.acceptedMessages + 1
+                && afterFailure.processedMessages == beforeFailure.processedMessages + 1
+                && afterFailure.synchronousMessages == beforeFailure.synchronousMessages + 1
+                && afterFailure.sinkWriteFailures >= beforeFailure.sinkWriteFailures + 1,
+            "LogSync should update accepted, processed, synchronous and failure counters");
+        Require(!afterFailure.running && afterFailure.currentQueueSize == 0,
+            "LogSync should not require Start or enqueue a message");
+
+        logger.ClearSinks();
+        auto flushCounting = std::make_shared<FlushCountingSink>();
+        logger.AddSink(flushCounting);
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"flush sync"),
+            "LogSync should write before the Logger has started");
+        Require(logger.Flush(std::chrono::seconds(1))
+                && flushCounting->Writes() == 1 && flushCounting->Flushes() == 1,
+            "Flush should flush synchronous Sinks while the Logger is stopped");
+
+        logger.ClearSinks();
+        const auto syncFileRoot = MakeTempRoot("LikesProgramLoggingSyncFileFlushTests");
+        std::filesystem::remove_all(syncFileRoot);
+        auto syncFile = LikesProgram::Log::FileSink::CreateSink(
+            LikesProgram::String(syncFileRoot.string()), u"sync-flush.log", 0);
+        logger.AddSink(syncFile);
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"visible after flush"),
+            "LogSync should write to FileSink before the Logger has started");
+        Require(logger.Flush(std::chrono::seconds(1)),
+            "Flush should commit stopped synchronous FileSink bytes");
+        bool foundVisibleSyncFile = false;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(syncFileRoot)) {
+            if (entry.is_regular_file() && entry.path().filename() == "sync-flush.log") {
+                foundVisibleSyncFile = std::filesystem::file_size(entry.path()) > 0;
+            }
+        }
+        Require(foundVisibleSyncFile,
+            "Stopped synchronous FileSink bytes should be visible immediately after Flush");
+        logger.ClearSinks();
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"release file sink snapshot"),
+            "LogSync should release the previous FileSink snapshot after ClearSinks");
+        syncFile.reset();
+        std::filesystem::remove_all(syncFileRoot);
+
+        auto capture = std::make_shared<CapturingSink>();
+        logger.AddSink(capture);
+        LikesProgram::Log::LoggerOptions options;
+        options.outputFormat = LikesProgram::Log::LogOutputFormat::JsonLines;
+        logger.Configure(options);
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"context {}", 2),
+            "LogSync should succeed for a healthy capturing Sink");
+        const auto lines = capture->Lines();
+        Require(lines.size() == 1
+                && lines[0].Find(u"\"logger\":\"sync-logger\"")
+                    != LikesProgram::String::npos
+                && lines[0].Find(u"\"module\":\"sync-module\"")
+                    != LikesProgram::String::npos
+                && lines[0].Find(u"\"message\":\"context 2\"")
+                    != LikesProgram::String::npos,
+            "LogSync should preserve logger, context, formatting and output format semantics");
+
+        logger.ClearSinks();
+        auto concurrent = std::make_shared<CountingSink>();
+        logger.AddSink(concurrent);
+        constexpr int threadCount = 4;
+        constexpr int perThread = 1000;
+        std::atomic<bool> succeeded{ true };
+        std::vector<std::thread> threads;
+        for (int thread = 0; thread < threadCount; ++thread) {
+            threads.emplace_back([&logger, &succeeded, thread] {
+                for (int index = 0; index < perThread; ++index) {
+                    if (!logger.LogSync(LikesProgram::Log::Level::Info,
+                            std::source_location::current(), u"{}:{}", thread, index)) {
+                        succeeded.store(false, std::memory_order_relaxed);
+                    }
+                }
+            });
+        }
+        for (auto& thread : threads) thread.join();
+        Require(succeeded.load(std::memory_order_relaxed)
+                && concurrent->Count() == static_cast<size_t>(threadCount * perThread),
+            "concurrent LogSync calls should deliver every message");
+
+        logger.SetLevel(LikesProgram::Log::Level::Error);
+        const auto beforeFiltered = logger.Stats();
+        Require(logger.LogSync(LikesProgram::Log::Level::Debug,
+                std::source_location::current(), u"filtered {}", ThrowOnCopy{}),
+            "a filtered LogSync call should be a successful no-op");
+        const auto afterFiltered = logger.Stats();
+        Require(afterFiltered.acceptedMessages == beforeFiltered.acceptedMessages
+                && afterFiltered.synchronousMessages == beforeFiltered.synchronousMessages,
+            "filtered LogSync calls should not construct or count a message");
+
+        logger.ClearSinks();
+        LikesProgram::Log::Logger::ClearContext();
+    }
+
+    void TestLiteralCacheContentAndProducerLifetime() {
+        auto& logger = LikesProgram::Log::Logger::Instance(false, false);
+        ResetLogger(logger);
+
+        auto blocking = std::make_shared<BlockingSink>();
+        auto capture = std::make_shared<CapturingSink>();
+        logger.AddSink(blocking);
+        logger.AddSink(capture);
+        Require(logger.Start(), "Logger should start for literal cache lifetime test");
+
+        char16_t mutableMessage[] = u"first";
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), mutableMessage);
+        Require(blocking->WaitStarted(std::chrono::seconds(5)),
+            "first mutable-array message should reach the blocking Sink");
+
+        const char16_t replacement[] = u"other";
+        std::copy(std::begin(replacement), std::end(replacement), std::begin(mutableMessage));
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), mutableMessage);
+
+        std::thread producer([&logger] {
+            LikesProgram::Log::Logger::SetModule(u"producer-module");
+            logger.Log(LikesProgram::Log::Level::Info,
+                std::source_location::current(), u"producer-exit");
+        });
+        producer.join();
+
+        blocking->Release();
+        Require(logger.Flush(std::chrono::seconds(5)),
+            "Flush should retain queued snapshots after producer thread exit");
+        logger.Shutdown(true);
+
+        const auto lines = capture->Lines();
+        Require(lines.size() == 3, "literal cache lifetime test should capture three messages");
+        Require(lines[0].Find(u"first") != LikesProgram::String::npos,
+            "first mutable-array snapshot should retain its original content");
+        Require(lines[1].Find(u"other") != LikesProgram::String::npos,
+            "same-address mutable array should refresh cached content");
+        Require(lines[2].Find(u"producer-exit") != LikesProgram::String::npos &&
+                lines[2].Find(u"producer-module") != LikesProgram::String::npos,
+            "queued literal and context should outlive the producer thread cache");
+
+        logger.ClearSinks();
+        auto synchronous = std::make_shared<CapturingSink>();
+        logger.AddSink(synchronous);
+        char16_t syncMessage[] = u"alpha";
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), syncMessage),
+            "first synchronous mutable-array write should succeed");
+        const char16_t syncReplacement[] = u"bravo";
+        std::copy(std::begin(syncReplacement), std::end(syncReplacement), std::begin(syncMessage));
+        Require(logger.LogSync(LikesProgram::Log::Level::Info,
+                std::source_location::current(), syncMessage),
+            "updated synchronous mutable-array write should succeed");
+
+        const auto syncLines = synchronous->Lines();
+        Require(syncLines.size() == 2 &&
+                syncLines[0].Find(u"alpha") != LikesProgram::String::npos &&
+                syncLines[1].Find(u"bravo") != LikesProgram::String::npos,
+            "synchronous cache should validate same-address array content");
+        logger.ClearSinks();
+    }
+
+    void TestAsyncNoArgumentOverloadSelection() {
+        auto& logger = LikesProgram::Log::Logger::Instance(false, false);
+        ResetLogger(logger);
+
+        auto capture = std::make_shared<CapturingSink>();
+        logger.AddSink(capture);
+        Require(logger.Start(), "Logger should start for no-argument overload test");
+
+        LikesProgram::String owned(u"owned-message");
+        const char16_t* pointer = u"pointer-message";
+        const std::u16string_view view = u"view-message";
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), u"literal-message");
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), owned);
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), pointer);
+        logger.Log(LikesProgram::Log::Level::Info,
+            std::source_location::current(), view);
+
+        Require(logger.Flush(std::chrono::seconds(5)),
+            "no-argument overload messages should flush");
+        logger.Shutdown(true);
+
+        const auto lines = capture->Lines();
+        Require(lines.size() == 4,
+            "literal, String, pointer, and view overloads should all emit");
+        Require(lines[0].Find(u"literal-message") != LikesProgram::String::npos &&
+                lines[1].Find(u"owned-message") != LikesProgram::String::npos &&
+                lines[2].Find(u"pointer-message") != LikesProgram::String::npos &&
+                lines[3].Find(u"view-message") != LikesProgram::String::npos,
+            "no-argument overloads should preserve their message content");
+        logger.ClearSinks();
+    }
 }
+
+#define RUN_LOGGING_TEST(test) \
+    do { \
+        std::cerr << "[ RUN      ] " #test << std::endl; \
+        test(); \
+        std::cerr << "[       OK ] " #test << std::endl; \
+    } while (false)
 
 int main() {
     try {
-        TestPackageIdentity();
-        TestLevelConversion();
-        TestDisabledLevelSkipsFormatting();
-        TestLoggerFileSink();
-        TestFileSinkOpenFailureBoundary();
-        TestConsoleSinkWriteBoundary();
-        TestFileSinkRetentionPolicy();
-        TestLoggerFlushAndStats();
-        TestSinkFailureIsolation();
-        TestQueueBackpressureDropNewest();
-        TestQueueBackpressureDropOldest();
-        TestShutdownTimeoutRecovery();
-        TestSinkFlushFailureIsolation();
-        TestLoggerConfigOpenSinkAndRetry();
-        TestLoggerRetryQueueBounded();
-        TestLoggerFlushUsesSingleTimeoutBudgetForRetryDrain();
-        TestLoggerShutdownStopsRetryExpansion();
-        TestLoggerConfigValidation();
-        TestLoggerConfigureNormalizesInvalidRuntimeOptions();
-        TestFileSinkMultiProcessConfig();
-        TestFileSinkMultiProcessRotationSeesPeerWrites();
-        TestLoggerStress100k();
-        TestRuntimeSinkReplacement();
-        TestLoggerDiagnosticsExport();
-        TestTextContextFields();
-        TestJsonLinesContextFields();
-        TestContextScopeRestore();
-        TestJsonContextFieldDoesNotOverrideBuiltins();
+        RUN_LOGGING_TEST(TestPackageIdentity);
+        RUN_LOGGING_TEST(TestLevelConversion);
+        RUN_LOGGING_TEST(TestDisabledLevelSkipsFormatting);
+        RUN_LOGGING_TEST(TestImmediateStartShutdownHandshake);
+        RUN_LOGGING_TEST(TestLoggerFileSink);
+        RUN_LOGGING_TEST(TestFileSinkOpenFailureBoundary);
+        RUN_LOGGING_TEST(TestConsoleSinkWriteBoundary);
+        RUN_LOGGING_TEST(TestFileSinkRetentionPolicy);
+        RUN_LOGGING_TEST(TestLoggerFlushAndStats);
+        RUN_LOGGING_TEST(TestSinkFailureIsolation);
+        RUN_LOGGING_TEST(TestQueueBackpressureDropNewest);
+        RUN_LOGGING_TEST(TestQueueBackpressureDropOldest);
+        RUN_LOGGING_TEST(TestQueueRingUnboundedGrowthAndWrap);
+        RUN_LOGGING_TEST(TestShutdownTimeoutRecovery);
+        RUN_LOGGING_TEST(TestSinkFlushFailureIsolation);
+        RUN_LOGGING_TEST(TestLoggerConfigOpenSinkAndRetry);
+        RUN_LOGGING_TEST(TestLoggerRetryQueueBounded);
+        RUN_LOGGING_TEST(TestLoggerFlushUsesSingleTimeoutBudgetForRetryDrain);
+        RUN_LOGGING_TEST(TestLoggerShutdownStopsRetryExpansion);
+        RUN_LOGGING_TEST(TestLoggerConfigValidation);
+        RUN_LOGGING_TEST(TestLoggerConfigureNormalizesInvalidRuntimeOptions);
+        RUN_LOGGING_TEST(TestFileSinkMultiProcessConfig);
+        RUN_LOGGING_TEST(TestFileSinkMultiProcessRotationSeesPeerWrites);
+        RUN_LOGGING_TEST(TestLoggerStress100k);
+        RUN_LOGGING_TEST(TestRuntimeSinkReplacement);
+        RUN_LOGGING_TEST(TestLoggerDiagnosticsExport);
+        RUN_LOGGING_TEST(TestTextContextFields);
+        RUN_LOGGING_TEST(TestJsonLinesContextFields);
+        RUN_LOGGING_TEST(TestContextScopeRestore);
+        RUN_LOGGING_TEST(TestJsonContextFieldDoesNotOverrideBuiltins);
+        RUN_LOGGING_TEST(TestSynchronousDispatch);
+        RUN_LOGGING_TEST(TestLiteralCacheContentAndProducerLifetime);
+        RUN_LOGGING_TEST(TestAsyncNoArgumentOverloadSelection);
     }
     catch (const std::exception& ex) {
         std::cerr << ex.what() << std::endl;
@@ -1135,3 +1459,5 @@ int main() {
 
     return 0;
 }
+
+#undef RUN_LOGGING_TEST

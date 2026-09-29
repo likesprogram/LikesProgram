@@ -91,6 +91,16 @@ if (LIKESPROGRAM_BUILD_TESTS)
     endif()
 
     add_test(NAME LikesProgramCoreTests COMMAND LikesProgramCoreTests)
+
+    add_executable(LikesProgramCoreStressTests
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoreStressTests.cpp
+    )
+    target_link_libraries(LikesProgramCoreStressTests PRIVATE LikesProgram::Core)
+    if (MSVC)
+        target_compile_options(LikesProgramCoreStressTests PRIVATE /utf-8 /W4)
+    endif()
+
+    add_test(NAME LikesProgramCoreStressTests COMMAND LikesProgramCoreStressTests)
 endif()
 
 # =========================
@@ -105,10 +115,31 @@ if (LIKESPROGRAM_BUILD_EXAMPLES)
         target_compile_options(LikesProgramCoreExample PRIVATE /utf-8 /W4)
     endif()
 
+    if (LIKESPROGRAM_BUILD_SHARED)
+        add_library(LikesProgramCoreBenchmarkReference SHARED
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CoreBenchmarkReference.cpp
+        )
+        target_compile_definitions(LikesProgramCoreBenchmarkReference
+            PUBLIC LIKESPROGRAM_CORE_BENCHMARK_REFERENCE_SHARED
+            PRIVATE LIKESPROGRAM_CORE_BENCHMARK_REFERENCE_EXPORTS
+        )
+    else()
+        add_library(LikesProgramCoreBenchmarkReference STATIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CoreBenchmarkReference.cpp
+        )
+    endif()
+    target_compile_features(LikesProgramCoreBenchmarkReference PUBLIC cxx_std_20)
+    if (MSVC)
+        target_compile_options(LikesProgramCoreBenchmarkReference PRIVATE /utf-8 /W4)
+    endif()
+
     add_executable(LikesProgramCoreBenchmark
         ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CoreBenchmark.cpp
     )
-    target_link_libraries(LikesProgramCoreBenchmark PRIVATE LikesProgram::Core)
+    target_link_libraries(LikesProgramCoreBenchmark PRIVATE
+        LikesProgram::Core
+        LikesProgramCoreBenchmarkReference
+    )
     target_include_directories(LikesProgramCoreBenchmark PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/include
     )

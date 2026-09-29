@@ -21,6 +21,14 @@
 #define LIKESPROGRAM_DOCTOR_HAS_NET 0
 #endif
 
+#ifndef LIKESPROGRAM_DOCTOR_HAS_QUIC
+#define LIKESPROGRAM_DOCTOR_HAS_QUIC 0
+#endif
+
+#ifndef LIKESPROGRAM_DOCTOR_HAS_HTTP
+#define LIKESPROGRAM_DOCTOR_HAS_HTTP 0
+#endif
+
 #if LIKESPROGRAM_DOCTOR_HAS_CONFIG
 #include <LikesProgram/Config/Config.hpp>
 #endif
@@ -45,15 +53,25 @@
 #include <LikesProgram/Net/Net.hpp>
 #endif
 
+#if LIKESPROGRAM_DOCTOR_HAS_QUIC
+#include <LikesProgram/Quic/Quic.hpp>
+#endif
+
+#if LIKESPROGRAM_DOCTOR_HAS_HTTP
+#include <LikesProgram/Http/Http.hpp>
+#endif
+
 #include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstddef>
+#include <cstring>
 #include <exception>
 #include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -173,7 +191,9 @@ namespace {
             || component == "config"
             || component == "metrics"
             || component == "threading"
-            || component == "net";
+            || component == "net"
+            || component == "quic"
+            || component == "http";
     }
 
     // 解析单个 --require 组件，all/full 会展开为全部当前稳定组件。
@@ -191,6 +211,8 @@ namespace {
             AddUnique(options.requiredComponents, "metrics");
             AddUnique(options.requiredComponents, "threading");
             AddUnique(options.requiredComponents, "net");
+            AddUnique(options.requiredComponents, "quic");
+            AddUnique(options.requiredComponents, "http");
             return true;
         }
 
@@ -328,7 +350,10 @@ namespace {
     }
 
     // 构造跳过结果，用于未链接的可选扩展包。
-    CheckResult Skipped(std::string component, std::string detail, bool required) {
+    [[maybe_unused]] CheckResult Skipped(
+        std::string component,
+        std::string detail,
+        bool required) {
         return CheckResult{ std::move(component), CheckState::Skipped, std::move(detail), required };
     }
 
@@ -390,17 +415,17 @@ namespace {
             return Failed("config", "key-value parser returned wrong feature.logging", required);
         }
 
-        const auto json = LikesProgram::Config::Configuration::TryFromJson(
-            u"{\"release\":{\"channel\":\"stable\",\"build\":1}}"); // JSON 基础解析样本
+        const auto json = LikesProgram::Config::Configuration::TryFromJson5(
+            u"{release:{channel:'stable',build:+1,},}");      // JSON5 基础解析样本
         if (!json.IsOk()) {
             return Failed("config", json.GetStatus().ToString().ToStdString(), required);
         }
         if (json.Value().GetString(u"release.channel") != u"stable") {
-            return Failed("config", "JSON parser returned wrong release.channel", required);
+            return Failed("config", "JSON5 parser returned wrong release.channel", required);
         }
 
         return Passed("config", "package version " + std::string(packageVersion)
-            + "; key-value and JSON checks passed", required);
+            + "; key-value and JSON5 checks passed", required);
 #else
         const std::string detail =
             "component is not linked into this tool; enable LIKESPROGRAM_BUILD_CONFIG=ON"; // 未链接说明
@@ -554,10 +579,39 @@ namespace {
                 + " does not match core version " + VersionText(), required);
         }
 
+        auto poller = LikesProgram::Net::CreateDefaultPoller(nullptr); // 诊断默认平台轮询后端
+        if (!poller || poller->BackendName() == nullptr || poller->BackendName()[0] == '\0') {
+            return Failed("net", "default poller backend name check failed", required);
+        }
+        const std::string pollerBackend = poller->BackendName();       // 输出当前后端，便于迁移对照
+#if defined(__linux__)
+        const bool knownBackend = std::strcmp(
+            poller->BackendName(),
+            "io_uring-multishot-provided-buffer") == 0
+            || std::strcmp(poller->BackendName(), "epoll-level-completion") == 0;
+        if (!knownBackend) {
+            return Failed("net", "unsupported poller backend " + pollerBackend, required);
+        }
+#elif defined(_WIN32)
+        if (std::strcmp(poller->BackendName(), "iocp-overlapped") != 0) {
+            return Failed("net", "unsupported Windows poller backend " + pollerBackend, required);
+        }
+#endif
+
         LikesProgram::Net::Buffer buffer;                    // 诊断用连续网络缓冲
         buffer.Append("net", 3);
         if (buffer.AsStringView() != "net") {
             return Failed("net", "buffer append/string view check failed", required);
+        }
+        buffer.RetrieveAll();
+        std::uint8_t* writeBegin = buffer.PrepareWrite(4);   // 覆盖 TCP 直写 Buffer 所需公开入口
+        writeBegin[0] = 'f';
+        writeBegin[1] = 'a';
+        writeBegin[2] = 's';
+        writeBegin[3] = 't';
+        buffer.HasWritten(4);
+        if (buffer.AsStringView() != "fast") {
+            return Failed("net", "buffer prepare write check failed", required);
         }
 
         LikesProgram::Net::Address loopback("127.0.0.1", 0); // 不打开 socket 的地址格式化样本
@@ -565,32 +619,247 @@ namespace {
             return Failed("net", "loopback address formatting check failed", required);
         }
 
-        std::atomic<int> sharedInitCount{ 0 };                // 共享安全资源初始化次数
+        LikesProgram::Net::Connection connection(LikesProgram::Net::kInvalidSocket, nullptr);
+        connection.SetWriteWatermark(64 * 1024, 16 * 1024);
+        connection.SetMaxPendingWriteBytes(4 * 1024 * 1024);
+        connection.PauseReading();
+        connection.ResumeReading();
+        if (!connection.IsConnected()) {
+            return Failed("net", "connection backpressure API check failed", required);
+        }
+
+        class DoctorDtlsEngine final : public LikesProgram::Net::DtlsEngine {
+        public:
+            LikesProgram::Net::DtlsResult StartHandshake(
+                LikesProgram::Net::DtlsDatagramBatch& output) override {
+                LikesProgram::Net::Buffer flight(0); // 无 socket 的完整数据报边界样本
+                flight.Append("doctor-dtls", 11);
+                output.Append(std::move(flight));
+                return { LikesProgram::Net::DtlsAction::CiphertextReady, 0, 0 };
+            }
+            LikesProgram::Net::DtlsResult ConsumeCiphertext(
+                LikesProgram::Net::Buffer& input,
+                LikesProgram::Net::DtlsDatagramBatch&,
+                LikesProgram::Net::DtlsDatagramBatch&) override {
+                input.RetrieveAll();
+                return {};
+            }
+            LikesProgram::Net::DtlsResult ConsumePlaintext(
+                LikesProgram::Net::Buffer& input,
+                LikesProgram::Net::DtlsDatagramBatch&) override {
+                input.RetrieveAll();
+                return {};
+            }
+            LikesProgram::Net::DtlsResult HandleTimeout(
+                LikesProgram::Net::DtlsDatagramBatch&) override { return {}; }
+            LikesProgram::Net::DtlsResult Shutdown(
+                LikesProgram::Net::DtlsDatagramBatch&) override {
+                return { LikesProgram::Net::DtlsAction::CloseSession, 0, 0 };
+            }
+            LikesProgram::Net::DtlsState State() const noexcept override {
+                return LikesProgram::Net::DtlsState::Handshaking;
+            }
+            const char* NegotiatedProtocol() const noexcept override { return ""; }
+        };
+
+        LikesProgram::Net::DtlsEngineFactory emptyDtlsFactory; // 空 Factory 必须安全失败
+        if (emptyDtlsFactory || !emptyDtlsFactory.InitializeSharedResources()
+            || emptyDtlsFactory.Create(
+                LikesProgram::Net::Address(), LikesProgram::Net::Address(), 1200)) {
+            return Failed("net", "empty DTLS Factory contract failed", required);
+        }
+        std::atomic<int> dtlsSharedInitCount{ 0 }; // 复制 Factory 共享的初始化次数
+        LikesProgram::Net::DtlsEngineFactory dtlsFactory(
+            LikesProgram::Net::DtlsRole::Server,
+            [](const LikesProgram::Net::Address&, const LikesProgram::Net::Address&, std::size_t) {
+                return std::make_unique<DoctorDtlsEngine>();
+            },
+            [&dtlsSharedInitCount]() {
+                dtlsSharedInitCount.fetch_add(1);
+                return true;
+            });
+        LikesProgram::Net::DtlsEngineFactory copiedDtlsFactory(dtlsFactory); // PImpl 复制共享 once 状态
+        if (!dtlsFactory.InitializeSharedResources()
+            || !copiedDtlsFactory.InitializeSharedResources()
+            || dtlsSharedInitCount.load() != 1
+            || copiedDtlsFactory.Role() != LikesProgram::Net::DtlsRole::Server) {
+            return Failed("net", "DTLS Factory role/copy/shared initialization failed", required);
+        }
+        auto dtlsEngine = copiedDtlsFactory.Create(loopback, loopback, 1200);
+        LikesProgram::Net::DtlsDatagramBatch dtlsBatch; // 公共 move-only 数据报队列
+        if (!dtlsEngine) return Failed("net", "DTLS Factory Create failed", required);
+        const LikesProgram::Net::DtlsResult dtlsResult = dtlsEngine->StartHandshake(dtlsBatch);
+        if (!dtlsResult.HasAction(LikesProgram::Net::DtlsAction::CiphertextReady)
+            || dtlsBatch.Count() != 1 || dtlsBatch.At(0).AsStringView() != "doctor-dtls") {
+            return Failed("net", "DTLS batch/action boundary check failed", required);
+        }
+        LikesProgram::Net::Connection dtlsConnection(
+            LikesProgram::Net::kInvalidSocket,
+            nullptr,
+            LikesProgram::Net::TransportKind::Udp);
+        dtlsConnection.SetDtlsEngineFactory(copiedDtlsFactory);
+        if (!dtlsConnection.HasDtlsEngineFactory()) {
+            return Failed("net", "DTLS Connection configuration check failed", required);
+        }
+
+        LikesProgram::Net::EventLoopGroup workerGroup(2);
+        if (workerGroup.Size() != 2 || workerGroup.IsRunning()) {
+            return Failed("net", "event loop group initial state check failed", required);
+        }
+        workerGroup.Start();
+        LikesProgram::Net::EventLoop* firstWorker = workerGroup.NextLoop();  // 验证 worker 轮询分发入口
+        LikesProgram::Net::EventLoop* secondWorker = workerGroup.NextLoop(); // 两个 worker 应返回不同 loop
+        if (!workerGroup.IsRunning()
+            || firstWorker == nullptr
+            || secondWorker == nullptr
+            || firstWorker == secondWorker) {
+            return Failed("net", "event loop group worker dispatch check failed", required);
+        }
+        workerGroup.Shutdown();
+        if (workerGroup.IsRunning()) {
+            return Failed("net", "event loop group shutdown check failed", required);
+        }
+
+        LikesProgram::Net::ConnectionPoolOptions poolOptions; // 验证 TCP-only 连接池公开配置对象
+        poolOptions.remoteAddress = LikesProgram::Net::Address("127.0.0.1", 9);
+        poolOptions.transportKind = LikesProgram::Net::TransportKind::Udp;
+        bool poolRejectedUdp = false;                         // UDP 不应进入连接池抽象
+        try {
+            LikesProgram::Net::ConnectionPool pool(poolOptions);
+            (void)pool;
+        }
+        catch (const std::invalid_argument&) {
+            poolRejectedUdp = true;
+        }
+        if (!poolRejectedUdp) {
+            return Failed("net", "connection pool did not reject UDP transport", required);
+        }
+
         LikesProgram::Net::ConnectionFactory factory(
             [](LikesProgram::Net::SocketType, LikesProgram::Net::EventLoop*) {
                 return std::shared_ptr<LikesProgram::Net::Connection>{};
-            },
-            [&sharedInitCount]() {
-                sharedInitCount.fetch_add(1, std::memory_order_relaxed);
-                return true;
             });
-
-        const bool firstSharedInit = factory.InitializeSharedSecureResources();   // 首次应触发用户回调
-        const bool secondSharedInit = factory.InitializeSharedSecureResources();  // 第二次应复用缓存结果
-        if (!firstSharedInit || !secondSharedInit) {
-            return Failed("net", "shared secure initializer returned false", required);
-        }
-        if (sharedInitCount.load(std::memory_order_relaxed) != 1) {
-            return Failed("net", "shared secure initializer did not run exactly once", required);
+        if (!factory) {
+            return Failed("net", "connection factory callback is unavailable", required);
         }
 
         return Passed("net", "package version " + std::string(packageVersion)
-            + "; buffer/address/shared secure factory checks passed", required);
+            + "; poller backend=" + pollerBackend
+            + "; buffer/address/backpressure/DTLS/event loop group/connection pool/factory checks passed", required);
 #else
         const std::string detail =
             "component is not linked into this tool; enable LIKESPROGRAM_BUILD_NET=ON"; // 未链接说明
         return required ? Failed("net", detail, required)
             : Skipped("net", detail, required);
+#endif
+    }
+
+    // 检查 Quic 包身份和独立 transport contract target。
+    CheckResult RunQuicCheck(bool required) {
+#if LIKESPROGRAM_DOCTOR_HAS_QUIC
+        if (!LikesProgram::Quic::PackageAvailable()) {
+            return Failed("quic", "PackageAvailable returned false", required);
+        }
+
+        const char* packageVersion = LikesProgram::Quic::PackageVersion();
+        if (packageVersion == nullptr) {
+            return Failed("quic", "PackageVersion returned null", required);
+        }
+
+        if (std::string(packageVersion) != VersionText()) {
+            return Failed("quic", "package version " + std::string(packageVersion)
+                + " does not match core version " + VersionText(), required);
+        }
+
+        if (std::string(LikesProgram::Quic::PackageName()) != "LikesProgramQuic") {
+            return Failed("quic", "package name is not LikesProgramQuic", required);
+        }
+
+        return Passed("quic", "package version " + std::string(packageVersion)
+            + "; QUIC transport contract target is available", required);
+#else
+        const std::string detail =
+            "component is not linked into this tool; enable LIKESPROGRAM_BUILD_QUIC=ON";
+        return required ? Failed("quic", detail, required)
+            : Skipped("quic", detail, required);
+#endif
+    }
+
+    // 检查 Http 包身份、三代帧/报文 codec 和无网络 Session 默认边界。
+    CheckResult RunHttpCheck(bool required) {
+#if LIKESPROGRAM_DOCTOR_HAS_HTTP
+        if (!LikesProgram::Http::PackageAvailable()) {
+            return Failed("http", "PackageAvailable returned false", required);
+        }
+
+        const char* packageVersion = LikesProgram::Http::PackageVersion(); // Http 包版本指针
+        if (packageVersion == nullptr) {
+            return Failed("http", "PackageVersion returned null", required);
+        }
+
+        if (std::string(packageVersion) != VersionText()) {
+            return Failed("http", "package version " + std::string(packageVersion)
+                + " does not match core version " + VersionText(), required);
+        }
+
+        LikesProgram::Http::HttpRequest request;          // 诊断用 HTTP/1 请求报文
+        request.method = "POST";
+        request.target = "/doctor";
+        request.headers.push_back({ "Host", "localhost" });
+        request.body = { 'o', 'k' };
+
+        const auto requestBytes = LikesProgram::Http::BuildHttp1Request(request);
+        if (!requestBytes.IsOk()) {
+            return Failed("http", requestBytes.GetStatus().ToString().ToStdString(), required);
+        }
+
+        const auto parsedRequest = LikesProgram::Http::ParseHttp1Request(requestBytes.Value());
+        if (!parsedRequest.IsOk()) {
+            return Failed("http", parsedRequest.GetStatus().ToString().ToStdString(), required);
+        }
+        if (parsedRequest.Value().target != "/doctor"
+            || LikesProgram::Http::HttpHeaderValue(parsedRequest.Value().headers, "host")
+                != "localhost") {
+            return Failed("http", "HTTP/1 request round trip returned wrong fields", required);
+        }
+
+        LikesProgram::Http::Http2Frame frame;             // 诊断用 HTTP/2 空 SETTINGS 帧
+        frame.type = static_cast<std::uint8_t>(LikesProgram::Http::Http2FrameType::Settings);
+        frame.streamId = 0;
+
+        const auto frameBytes = LikesProgram::Http::BuildHttp2Frame(frame);
+        if (!frameBytes.IsOk()) {
+            return Failed("http", frameBytes.GetStatus().ToString().ToStdString(), required);
+        }
+
+        const auto parsedFrame = LikesProgram::Http::ParseHttp2Frame(frameBytes.Value());
+        if (!parsedFrame.IsOk() || parsedFrame.Value().type != frame.type) {
+            return Failed("http", "HTTP/2 frame round trip failed", required);
+        }
+
+        LikesProgram::Http::Http3Frame http3Frame;       // 诊断用 HTTP/3 SETTINGS 帧
+        http3Frame.type = static_cast<std::uint64_t>(LikesProgram::Http::Http3FrameType::Settings);
+        const auto http3Bytes = LikesProgram::Http::BuildHttp3Frame(http3Frame);
+        if (!http3Bytes.IsOk()) {
+            return Failed("http", http3Bytes.GetStatus().ToString().ToStdString(), required);
+        }
+        const auto parsedHttp3 = LikesProgram::Http::ParseHttp3Frame(http3Bytes.Value());
+        if (!parsedHttp3.IsOk() || parsedHttp3.Value().type != http3Frame.type) {
+            return Failed("http", "HTTP/3 frame round trip failed", required);
+        }
+
+        LikesProgram::Http::HttpSession session;       // 默认 Session 不应隐式连接网络
+        if (session.Send(request).IsOk() || session.Handle(request).IsOk()) {
+            return Failed("http", "HttpSession unexpectedly has a default network or handler", required);
+        }
+
+        return Passed("http", "package version " + std::string(packageVersion)
+            + "; HTTP/1, HTTP/2, HTTP/3 and Session boundary checks passed", required);
+#else
+        const std::string detail =
+            "component is not linked into this tool; enable LIKESPROGRAM_BUILD_HTTP=ON"; // 未链接说明
+        return required ? Failed("http", detail, required)
+            : Skipped("http", detail, required);
 #endif
     }
 
@@ -717,6 +986,8 @@ namespace {
         report.checks.push_back(RunMetricsCheck(IsRequired(options, "metrics")));
         report.checks.push_back(RunThreadingCheck(IsRequired(options, "threading")));
         report.checks.push_back(RunNetCheck(IsRequired(options, "net")));
+        report.checks.push_back(RunQuicCheck(IsRequired(options, "quic")));
+        report.checks.push_back(RunHttpCheck(IsRequired(options, "http")));
 
         report.ok = true;
         for (const auto& check : report.checks) {
@@ -815,7 +1086,7 @@ namespace {
         out << "  --format text|json         Select output format.\n";
         out << "  --text                     Shortcut for --format text.\n";
         out << "  --json                     Shortcut for --format json.\n";
-        out << "  --require NAME             Require core, logging, config, metrics, threading, net, or all.\n";
+        out << "  --require NAME             Require core, logging, config, metrics, threading, net, quic, http, or all.\n";
         out << "  --require=NAME[,NAME...]   Require one or more components.\n\n";
         out << "Exit codes:\n";
         out << "  0  diagnostics passed\n";

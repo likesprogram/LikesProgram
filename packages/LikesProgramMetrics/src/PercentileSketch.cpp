@@ -1,9 +1,10 @@
-#include <metrics/PercentileSketch.hpp>
+#include "metrics/PercentileSketch.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -13,6 +14,15 @@
 namespace LikesProgram {
     namespace Metrics {
         namespace Internal {
+            namespace {
+                // Hash the current thread once; Add is a hot path and the thread id does not change.
+                size_t CurrentThreadShard(size_t shardCount) noexcept {
+                    static thread_local const size_t threadHash =
+                        std::hash<std::thread::id>{}(std::this_thread::get_id());
+                    return threadHash % shardCount;
+                }
+            }
+
             struct PercentileSketch::PercentileSketchImpl {
                 std::vector<std::unique_ptr<Shard>> m_shardData; // 分片数组，元素地址稳定
             };
@@ -91,8 +101,7 @@ namespace LikesProgram {
             void PercentileSketch::Add(double value) {
                 if (!m_impl || !std::isfinite(value)) return;
 
-                const size_t shardId = std::hash<std::thread::id>{}(
-                    std::this_thread::get_id()) % m_shards; // 按线程分片降低写竞争
+                const size_t shardId = CurrentThreadShard(m_shards); // 按线程分片降低写竞争
                 Shard& shard = *(m_impl->m_shardData[shardId]);
 
                 std::unique_lock lock(shard.m_mutex);
@@ -152,11 +161,6 @@ namespace LikesProgram {
 
                 if (totalCount == 0 || merged.empty()) return NAN;
                 CompressCentroids(merged, m_compression);
-                std::sort(merged.begin(), merged.end(),
-                    [](const Centroid& left, const Centroid& right) {
-                        return left.mean < right.mean;
-                    });
-
                 const auto targetRank = static_cast<int64_t>(
                     std::ceil(q * static_cast<double>(totalCount))); // 目标全局排名
                 int64_t cumulative = 0; // 已覆盖的样本数量
@@ -239,8 +243,7 @@ namespace LikesProgram {
                     }
                 }
 
-                const size_t shardId = std::hash<std::thread::id>{}(
-                    std::this_thread::get_id()) % m_shards; // 合并写入当前线程所属分片
+                const size_t shardId = CurrentThreadShard(m_shards); // 合并写入当前线程所属分片
                 Shard& targetShard = *(m_impl->m_shardData[shardId]);
 
                 std::unique_lock lock(targetShard.m_mutex);

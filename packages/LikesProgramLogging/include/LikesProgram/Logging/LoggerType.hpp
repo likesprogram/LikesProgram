@@ -55,8 +55,9 @@ namespace LikesProgram {
 
         // Logger 运行统计快照，所有计数为进程内累计值。
         struct LoggerStats {
-            uint64_t acceptedMessages = 0;       // 已进入后台队列的日志条数
+            uint64_t acceptedMessages = 0;       // 已进入异步队列或同步分发的日志条数
             uint64_t processedMessages = 0;      // 已完成 Sink 分发的日志条数
+            uint64_t synchronousMessages = 0;    // 已进入 LogSync 直接分发的日志条数
             uint64_t droppedMessages = 0;        // 因背压、停止或队列裁剪丢弃的日志条数
             uint64_t enqueueTimeouts = 0;        // Block 策略等待容量超时次数
             uint64_t sinkWriteFailures = 0;      // Sink::Write 或 Sink::Flush 抛错次数

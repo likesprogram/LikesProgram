@@ -1,5 +1,5 @@
 #include <LikesProgram/Metrics/Histogram.hpp>
-#include <metrics/MetricsInternal.hpp>
+#include "metrics/MetricsInternal.hpp"
 
 #include <algorithm>
 #include <atomic>

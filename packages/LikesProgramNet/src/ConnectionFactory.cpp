@@ -1,19 +1,15 @@
 #include <LikesProgram/Net/ConnectionFactory.hpp>
 #include <memory>
-#include <mutex>
 #include <utility>
 
 namespace LikesProgram {
     namespace Net {
         struct ConnectionFactory::ConnectionFactoryImpl {
             struct FactoryState {
-                CreateCallback m_create;                                  // 每连接创建回调
-                SharedSecureInitializer m_initializeSharedSecureResources; // 共享安全资源初始化回调
-                mutable std::once_flag m_sharedSecureOnce;                // 保证共享初始化只执行一次
-                mutable bool m_sharedSecureResult = true;                 // 记录首次共享初始化结果
+                CreateCallback m_create; // 每连接创建回调
             };
 
-            std::shared_ptr<FactoryState> m_state; // 复制工厂时共享一次性初始化状态
+            std::shared_ptr<FactoryState> m_state; // 复制工厂时共享创建回调
         };
 
         ConnectionFactory::ConnectionFactory() = default;
@@ -56,15 +52,6 @@ namespace LikesProgram {
             m_impl->m_state->m_create = std::move(createCallback);
         }
 
-        ConnectionFactory::ConnectionFactory(
-            CreateCallback createCallback,
-            SharedSecureInitializer sharedSecureInitializer)
-            : m_impl(new ConnectionFactoryImpl{}) {
-            m_impl->m_state = std::make_shared<ConnectionFactoryImpl::FactoryState>();
-            m_impl->m_state->m_create = std::move(createCallback);
-            m_impl->m_state->m_initializeSharedSecureResources = std::move(sharedSecureInitializer);
-        }
-
         ConnectionFactory::operator bool() const noexcept {
             return m_impl
                 && m_impl->m_state
@@ -76,22 +63,5 @@ namespace LikesProgram {
             return m_impl->m_state->m_create(fd, loop);
         }
 
-        bool ConnectionFactory::InitializeSharedSecureResources() const {
-            if (!m_impl || !m_impl->m_state) return true;
-
-            // 共享资源只随工厂状态初始化一次，避免每个连接重复加载证书链。
-            std::call_once(m_impl->m_state->m_sharedSecureOnce, [state = m_impl->m_state]() {
-                if (state->m_initializeSharedSecureResources) {
-                    try {
-                        state->m_sharedSecureResult = state->m_initializeSharedSecureResources();
-                    }
-                    catch (...) {
-                        state->m_sharedSecureResult = false;
-                    }
-                }
-            });
-
-            return m_impl->m_state->m_sharedSecureResult;
-        }
     }
 }

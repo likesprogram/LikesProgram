@@ -1,8 +1,230 @@
-#include <LikesProgram/Config/ConfigurationInternal.hpp>
+#include "LikesProgram/Config/ConfigurationInternal.hpp"
+#include <cstring>
+#include <new>
+#include <utility>
 
 namespace LikesProgram {
     namespace Config {
         namespace Internal {
+            ConfigText::ConfigText(const String& value) {
+                new (&m_storage.stringValue) String(value);
+                SetState(OriginalStringState);
+            }
+
+            ConfigText::ConfigText(String&& value) {
+                new (&m_storage.stringValue) String(std::move(value));
+                SetState(OriginalStringState);
+            }
+
+            ConfigText::ConfigText(std::u16string_view value) {
+                Assign(value);
+            }
+
+            ConfigText::ConfigText(std::u16string&& value) {
+                Assign(std::u16string_view(value));
+            }
+
+            ConfigText::ConfigText(const ConfigText& other) {
+                if (other.State() == OriginalStringState) {
+                    new (&m_storage.stringValue) String(other.m_storage.stringValue);
+                    SetState(OriginalStringState);
+                } else if (other.State() == MaterializedStringState) {
+                    new (&m_storage.stringValue) String(*other.m_storage.materializedValue);
+                    SetState(OriginalStringState);
+                } else Assign(other.View());
+            }
+
+            ConfigText::ConfigText(ConfigText&& other) {
+                const unsigned char state = other.State();
+                if (state == OriginalStringState) {
+                    new (&m_storage.stringValue) String(std::move(other.m_storage.stringValue));
+                    SetState(OriginalStringState);
+                    // Keep the moved-from String state so its normal destructor releases it once.
+                    return;
+                } else if (state == MaterializedStringState) {
+                    m_storage.materializedValue = other.m_storage.materializedValue;
+                    SetState(MaterializedStringState);
+                } else if (state == HeapState) {
+                    m_storage.heapText = other.m_storage.heapText;
+                    SetState(HeapState);
+                } else {
+                    if (state > 0) std::memcpy(m_storage.inlineData, other.m_storage.inlineData, static_cast<size_t>(state) * sizeof(char16_t));
+                    SetState(state);
+                }
+                other.SetState(0);
+            }
+
+            ConfigText::~ConfigText() {
+                Release();
+            }
+
+            ConfigText& ConfigText::operator=(const ConfigText& other) {
+                if (this == &other) return *this;
+                ConfigText replacement(other); // 先完成可能抛出的深拷贝
+                return *this = std::move(replacement);
+            }
+
+            ConfigText& ConfigText::operator=(ConfigText&& other) {
+                if (this == &other) return *this;
+                this->~ConfigText();
+                new (this) ConfigText(std::move(other));
+                return *this;
+            }
+
+            void ConfigText::Assign(std::u16string_view value) {
+                if (value.size() <= InlineCapacity) {
+                    if (!value.empty()) std::memcpy(m_storage.inlineData, value.data(), value.size() * sizeof(char16_t));
+                    SetState(static_cast<unsigned char>(value.size()));
+                    return;
+                }
+
+                std::unique_ptr<char16_t[]> data = std::make_unique<char16_t[]>(value.size()); // 长文本独立缓冲
+                std::memcpy(data.get(), value.data(), value.size() * sizeof(char16_t));
+                m_storage.heapText.data = data.release();
+                m_storage.heapText.length = value.size();
+                SetState(HeapState);
+            }
+
+            const char16_t* ConfigText::Data() const noexcept {
+                static constexpr char16_t empty[] = u""; // 空 view 的稳定地址
+                const unsigned char state = State();
+                if (state == OriginalStringState) return m_storage.stringValue.data();
+                if (state == MaterializedStringState) return m_storage.materializedValue->data();
+                if (state == HeapState) return m_storage.heapText.data;
+                if (state == 0) return empty;
+                return m_storage.inlineData;
+            }
+
+            unsigned char ConfigText::State() const noexcept {
+                const auto* bytes = reinterpret_cast<const unsigned char*>(&m_storage);
+                return bytes[StateOffset];
+            }
+
+            void ConfigText::SetState(unsigned char state) const noexcept {
+                auto* bytes = reinterpret_cast<unsigned char*>(&m_storage);
+                bytes[StateOffset] = state;
+            }
+
+            void ConfigText::Release() noexcept {
+                const unsigned char state = State();
+                if (state == OriginalStringState) m_storage.stringValue.~String();
+                else if (state == MaterializedStringState) delete m_storage.materializedValue;
+                else if (state == HeapState) delete[] m_storage.heapText.data;
+            }
+
+            std::u16string_view ConfigText::View() const noexcept {
+                const unsigned char state = State();
+                if (state == OriginalStringState) return std::u16string_view(m_storage.stringValue.data(), m_storage.stringValue.Length());
+                if (state == MaterializedStringState) return std::u16string_view(m_storage.materializedValue->data(), m_storage.materializedValue->Length());
+                if (state == HeapState) return std::u16string_view(m_storage.heapText.data, m_storage.heapText.length);
+                return std::u16string_view(Data(), state);
+            }
+
+            const String& ConfigText::AsString() const {
+                const unsigned char state = State();
+                if (state == OriginalStringState) return m_storage.stringValue;
+                if (state == MaterializedStringState) return *m_storage.materializedValue;
+
+                std::unique_ptr<String> converted = std::make_unique<String>(View()); // 成功后再替换延迟存储
+                if (state == HeapState) delete[] m_storage.heapText.data;
+                m_storage.materializedValue = converted.release();
+                SetState(MaterializedStringState);
+                return *m_storage.materializedValue;
+            }
+
+            bool ConfigText::Equals(const String& value) const noexcept {
+                const auto current = View(); // 当前 key 的 UTF-16 view
+                const auto other = std::u16string_view(value.data(), value.Length()); // 查询 key view
+                return current == other;
+            }
+
+            bool ConfigText::operator==(const ConfigText& other) const noexcept {
+                return View() == other.View();
+            }
+
+            // 默认节点持有 null，供公开根恢复和共享只读哨兵使用。
+            ConfigNode::ConfigNode() = default;
+
+            // 字符串直接在节点 variant 中就位，避免临时 storage 再搬移一次。
+            ConfigNode::ConfigNode(ConfigText&& value) : m_value(std::move(value)) { }
+
+            // 标量直接选择唯一 variant 分支。
+            ConfigNode::ConfigNode(int64_t value) noexcept : m_value(value) { }
+
+            ConfigNode::ConfigNode(double value) noexcept : m_value(value) { }
+
+            ConfigNode::ConfigNode(bool value) noexcept : m_value(value) { }
+
+            // 容器直接把已完成的递归字段表或元素表移入节点。
+            ConfigNode::ConfigNode(ConfigArray&& value) : m_value(std::move(value)) { }
+
+            ConfigNode::ConfigNode(ConfigObject&& value) : m_value(std::move(value)) { }
+
+            // 节点只允许移动，throwing move 由 vector 的基本保证承接。
+            ConfigNode::ConfigNode(ConfigNode&& other) = default;
+
+            // 递归容器按正常逆序销毁整棵内部树。
+            ConfigNode::~ConfigNode() = default;
+
+            // 移动赋值替换完整子树，不允许隐式深复制。
+            ConfigNode& ConfigNode::operator=(ConfigNode&& other) = default;
+
+            // variant 内容比较递归复用数组和对象条目的顺序比较。
+            bool ConfigNode::operator==(const ConfigNode& other) const {
+                return m_value == other.m_value;
+            }
+
+            // 显式深克隆内部树，复制失败时局部 RAII 容器负责完整回收。
+            ConfigNode CloneNode(const ConfigNode& source) {
+                const auto& storage = source.m_value; // 当前只读节点分支
+                if (const auto* text = std::get_if<ConfigText>(&storage)) return ConfigNode(ConfigText(*text));
+                if (const auto* integer = std::get_if<int64_t>(&storage)) return ConfigNode(*integer);
+                if (const auto* number = std::get_if<double>(&storage)) return ConfigNode(*number);
+                if (const auto* boolean = std::get_if<bool>(&storage)) return ConfigNode(*boolean);
+
+                if (const auto* array = std::get_if<ConfigArray>(&storage)) {
+                    ConfigArray clone; // 目标数组按值拥有全部深克隆子节点
+                    clone.reserve(array->size());
+                    for (const auto& child : *array) clone.push_back(CloneNode(child));
+                    return ConfigNode(std::move(clone));
+                }
+
+                if (const auto* object = std::get_if<ConfigObject>(&storage)) {
+                    ConfigObject clone; // 目标对象保持 key 和字段插入顺序
+                    clone.reserve(object->size());
+                    for (const auto& entry : *object) clone.push_back(ConfigObjectEntry{ ConfigText(entry.key), CloneNode(entry.value) });
+                    return ConfigNode(std::move(clone));
+                }
+
+                return ConfigNode();
+            }
+
+            // variant 分支索引和公开枚举保持一一对应，未知分支安全回退 null。
+            ConfigValueType NodeType(const ConfigNode& value) noexcept {
+                switch (value.m_value.index()) {
+                    case 0: return ConfigValueType::Null;
+                    case 1: return ConfigValueType::String;
+                    case 2: return ConfigValueType::Int64;
+                    case 3: return ConfigValueType::Double;
+                    case 4: return ConfigValueType::Bool;
+                    case 5: return ConfigValueType::Array;
+                    case 6: return ConfigValueType::Object;
+                    default: return ConfigValueType::Null;
+                }
+            }
+
+            // 内部遍历只比较枚举，不分配公开值或触发深克隆。
+            bool NodeIs(const ConfigNode& value, ConfigValueType type) noexcept {
+                return NodeType(value) == type;
+            }
+
+            // 字符串节点按需物化 Core/String，其他类型共享空串哨兵。
+            const String& NodeString(const ConfigNode& value) {
+                static const String empty; // 非字符串内部节点共享的稳定返回值
+                const auto* text = std::get_if<ConfigText>(&value.m_value); // 私有文本分支
+                return text ? text->AsString() : empty;
+            }
+
             // JSON/YAML/TOML 共同使用的 ASCII 空白判断。
             bool IsAsciiSpace(char32_t ch) noexcept {
                 return ch == U' ' || ch == U'\t' || ch == U'\r' || ch == U'\n';
@@ -20,9 +242,7 @@ namespace LikesProgram {
 
             // Unicode 转义和十六进制输出共用的数字判断。
             bool IsHexDigit(char32_t ch) noexcept {
-                return (ch >= U'0' && ch <= U'9') ||
-                    (ch >= U'a' && ch <= U'f') ||
-                    (ch >= U'A' && ch <= U'F');
+                return (ch >= U'0' && ch <= U'9') || (ch >= U'a' && ch <= U'f') || (ch >= U'A' && ch <= U'F');
             }
 
             // 将十六进制字符转换为数值，调用方负责先判断合法性。
@@ -72,9 +292,7 @@ namespace LikesProgram {
                     begin = i + 1;
                 }
 
-                if (begin <= data.size()) {
-                    lines.emplace_back(std::u32string_view(data.data() + begin, data.size() - begin));
-                }
+                if (begin <= data.size()) lines.emplace_back(std::u32string_view(data.data() + begin, data.size() - begin));
 
                 return lines;
             }
@@ -91,9 +309,7 @@ namespace LikesProgram {
 
             // 判断 key 是否含 dotted path 分隔符。
             bool HasDot(const String& key) {
-                for (auto cp : key) {
-                    if (cp == U'.') return true;
-                }
+                for (auto cp : key) if (cp == U'.') return true;
                 return false;
             }
 
@@ -106,9 +322,7 @@ namespace LikesProgram {
                 for (size_t i = 0; i <= data.size(); ++i) {
                     if (i < data.size() && data[i] != U'.') continue;
 
-                    if (i > begin) {
-                        parts.emplace_back(std::u32string_view(data.data() + begin, i - begin));
-                    }
+                    if (i > begin) parts.emplace_back(std::u32string_view(data.data() + begin, i - begin));
                     begin = i + 1;
                 }
 
@@ -146,14 +360,12 @@ namespace LikesProgram {
             // 严格 bool 解析，支持配置常见同义词。
             bool ParseBoolStrict(const String& value, bool& out) {
                 String normalized = TrimAscii(value).ToLower(); // 小写归一化文本
-                if (normalized == u"true" || normalized == u"1" ||
-                    normalized == u"yes" || normalized == u"on") {
+                if (normalized == u"true" || normalized == u"1" || normalized == u"yes" || normalized == u"on") {
                     out = true;
                     return true;
                 }
 
-                if (normalized == u"false" || normalized == u"0" ||
-                    normalized == u"no" || normalized == u"off") {
+                if (normalized == u"false" || normalized == u"0" || normalized == u"no" || normalized == u"off") {
                     out = false;
                     return true;
                 }
@@ -163,32 +375,14 @@ namespace LikesProgram {
 
             // 在线性对象存储中查找字段，保持插入顺序结构。
             ConfigObjectEntry* FindObjectEntry(ConfigObject& object, const String& key) {
-                for (auto& entry : object) {
-                    if (entry.key == key) return &entry;
-                }
+                for (auto& entry : object) if (entry.key.Equals(key)) return &entry;
                 return nullptr;
             }
 
             // 在线性对象存储中查找只读字段。
             const ConfigObjectEntry* FindObjectEntry(const ConfigObject& object, const String& key) {
-                for (const auto& entry : object) {
-                    if (entry.key == key) return &entry;
-                }
+                for (const auto& entry : object) if (entry.key.Equals(key)) return &entry;
                 return nullptr;
-            }
-
-            // 为对象节点预留字段空间，非对象会先转换为空对象。
-            void ReserveObject(ConfigValue& value, size_t capacity) {
-                auto& storage = ConfigValueAccess::Storage(value); // 当前节点底层存储，避免热路径重复解引用 PImpl
-                storage = ConfigObject{};
-                std::get<ConfigObject>(storage).reserve(capacity);
-            }
-
-            // 为数组节点预留元素空间，非数组会先转换为空数组。
-            void ReserveArray(ConfigValue& value, size_t capacity) {
-                auto& storage = ConfigValueAccess::Storage(value); // 当前节点底层存储，避免热路径重复解引用 PImpl
-                storage = ConfigArray{};
-                std::get<ConfigArray>(storage).reserve(capacity);
             }
 
             // 追加 UTF-8 字面量，避免调用点反复构造编码说明。
@@ -224,17 +418,14 @@ namespace LikesProgram {
 
                 for (char32_t cp : value) {
                     switch (cp) {
-                    case U'"': AppendText(output, u"\\\""); break;
-                    case U'\\': AppendText(output, u"\\\\"); break;
-                    case U'\b': AppendText(output, u"\\b"); break;
-                    case U'\f': AppendText(output, u"\\f"); break;
-                    case U'\n': AppendText(output, u"\\n"); break;
-                    case U'\r': AppendText(output, u"\\r"); break;
-                    case U'\t': AppendText(output, u"\\t"); break;
-                    default:
-                        if (cp < 0x20) AppendHex4(output, cp);
-                        else output.Append(cp);
-                        break;
+                        case U'"': AppendText(output, u"\\\""); break;
+                        case U'\\': AppendText(output, u"\\\\"); break;
+                        case U'\b': AppendText(output, u"\\b"); break;
+                        case U'\f': AppendText(output, u"\\f"); break;
+                        case U'\n': AppendText(output, u"\\n"); break;
+                        case U'\r': AppendText(output, u"\\r"); break;
+                        case U'\t': AppendText(output, u"\\t"); break;
+                        default: if (cp < 0x20) AppendHex4(output, cp); else output.Append(cp); break;
                     }
                 }
 
@@ -261,10 +452,7 @@ namespace LikesProgram {
                     if (text[i] == U'\n') {
                         ++line;
                         column = 1;
-                    }
-                    else {
-                        ++column;
-                    }
+                    } else ++column;
                 }
 
                 return String::Format(u"line {}, column {}: {}", line, column, message);
@@ -337,38 +525,39 @@ namespace LikesProgram {
             }
 
             // 解析 YAML/TOML 共用的简单标量，复杂结构由各自解析器处理。
-            ConfigValue ParseSimpleScalar(const String& raw) {
+            ConfigNode ParseSimpleScalar(const String& raw) {
                 String value = TrimLineSpace(raw); // 去除行内空白后的标量文本
-                if (value.Empty()) return ConfigValue(String());
+                if (value.Empty()) return ConfigNode(ConfigText(String()));
 
                 // 双引号字符串优先尝试 JSON 解码，以复用转义和 Unicode 处理。
                 if ((value.StartsWith(u"\"") && value.EndsWith(u"\"")) ||
                     (value.StartsWith(u"'") && value.EndsWith(u"'"))) {
                     if (value.StartsWith(u"\"")) {
                         auto json = ConfigValue::TryParseJson(value);
-                        if (json.IsOk()) return json.Value();
+                        if (json.IsOk()) {
+                            ConfigValue parsed = json.MoveValue(); // JSON 根只分配一次公开 PImpl
+                            return ConfigValueAccess::TakeNode(parsed);
+                        }
                     }
-                    return ConfigValue(value.SubString(1, value.Size() - 2));
+                    return ConfigNode(ConfigText(value.SubString(1, value.Size() - 2)));
                 }
 
                 String lowered = value.ToLower(); // 小写标量，用于 null/bool 识别
-                if (lowered == u"null" || lowered == u"~") return ConfigValue::Null();
-                if (lowered == u"true" || lowered == u"yes" || lowered == u"on") return ConfigValue(true);
-                if (lowered == u"false" || lowered == u"no" || lowered == u"off") return ConfigValue(false);
+                if (lowered == u"null" || lowered == u"~") return ConfigNode();
+                if (lowered == u"true" || lowered == u"yes" || lowered == u"on") return ConfigNode(true);
+                if (lowered == u"false" || lowered == u"no" || lowered == u"off") return ConfigNode(false);
 
                 if (LooksLikeNumberToken(value)) {
-                    if (value.Find(u".") != String::npos ||
-                        value.Find(u"e") != String::npos ||
-                        value.Find(u"E") != String::npos) {
+                    if (value.Find(u".") != String::npos || value.Find(u"e") != String::npos || value.Find(u"E") != String::npos) {
                         double parsed = 0.0; // 严格解析后的浮点标量
-                        if (ParseDoubleStrict(value, parsed)) return ConfigValue(parsed);
+                        if (ParseDoubleStrict(value, parsed)) return ConfigNode(parsed);
                     }
 
                     int64_t parsed = 0; // 严格解析后的整数标量
-                    if (ParseInt64Strict(value, parsed)) return ConfigValue(parsed);
+                    if (ParseInt64Strict(value, parsed)) return ConfigNode(parsed);
                 }
 
-                return ConfigValue(value);
+                return ConfigNode(ConfigText(std::move(value)));
             }
         }
     }

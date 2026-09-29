@@ -96,6 +96,7 @@ if (LIKESPROGRAM_BUILD_TESTS)
     endif()
 
     add_test(NAME LikesProgramLoggingTests COMMAND LikesProgramLoggingTests)
+    set_tests_properties(LikesProgramLoggingTests PROPERTIES TIMEOUT 60)
 endif()
 
 # =========================

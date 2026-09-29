@@ -1,10 +1,11 @@
 # LikesProgramLogging 使用手册
 
-`LikesProgramLogging` 是 LikesProgram 的轻量异步日志扩展包。它只依赖 `LikesProgramCore`，不依赖 Metrics、Threading、Net 或第三方日志库。
+`LikesProgramLogging` 是 LikesProgram 的轻量同步/异步日志扩展包。它只依赖 `LikesProgramCore`，不依赖 Metrics、Threading、Net 或第三方日志库。
 
 它适合二次开发时快速接入：
 
 - 按级别过滤日志。
+- 在调用线程同步分发日志，不要求启动后台线程。
 - 后台线程异步分发日志。
 - 输出到控制台或文件。
 - 支持文本格式和 JSON Lines。
@@ -223,6 +224,24 @@ LogFatal(u"fatal: {}", reason);
 
 如果 Logger 未启动，写日志会增加 `droppedMessages`，不会自动启动。
 
+需要调用返回前确认 Sink 已执行时，使用同步入口：
+
+```cpp
+bool written = logger.LogSync(LikesProgram::Log::Level::Error,
+    std::source_location::current(), u"request {} failed: {}", requestId, reason);
+```
+
+`LogSync` 行为：
+
+- 不要求 `Start()`，不进入异步队列，也不受队列背压策略影响。
+- 在调用线程构造完整 `Message`，沿用级别、logger name、线程上下文、输出格式和每 Sink 最低级别。
+- 依次调用当前 Sink 快照；一个 Sink 失败不会阻止其余 Sink，任一符合条件的写入失败都会返回 `false`。
+- 消息或格式参数构造失败返回 `false` 并计入 `droppedMessages`，不会向业务调用者泄漏异常。
+- 同步写入失败不会调度异步重试；调用者可依据返回值决定降级、告警或退出策略。
+- 自定义 Sink 必须允许多个 `LogSync` 调用以及异步 worker 并发调用 `Write`。
+
+同步写入缓冲型 Sink 后仍可调用 `Flush(timeout)`。即使 Logger 从未启动或已经停止，只要异步队列为空，`Flush` 也会调用当前 Sink 的 `Flush()`。
+
 ## 输出编码
 
 设置 Sink 输出编码：
@@ -315,7 +334,7 @@ logger.ClearSinks();
 - `AddSink(nullptr)` 会被忽略。
 - `SetSinks` 会过滤空指针，然后原子替换当前列表。
 - `ClearSinks` 后日志仍可入队和统计，但不会输出到任何地方。
-- 后台分发线程调用 Sink 时会持有共享锁；替换 Sink 会等待当前分发批次结束后生效。
+- 异步 worker 和 `LogSync` 都通过稳定的 Sink 快照分发；替换列表只影响取得新快照的后续消息。
 - 某个 Sink 的 `Write` 或 `Flush` 抛异常不会影响其他 Sink，失败会计入 `sinkWriteFailures` 并写到 `std::cerr`。
 
 ## LoggerConfig 开放式配置
@@ -847,6 +866,7 @@ bool drained = logger.Flush(std::chrono::seconds(5));
 `Flush` 行为：
 
 - 等待队列为空且没有正在写 Sink 的消息。
+- 未启动或已停止且队列为空时不等待 worker，仍会刷新当前 Sink。
 - 成功 drain 后调用所有 Sink 的 `Flush()`。
 - Sink 的 `Flush()` 抛异常不会让 `Logger::Flush` 返回 false，但会计入 `sinkWriteFailures`。
 - 等待超时返回 `false`，并计入 `flushTimeouts`。
@@ -858,6 +878,7 @@ auto stats = logger.Stats();
 
 stats.acceptedMessages;
 stats.processedMessages;
+stats.synchronousMessages;
 stats.droppedMessages;
 stats.enqueueTimeouts;
 stats.sinkWriteFailures;
@@ -933,7 +954,7 @@ if (!drained) {
 
 使用 `LogInfo`、`LogWarn` 等宏时，也需要提前配置并启动全局 Logger。
 
-`Log(...)` 是异步入队。程序退出前调用 `Flush()` 或 `Shutdown()`，可以等待队列中的日志写完。
+`Log(...)` 是异步入队；`LogSync(...)` 在调用线程直接分发且返回聚合结果。程序退出前调用 `Flush()` 或 `Shutdown()`，可以等待队列中的日志写完并刷新 Sink。
 
 `Shutdown()` 默认清空 Sink。需要保留 Sink 列表并稍后再次 `Start()` 时，使用 `Shutdown(false)`。
 

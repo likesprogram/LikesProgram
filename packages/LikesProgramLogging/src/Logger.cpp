@@ -1,17 +1,20 @@
 #include <LikesProgram/Logging/Logger.hpp>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <mutex>
-#include <shared_mutex>
+#include <optional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -28,6 +31,36 @@ namespace LikesProgram {
         }
 
         namespace {
+            template <typename T>
+            class PortableAtomicSharedPtr {
+            public:
+                explicit PortableAtomicSharedPtr(std::shared_ptr<T> value) noexcept
+                    : m_value(std::move(value)) {}
+
+                std::shared_ptr<T> Load(std::memory_order order) const noexcept {
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+                    return m_value.load(order);
+#else
+                    return std::atomic_load_explicit(&m_value, order);
+#endif
+                }
+
+                void Store(std::shared_ptr<T> value, std::memory_order order) noexcept {
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+                    m_value.store(std::move(value), order);
+#else
+                    std::atomic_store_explicit(&m_value, std::move(value), order);
+#endif
+                }
+
+            private:
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+                std::atomic<std::shared_ptr<T>> m_value;
+#else
+                std::shared_ptr<T> m_value;
+#endif
+            };
+
             // 日志级别以整数存入 atomic，避免跨线程读取 enum 时额外包装。
             constexpr int EncodeLevel(Level level) noexcept {
                 return static_cast<int>(level);
@@ -60,6 +93,10 @@ namespace LikesProgram {
                 return LogOutputFormat::Text;
             }
 
+            constexpr int EncodeOutputFormat(LogOutputFormat format) noexcept {
+                return static_cast<int>(format);
+            }
+
             // 背压策略在入口归一化，后续队列逻辑不再处理未知枚举分支。
             QueueOverflowPolicy NormalizeOverflowPolicy(QueueOverflowPolicy policy) noexcept {
                 if (policy == QueueOverflowPolicy::DropNewest) return QueueOverflowPolicy::DropNewest;
@@ -77,11 +114,14 @@ namespace LikesProgram {
 
             // 进程 id 写入每条消息快照，方便多进程同文件输出时排查来源。
             uint64_t CurrentProcessId() noexcept {
+                static const uint64_t processId = []() noexcept {
 #ifdef _WIN32
-                return static_cast<uint64_t>(_getpid());
+                    return static_cast<uint64_t>(_getpid());
 #else
-                return static_cast<uint64_t>(getpid());
+                    return static_cast<uint64_t>(getpid());
 #endif
+                }();
+                return processId;
             }
 
             // 诊断文本使用稳定英文枚举值，便于日志采集和脚本解析。
@@ -192,6 +232,8 @@ namespace LikesProgram {
                     String(diagnostics.stats.acceptedMessages), first);
                 AppendDiagnosticsTextField(text, u"processed_messages",
                     String(diagnostics.stats.processedMessages), first);
+                AppendDiagnosticsTextField(text, u"synchronous_messages",
+                    String(diagnostics.stats.synchronousMessages), first);
                 AppendDiagnosticsTextField(text, u"dropped_messages",
                     String(diagnostics.stats.droppedMessages), first);
                 AppendDiagnosticsTextField(text, u"enqueue_timeouts",
@@ -245,6 +287,8 @@ namespace LikesProgram {
                     diagnostics.stats.acceptedMessages, first);
                 AppendDiagnosticsJsonNumber(text, u"processed_messages",
                     diagnostics.stats.processedMessages, first);
+                AppendDiagnosticsJsonNumber(text, u"synchronous_messages",
+                    diagnostics.stats.synchronousMessages, first);
                 AppendDiagnosticsJsonNumber(text, u"dropped_messages",
                     diagnostics.stats.droppedMessages, first);
                 AppendDiagnosticsJsonNumber(text, u"enqueue_timeouts",
@@ -282,11 +326,265 @@ namespace LikesProgram {
                 std::vector<LogContextField> fields;     // 当前线程自定义上下文字段
             };
 
-            thread_local ThreadContext localContext;      // 每个调用线程独立维护日志上下文
+            struct SharedTextCacheEntry {
+                const void* source = nullptr;             // 编译器生成文本的稳定地址
+                std::shared_ptr<const String> value;      // 一次性物化后的不可变 String
+            };
 
-            // 消息创建时只复制展示名，不在后台线程访问调用线程的 thread_local。
-            String CurrentThreadNameFallback() {
-                return localContext.threadName;
+            struct SharedTextCache {
+                std::array<SharedTextCacheEntry, 16> entries{}; // 覆盖常见线程内活跃调用点集合
+                size_t nextReplacement = 0;               // 缓存满后的环形替换位置
+            };
+
+            std::shared_ptr<const String> CaptureSharedUtf8Text(const char* source,
+                SharedTextCache& cache) {
+                if (!source) return {};
+                for (const auto& entry : cache.entries) {
+                    if (entry.source == source && entry.value) return entry.value;
+                }
+
+                auto value = std::make_shared<const String>(source);
+                auto& entry = cache.entries[cache.nextReplacement];
+                entry.source = source;
+                entry.value = value;
+                cache.nextReplacement = (cache.nextReplacement + 1) % cache.entries.size();
+                return value;
+            }
+
+            std::shared_ptr<const String> CaptureSharedUtf16Text(std::u16string_view text,
+                const void* source, SharedTextCache& cache) {
+                for (const auto& entry : cache.entries) {
+                    if (entry.source == source && entry.value &&
+                        entry.value->Length() == text.size() &&
+                        (text.empty() || std::memcmp(entry.value->data(), text.data(),
+                            text.size() * sizeof(char16_t)) == 0)) {
+                        return entry.value;
+                    }
+                }
+
+                auto value = std::make_shared<const String>(text);
+                auto& entry = cache.entries[cache.nextReplacement];
+                entry.source = source;
+                entry.value = value;
+                cache.nextReplacement = (cache.nextReplacement + 1) % cache.entries.size();
+                return value;
+            }
+
+            std::optional<String> CaptureOptionalString(const String& value) {
+                if (value.Empty()) return std::nullopt;
+                return std::optional<String>(std::in_place, value);
+            }
+
+            struct QueuedContext {
+                std::optional<String> threadName;          // 非空线程展示名
+                std::optional<String> module;              // 非空模块上下文
+                std::optional<String> category;            // 非空类别上下文
+                std::optional<String> traceId;             // 非空 trace id
+                std::optional<String> spanId;              // 非空 span id
+                std::optional<String> requestId;           // 非空 request id
+                std::vector<LogContextField> fields;       // 自定义上下文字段
+            };
+
+            struct QueuedMetadata {
+                std::shared_ptr<const String> sharedMessage;   // 固定字面量的一次性物化文本
+                std::shared_ptr<const String> file;            // 调用点文件名共享快照
+                std::shared_ptr<const String> function;        // 调用点函数名共享快照
+                std::shared_ptr<const QueuedContext> context;  // 线程上下文快照
+            };
+
+            struct QueuedMetadataCacheEntry {
+                const void* literalSource = nullptr;       // 固定消息字面量地址，动态消息为 null
+                const char* fileSource = nullptr;          // source_location 文件地址
+                const char* functionSource = nullptr;      // source_location 函数地址
+                int line = 0;                              // 区分复用同一栈地址的不同调用点
+                const QueuedContext* contextSource = nullptr; // 上下文快照身份
+                std::shared_ptr<const QueuedMetadata> value; // 合并后的不可变元数据
+            };
+
+            struct QueuedMetadataCache {
+                std::array<QueuedMetadataCacheEntry, 16> entries{}; // 常用调用点元数据集合
+                size_t nextReplacement = 0;               // 缓存满后的环形替换位置
+            };
+
+            struct QueuedMessage {
+                QueuedMessage() = default;
+
+                explicit QueuedMessage(String&& value)
+                    : ownedMessage(std::in_place, std::move(value)) {
+                }
+
+                Level level = Level::Trace;                        // 调用时日志级别
+                std::optional<String> ownedMessage;                // 动态消息的独占快照
+                std::shared_ptr<const QueuedMetadata> metadata;    // 调用点与上下文合并快照
+                int line = 0;                                      // 调用点行号
+                std::thread::id tid;                               // 调用线程 id
+                std::chrono::system_clock::time_point timestamp;   // 调用时墙钟时间
+                bool debug = false;                                // 调用时调试输出开关
+                Level minLevel = Level::Trace;                     // 调用时全局最低级别
+                String::Encoding encoding = String::Encoding::UTF8;// 调用时输出编码
+                uint64_t processId = 0;                            // 进程 id 快照
+                LogOutputFormat outputFormat = LogOutputFormat::Text; // 调用时输出格式
+                std::shared_ptr<const String> loggerName;          // 非空 Logger 名称共享快照
+            };
+
+            // 主队列在配置时预分配环形槽，避免大消息元素在 push/pop 周期中反复分配 deque 块。
+            class QueuedMessageQueue {
+            public:
+                bool empty() const noexcept { return m_size == 0; }
+                size_t size() const noexcept { return m_size; }
+
+                QueuedMessage& front() noexcept {
+                    return *m_slots[m_head];
+                }
+
+                void pop_front() noexcept {
+                    m_slots[m_head].reset();
+                    ++m_head;
+                    if (m_head == m_slots.size()) m_head = 0;
+                    --m_size;
+                    if (m_size == 0) m_head = 0;
+                }
+
+                void push_back(QueuedMessage&& value) {
+                    if (m_size == m_slots.size()) Grow();
+                    size_t index = m_head + m_size;
+                    if (index >= m_slots.size()) index -= m_slots.size();
+                    m_slots[index].emplace(std::move(value));
+                    ++m_size;
+                }
+
+                // 空队列可按新配置重建容量；非空队列保留现有槽，门限仍由 LoggerOptions 控制。
+                void Prepare(size_t requestedCapacity) {
+                    if (m_size != 0) return;
+                    const size_t capacity = requestedCapacity > 0 ? requestedCapacity : 256;
+                    if (m_slots.size() == capacity) return;
+                    m_slots = std::vector<std::optional<QueuedMessage>>(capacity);
+                    m_head = 0;
+                }
+
+            private:
+                void Grow() {
+                    const size_t nextCapacity = m_slots.empty() ? 256 : m_slots.size() * 2;
+                    std::vector<std::optional<QueuedMessage>> expanded(nextCapacity);
+                    for (size_t index = 0; index < m_size; ++index) {
+                        size_t source = m_head + index;
+                        if (source >= m_slots.size()) source -= m_slots.size();
+                        expanded[index].emplace(std::move(*m_slots[source]));
+                    }
+                    m_slots = std::move(expanded);
+                    m_head = 0;
+                }
+
+                std::vector<std::optional<QueuedMessage>> m_slots;
+                size_t m_head = 0;
+                size_t m_size = 0;
+            };
+
+            thread_local ThreadContext localContext;      // 每个调用线程独立维护日志上下文
+            thread_local uint64_t localContextRevision = 1; // 单调修订号避免逐消息比较所有上下文字段
+            thread_local SharedTextCache localFileCache;  // 文件名由编译器静态文本地址复用
+            thread_local SharedTextCache localFunctionCache; // 函数名由编译器静态文本地址复用
+            thread_local SharedTextCache localLiteralCache; // UTF-16 字面量按地址复用
+            thread_local uint64_t localQueuedContextRevision = 0; // 最近发布到异步队列的上下文修订号
+            thread_local std::shared_ptr<const QueuedContext> localQueuedContext; // 当前不可变异步上下文
+            thread_local QueuedMetadataCache localMetadataCache; // 合并固定文本和上下文引用
+
+            const std::shared_ptr<const QueuedContext>& CaptureQueuedContext() {
+                if (localQueuedContext && localQueuedContextRevision == localContextRevision) {
+                    return localQueuedContext;
+                }
+
+                auto context = std::make_shared<QueuedContext>();
+                context->threadName = CaptureOptionalString(localContext.threadName);
+                context->module = CaptureOptionalString(localContext.module);
+                context->category = CaptureOptionalString(localContext.category);
+                context->traceId = CaptureOptionalString(localContext.traceId);
+                context->spanId = CaptureOptionalString(localContext.spanId);
+                context->requestId = CaptureOptionalString(localContext.requestId);
+                context->fields = localContext.fields;
+                localQueuedContext = std::move(context);
+                localQueuedContextRevision = localContextRevision;
+                return localQueuedContext;
+            }
+
+            std::shared_ptr<const QueuedMetadata> CaptureQueuedMetadata(
+                std::u16string_view literal, const void* literalSource,
+                const char* fileSource, int line, const char* functionSource) {
+                const auto& context = CaptureQueuedContext();
+                for (const auto& entry : localMetadataCache.entries) {
+                    if (entry.literalSource == literalSource &&
+                        entry.fileSource == fileSource &&
+                        entry.functionSource == functionSource &&
+                        entry.line == line &&
+                        entry.contextSource == context.get() && entry.value) {
+                        return entry.value;
+                    }
+                }
+
+                auto metadata = std::make_shared<QueuedMetadata>();
+                if (literalSource) {
+                    metadata->sharedMessage = CaptureSharedUtf16Text(
+                        literal, literalSource, localLiteralCache);
+                }
+                metadata->file = CaptureSharedUtf8Text(fileSource, localFileCache);
+                metadata->function = CaptureSharedUtf8Text(functionSource, localFunctionCache);
+                metadata->context = context;
+
+                auto& entry = localMetadataCache.entries[localMetadataCache.nextReplacement];
+                entry.literalSource = literalSource;
+                entry.fileSource = fileSource;
+                entry.functionSource = functionSource;
+                entry.line = line;
+                entry.contextSource = context.get();
+                entry.value = metadata;
+                localMetadataCache.nextReplacement =
+                    (localMetadataCache.nextReplacement + 1) % localMetadataCache.entries.size();
+                return metadata;
+            }
+
+            struct SyncMessageSlot {
+                Message message;                          // 当前递归深度复用的完整消息对象
+                const char* fileSource = nullptr;          // 已物化的 source_location 文件地址
+                const char* functionSource = nullptr;      // 已物化的 source_location 函数地址
+                const void* messageLiteralSource = nullptr;// 已物化的编译期 UTF-16 字面量地址
+                int messageLiteralLine = 0;                // 防止同一栈地址跨调用点复用
+                uint64_t contextRevision = 0;              // 已复制的线程上下文修订号
+                uint64_t loggerNameRevision = 0;           // 已复制的 Logger 名称修订号
+                uint64_t sinkRevision = 0;                 // 已缓存的 Sink 列表修订号
+                std::shared_ptr<const void> sinkSnapshot;  // 当前槽位持有的不可变 Sink 快照
+            };
+
+            struct SyncMessageCache {
+                std::vector<std::unique_ptr<SyncMessageSlot>> slots; // 指针槽避免扩容时复制 Message
+                size_t depth = 0;                          // Sink 内嵌套 LogSync 使用下一独立槽位
+            };
+
+            thread_local SyncMessageCache localSyncMessageCache; // 每个调用线程独占同步消息缓存
+
+            struct SyncDepthGuard {
+                size_t& depth;                             // 当前线程递归深度引用
+                ~SyncDepthGuard() { --depth; }
+            };
+
+            void UpdateCachedString(String& destination, const String& source) {
+                if (destination != source) destination = source;
+            }
+
+            void AssignSnapshotString(String& destination, const std::optional<String>& source) {
+                if (!source) destination.Clear();
+                else UpdateCachedString(destination, *source);
+            }
+
+            bool ContextFieldsEqual(const std::vector<LogContextField>& left,
+                const std::vector<LogContextField>& right) {
+                if (left.size() != right.size()) return false;
+                for (size_t index = 0; index < left.size(); ++index) {
+                    if (left[index].key != right[index].key ||
+                        left[index].value != right[index].value) {
+                        return false;
+                    }
+                }
+                return true;
             }
 
             // 同 key 覆盖旧值，保持上下文字段在单条消息中唯一。
@@ -296,21 +594,25 @@ namespace LikesProgram {
                 for (auto& field : localContext.fields) {
                     if (field.key == key) {
                         field.value = value;
+                        ++localContextRevision;
                         return;
                     }
                 }
 
                 localContext.fields.push_back(LogContextField{ key, value });
+                ++localContextRevision;
             }
 
             // 删除字段时保留其他上下文顺序，方便后续消息稳定输出。
             void RemoveLocalContextField(const String& key) {
                 if (key.Empty()) return;
 
+                const size_t oldSize = localContext.fields.size(); // 仅真实删除时推进修订号
                 localContext.fields.erase(std::remove_if(localContext.fields.begin(),
                     localContext.fields.end(), [&key](const LogContextField& field) {
                         return field.key == key;
                     }), localContext.fields.end());
+                if (localContext.fields.size() != oldSize) ++localContextRevision;
             }
 
             // Scope 构造时复制完整上下文，析构时可无锁恢复当前线程状态。
@@ -321,6 +623,7 @@ namespace LikesProgram {
             // 恢复只影响当前线程，不会触碰后台 worker 的执行上下文。
             void RestoreLocalContext(const ThreadContext& context) {
                 localContext = context;
+                ++localContextRevision;
             }
 
             struct SinkRuntime {
@@ -429,20 +732,27 @@ namespace LikesProgram {
             std::atomic<int> m_minLevel{ EncodeLevel(Level::Trace) };// 当前全局过滤级别
             std::atomic<int> m_encoding{ EncodeEncoding(String::Encoding::UTF8) }; // Sink 输出编码策略
             std::atomic<bool> m_debug{ false };                     // 是否输出调用点调试信息
+            std::atomic<int> m_outputFormat{ EncodeOutputFormat(LogOutputFormat::Text) }; // 同步热路径格式快照
+            std::atomic<uint64_t> m_loggerNameRevision{ 1 };        // Logger 名称变更修订号
 
-            // Sink 列表读多写少，用 shared_mutex 缩短正常分发路径的独占时间。
-            mutable std::shared_mutex m_sinkMtx;                    // 保护 m_sinks 的读写
-            std::vector<SinkRuntime> m_sinks;                        // 已注册输出目标列表和分发策略
+            using SinkList = std::vector<SinkRuntime>;
+            // 写操作串行复制并发布不可变列表；原子兼容层同时覆盖 GCC 11 与现代标准库。
+            mutable std::mutex m_sinkUpdateMtx;                     // 串行化 Sink 配置写入
+            PortableAtomicSharedPtr<const SinkList> m_sinks{
+                std::make_shared<const SinkList>() };                 // 当前不可变 Sink 运行时快照
+            std::atomic<uint64_t> m_sinkRevision{ 1 };               // Sink 快照发布修订号
 
             // 主队列锁同时保护配置快照，确保入队时消息携带一致的输出策略。
             mutable std::mutex m_queueMtx;                          // 保护队列、配置快照和 drain 状态
             std::condition_variable m_cv;                           // 后台线程等待新消息或停止信号
             std::condition_variable m_capacityCv;                    // 前台线程等待队列容量
             std::condition_variable m_drainCv;                       // Flush/Shutdown 等待队列清空
-            std::deque<Message> m_queue;                             // 待分发日志队列，支持丢弃最旧
+            QueuedMessageQueue m_queue;                              // 预分配环形待分发快照队列
             size_t m_inFlight = 0;                                   // 已出队但仍在写 Sink 的消息数
+            size_t m_capacityWaiters = 0;                            // 正在等待主队列容量的生产者数
             LoggerOptions m_options;                                 // 队列容量和背压策略配置
             String m_loggerName;                                     // Logger 逻辑名称配置快照来源
+            std::shared_ptr<const String> m_loggerNameSnapshot;       // 异步消息共享的不可变非空名称
             size_t m_queueHighWatermark = 0;                         // 队列最高水位
 
             // startMutex 串行化 Start/Shutdown，避免重复 join 或同时创建 worker。
@@ -460,8 +770,9 @@ namespace LikesProgram {
             size_t m_retryQueueHighWatermark = 0;                    // 重试队列最高水位
 
             // 统计全部使用原子累加，Stats 只需要读取近似一致的运行快照。
-            std::atomic<uint64_t> m_acceptedMessages{ 0 };           // 已入队消息数
-            std::atomic<uint64_t> m_processedMessages{ 0 };          // 已完成分发消息数
+            std::atomic<uint64_t> m_acceptedMessages{ 0 };           // 已进入异步队列的消息数
+            std::atomic<uint64_t> m_processedMessages{ 0 };          // 已完成异步分发的消息数
+            std::atomic<uint64_t> m_synchronousMessages{ 0 };        // 已进入同步直写消息数
             std::atomic<uint64_t> m_droppedMessages{ 0 };            // 已丢弃消息数
             std::atomic<uint64_t> m_enqueueTimeouts{ 0 };            // 入队等待容量超时次数
             std::atomic<uint64_t> m_sinkWriteFailures{ 0 };          // Sink 写入或 Flush 失败次数
@@ -511,6 +822,7 @@ namespace LikesProgram {
         Logger::Logger(bool autoStart, bool debug) : m_impl(new LoggerImpl{}) {
             m_impl->m_debug.store(debug, std::memory_order_release);
             m_impl->m_stop.store(true, std::memory_order_release);
+            m_impl->m_queue.Prepare(m_impl->m_options.maxQueueSize);
             if (autoStart) Start();
         }
 
@@ -527,9 +839,18 @@ namespace LikesProgram {
             LoggerImpl* impl = m_impl; // 工作线程启动时的实现对象，析构会先 Shutdown 并等待线程退出。
             if (!impl) return;
 
+            constexpr size_t maxBatchSize = 64; // 批量出队，平衡轻量 Sink 吞吐和容量释放延迟
+            std::vector<QueuedMessage> batch;
+            batch.reserve(maxBatchSize);
+            Message message; // worker 复用完整公开消息，只在分发前物化紧凑快照
+            std::shared_ptr<const String> materializedMessage;
+            std::shared_ptr<const String> materializedFile;
+            std::shared_ptr<const String> materializedFunction;
+            std::shared_ptr<const QueuedContext> materializedContext;
+            std::shared_ptr<const String> materializedLoggerName;
             while (true) {
-                Message message; // 从主队列取出的消息快照，离开队列锁后再写 Sink
-                bool hasMessage = false; // false 表示 stop 且队列已空，worker 可以退出
+                batch.clear();
+                bool notifyCapacity = false; // 仅在确有阻塞生产者时发布容量变化
                 {
                     std::unique_lock<std::mutex> lock(impl->m_queueMtx);
                     // 等到有消息或收到停止信号；停止后仍会继续 drain 队列内剩余消息。
@@ -537,38 +858,110 @@ namespace LikesProgram {
                         return !impl->m_queue.empty() || impl->m_stop.load(std::memory_order_acquire);
                     });
 
-                    // 只要队列里还有消息就继续处理，避免 Shutdown 丢失已接受日志。
-                    if (!impl->m_stop.load(std::memory_order_acquire) || !impl->m_queue.empty()) {
-                        message = std::move(impl->m_queue.front());
+                    // 只要队列里还有消息就批量取出，避免 Shutdown 丢失已接受日志。
+                    const size_t batchSize = (std::min)(maxBatchSize, impl->m_queue.size());
+                    for (size_t index = 0; index < batchSize; ++index) {
+                        batch.push_back(std::move(impl->m_queue.front()));
                         impl->m_queue.pop_front();
-                        ++impl->m_inFlight;
-                        hasMessage = true;
                     }
+                    impl->m_inFlight += batchSize;
+                    notifyCapacity = batchSize > 0 && impl->m_capacityWaiters > 0;
                     // 显式释放锁，满足 MSVC 并发分析对退出路径的锁状态推断。
                     lock.unlock();
                 }
 
-                if (!hasMessage) break;
-                impl->m_capacityCv.notify_all();
+                if (batch.empty()) break;
+                if (notifyCapacity) impl->m_capacityCv.notify_all();
 
-                std::vector<SinkRuntime> sinks; // 当前循环使用的 Sink 运行时快照
-                {
-                    // Sink 快照复制后再执行 Write，避免用户 Sink 回调阻塞配置更新。
-                    std::shared_lock<std::shared_mutex> sinkLock(impl->m_sinkMtx);
-                    sinks = impl->m_sinks;
-                }
+                for (QueuedMessage& queuedMessage : batch) {
+                    message.level = queuedMessage.level;
+                    const auto& metadata = queuedMessage.metadata;
+                    const String* sharedMessage = metadata && metadata->sharedMessage
+                        ? metadata->sharedMessage.get() : nullptr;
+                    if (sharedMessage) {
+                        if (materializedMessage.get() != sharedMessage) {
+                            UpdateCachedString(message.msg, *sharedMessage);
+                            materializedMessage = metadata->sharedMessage;
+                        }
+                    }
+                    else if (queuedMessage.ownedMessage) {
+                        message.msg = std::move(*queuedMessage.ownedMessage);
+                        materializedMessage.reset();
+                    }
+                    else {
+                        message.msg.Clear();
+                        materializedMessage.reset();
+                    }
 
-                for (const auto& runtime : sinks) {
+                    const String* file = metadata && metadata->file ? metadata->file.get() : nullptr;
+                    if (materializedFile.get() != file) {
+                        if (file) UpdateCachedString(message.file, *file);
+                        else message.file.Clear();
+                        materializedFile = metadata ? metadata->file : nullptr;
+                    }
+                    message.line = queuedMessage.line;
+                    message.tid = queuedMessage.tid;
+                    message.timestamp = queuedMessage.timestamp;
+                    const String* function = metadata && metadata->function
+                        ? metadata->function.get() : nullptr;
+                    if (materializedFunction.get() != function) {
+                        if (function) UpdateCachedString(message.func, *function);
+                        else message.func.Clear();
+                        materializedFunction = metadata ? metadata->function : nullptr;
+                    }
+                    message.debug = queuedMessage.debug;
+                    message.minLevel = queuedMessage.minLevel;
+                    message.encoding = queuedMessage.encoding;
+                    const QueuedContext* context = metadata && metadata->context
+                        ? metadata->context.get() : nullptr;
+                    if (materializedContext.get() != context) {
+                        if (context) {
+                            AssignSnapshotString(message.threadName, context->threadName);
+                            AssignSnapshotString(message.module, context->module);
+                            AssignSnapshotString(message.category, context->category);
+                            AssignSnapshotString(message.traceId, context->traceId);
+                            AssignSnapshotString(message.spanId, context->spanId);
+                            AssignSnapshotString(message.requestId, context->requestId);
+                            message.contextFields = context->fields;
+                        }
+                        else {
+                            message.threadName.Clear();
+                            message.module.Clear();
+                            message.category.Clear();
+                            message.traceId.Clear();
+                            message.spanId.Clear();
+                            message.requestId.Clear();
+                            message.contextFields.clear();
+                        }
+                        materializedContext = metadata ? metadata->context : nullptr;
+                    }
+                    message.processId = queuedMessage.processId;
+                    message.outputFormat = queuedMessage.outputFormat;
+                    if (materializedLoggerName != queuedMessage.loggerName) {
+                        if (queuedMessage.loggerName) {
+                            UpdateCachedString(message.loggerName, *queuedMessage.loggerName);
+                        }
+                        else message.loggerName.Clear();
+                        materializedLoggerName = queuedMessage.loggerName;
+                    }
+
+                    const auto sinks = impl->m_sinks.Load(
+                        std::memory_order_acquire); // 当前不可变 Sink 快照
+
+                    for (const auto& runtime : *sinks) {
                     // 每个 Sink 可独立禁用或设置更高最低级别，跳过不应接收的目标。
                     if (!runtime.enabled || !runtime.sink || message.level < runtime.minLevel) continue;
 
-                    Message sinkMessage = message; // 当前 Sink 可覆盖输出格式，不能污染其他 Sink
+                    std::optional<Message> overriddenMessage; // 仅格式覆盖时建立独立消息副本
+                    const Message* sinkMessage = &message; // 普通 Sink 直接共享 worker 的只读快照
                     if (runtime.overrideOutputFormat) {
-                        sinkMessage.outputFormat = NormalizeOutputFormat(runtime.outputFormat);
+                        overriddenMessage.emplace(message);
+                        overriddenMessage->outputFormat = NormalizeOutputFormat(runtime.outputFormat);
+                        sinkMessage = &*overriddenMessage;
                     }
 
                     try {
-                        runtime.sink->Write(sinkMessage);
+                        runtime.sink->Write(*sinkMessage);
                     }
                     catch (const std::exception& ex) {
                         impl->m_sinkWriteFailures.fetch_add(1, std::memory_order_relaxed);
@@ -578,17 +971,20 @@ namespace LikesProgram {
                             runtime.retry.enabled && runtime.retry.maxAttempts > 0) {
                             RetryTask task; // 首次失败转入 retry worker 的任务快照
                             task.runtime = runtime;
-                            task.message = std::move(sinkMessage);
+                            task.message = *sinkMessage;
                             task.attempt = 1;
                             task.delay = runtime.retry.initialBackoff;
                             bool queued = false; // 是否成功进入对应 Sink 的重试积压额度
                             {
                                 std::lock_guard<std::mutex> retryLock(impl->m_retryMtx);
-                                queued = TryPushRetryTaskLocked(impl->m_retryQueue,
-                                    impl->m_retryInFlightSinks, std::move(task));
-                                if (queued) {
-                                    RecordRetryQueueHighWatermark(impl->m_retryQueue,
-                                        impl->m_retryQueueHighWatermark);
+                                // Shutdown 可能在外层 stop 检查后发布停止；锁内复核可阻止迟到任务进入已停止的 worker。
+                                if (!impl->m_stop.load(std::memory_order_acquire)) {
+                                    queued = TryPushRetryTaskLocked(impl->m_retryQueue,
+                                        impl->m_retryInFlightSinks, std::move(task));
+                                    if (queued) {
+                                        RecordRetryQueueHighWatermark(impl->m_retryQueue,
+                                            impl->m_retryQueueHighWatermark);
+                                    }
                                 }
                             }
                             if (queued) {
@@ -608,17 +1004,20 @@ namespace LikesProgram {
                             runtime.retry.enabled && runtime.retry.maxAttempts > 0) {
                             RetryTask task; // 保留失败时的 Sink 与消息快照供异步重试
                             task.runtime = runtime;
-                            task.message = std::move(sinkMessage);
+                            task.message = *sinkMessage;
                             task.attempt = 1;
                             task.delay = runtime.retry.initialBackoff;
                             bool queued = false; // false 时统计为重试丢弃，避免无界增长
                             {
                                 std::lock_guard<std::mutex> retryLock(impl->m_retryMtx);
-                                queued = TryPushRetryTaskLocked(impl->m_retryQueue,
-                                    impl->m_retryInFlightSinks, std::move(task));
-                                if (queued) {
-                                    RecordRetryQueueHighWatermark(impl->m_retryQueue,
-                                        impl->m_retryQueueHighWatermark);
+                                // 与 std::exception 路径保持同一停止边界，避免未知异常路径重新激活 retry 队列。
+                                if (!impl->m_stop.load(std::memory_order_acquire)) {
+                                    queued = TryPushRetryTaskLocked(impl->m_retryQueue,
+                                        impl->m_retryInFlightSinks, std::move(task));
+                                    if (queued) {
+                                        RecordRetryQueueHighWatermark(impl->m_retryQueue,
+                                            impl->m_retryQueueHighWatermark);
+                                    }
                                 }
                             }
                             if (queued) {
@@ -630,14 +1029,16 @@ namespace LikesProgram {
                             }
                         }
                     }
-                }
+                    }
 
-                impl->m_processedMessages.fetch_add(1, std::memory_order_relaxed);
+                }
+                impl->m_processedMessages.fetch_add(static_cast<uint64_t>(batch.size()),
+                    std::memory_order_relaxed);
 
                 {
                     std::unique_lock<std::mutex> lock(impl->m_queueMtx);
                     // in-flight 与队列共同决定 Flush 是否完成，必须在同一把锁下更新。
-                    if (impl->m_inFlight > 0) --impl->m_inFlight;
+                    impl->m_inFlight -= batch.size();
                     lock.unlock();
                 }
                 impl->m_drainCv.notify_all();
@@ -771,9 +1172,13 @@ namespace LikesProgram {
         void Logger::Configure(const LoggerOptions& options) {
             if (!m_impl) return;
 
+            const LoggerOptions normalized = NormalizeLoggerOptions(options); // 锁外完成枚举归一化
             std::lock_guard<std::mutex> lock(m_impl->m_queueMtx);
             // 队列策略与 loggerName 共用主队列锁，保证入队快照一致。
-            m_impl->m_options = NormalizeLoggerOptions(options);
+            m_impl->m_options = normalized;
+            m_impl->m_queue.Prepare(normalized.maxQueueSize);
+            m_impl->m_outputFormat.store(EncodeOutputFormat(normalized.outputFormat),
+                std::memory_order_release);
             m_impl->m_capacityCv.notify_all();
         }
 
@@ -790,8 +1195,14 @@ namespace LikesProgram {
             if (!m_impl) return stats;
 
             // 原子计数先读取，避免在持锁期间做不必要工作。
-            stats.acceptedMessages = m_impl->m_acceptedMessages.load(std::memory_order_relaxed);
-            stats.processedMessages = m_impl->m_processedMessages.load(std::memory_order_relaxed);
+            stats.synchronousMessages =
+                m_impl->m_synchronousMessages.load(std::memory_order_relaxed);
+            stats.acceptedMessages =
+                m_impl->m_acceptedMessages.load(std::memory_order_relaxed) +
+                stats.synchronousMessages;
+            stats.processedMessages =
+                m_impl->m_processedMessages.load(std::memory_order_relaxed) +
+                stats.synchronousMessages;
             stats.droppedMessages = m_impl->m_droppedMessages.load(std::memory_order_relaxed);
             stats.enqueueTimeouts = m_impl->m_enqueueTimeouts.load(std::memory_order_relaxed);
             stats.sinkWriteFailures = m_impl->m_sinkWriteFailures.load(std::memory_order_relaxed);
@@ -814,11 +1225,8 @@ namespace LikesProgram {
                 stats.retryQueueHighWatermark = m_impl->m_retryQueueHighWatermark;
             }
 
-            {
-                std::shared_lock<std::shared_mutex> sinkLock(m_impl->m_sinkMtx);
-                // Sink 数量读取共享锁即可，保持 AddSink/SetSinks 的互斥边界。
-                stats.sinkCount = m_impl->m_sinks.size();
-            }
+            const auto sinks = m_impl->m_sinks.Load(std::memory_order_acquire);
+            stats.sinkCount = sinks->size();
 
             return stats;
         }
@@ -870,6 +1278,9 @@ namespace LikesProgram {
                 // 队列配置和 loggerName 一起切换，后续消息会拿到同一版本快照。
                 m_impl->m_options = NormalizeLoggerOptions(config.options);
                 m_impl->m_loggerName = config.loggerName;
+                m_impl->m_outputFormat.store(
+                    EncodeOutputFormat(m_impl->m_options.outputFormat), std::memory_order_release);
+                m_impl->m_loggerNameRevision.fetch_add(1, std::memory_order_release);
                 m_impl->m_capacityCv.notify_all();
             }
 
@@ -880,9 +1291,12 @@ namespace LikesProgram {
             m_impl->m_debug.store(config.debug, std::memory_order_release);
 
             {
-                std::unique_lock<std::shared_mutex> sinkLock(m_impl->m_sinkMtx);
-                // Sink 列表一次性替换，正在分发的线程继续使用自己的旧快照。
-                m_impl->m_sinks = std::move(runtimes);
+                std::lock_guard<std::mutex> sinkLock(m_impl->m_sinkUpdateMtx);
+                // Sink 列表一次性发布，正在分发的线程继续使用自己的旧快照。
+                m_impl->m_sinks.Store(
+                    std::make_shared<const LoggerImpl::SinkList>(std::move(runtimes)),
+                    std::memory_order_release);
+                m_impl->m_sinkRevision.fetch_add(1, std::memory_order_release);
             }
 
             return Status::OkStatus();
@@ -905,12 +1319,10 @@ namespace LikesProgram {
             }
 
             {
-                std::shared_lock<std::shared_mutex> sinkLock(m_impl->m_sinkMtx);
+                const auto sinks = m_impl->m_sinks.Load(std::memory_order_acquire);
                 // 导出 Sink 时还原配置结构，不暴露后台运行时私有类型。
-                config.sinks.reserve(m_impl->m_sinks.size());
-                for (const auto& runtime : m_impl->m_sinks) {
-                    config.sinks.push_back(ConfigFromRuntime(runtime));
-                }
+                config.sinks.reserve(sinks->size());
+                for (const auto& runtime : *sinks) config.sinks.push_back(ConfigFromRuntime(runtime));
             }
 
             return config;
@@ -919,9 +1331,15 @@ namespace LikesProgram {
         void Logger::AddSink(std::shared_ptr<Sink> sink) {
             if (!m_impl || !sink) return;
 
-            std::unique_lock<std::shared_mutex> lock(m_impl->m_sinkMtx);
+            std::lock_guard<std::mutex> lock(m_impl->m_sinkUpdateMtx);
+            auto next = std::make_shared<LoggerImpl::SinkList>(
+                *m_impl->m_sinks.Load(std::memory_order_acquire));
             // 旧入口没有独立配置，默认继承 Logger 全局级别和输出格式。
-            m_impl->m_sinks.push_back(RuntimeFromSink(std::move(sink)));
+            next->push_back(RuntimeFromSink(std::move(sink)));
+            m_impl->m_sinks.Store(
+                std::shared_ptr<const LoggerImpl::SinkList>(std::move(next)),
+                std::memory_order_release);
+            m_impl->m_sinkRevision.fetch_add(1, std::memory_order_release);
         }
 
         void Logger::SetSinks(const std::vector<std::shared_ptr<Sink>>& sinks) {
@@ -933,17 +1351,23 @@ namespace LikesProgram {
                 if (sink) filtered.push_back(RuntimeFromSink(sink));
             }
 
-            std::unique_lock<std::shared_mutex> lock(m_impl->m_sinkMtx);
-            // 替换以移动完成，正在分发的 worker 不受新列表生命周期影响。
-            m_impl->m_sinks = std::move(filtered);
+            std::lock_guard<std::mutex> lock(m_impl->m_sinkUpdateMtx);
+            // 替换以原子发布完成，正在分发的 worker 不受新列表生命周期影响。
+            m_impl->m_sinks.Store(
+                std::make_shared<const LoggerImpl::SinkList>(std::move(filtered)),
+                std::memory_order_release);
+            m_impl->m_sinkRevision.fetch_add(1, std::memory_order_release);
         }
 
         void Logger::ClearSinks() {
             if (!m_impl) return;
 
-            std::unique_lock<std::shared_mutex> lock(m_impl->m_sinkMtx);
+            std::lock_guard<std::mutex> lock(m_impl->m_sinkUpdateMtx);
             // 清空后日志仍会计入队列统计，只是不再分发到任何 Sink。
-            m_impl->m_sinks.clear();
+            m_impl->m_sinks.Store(
+                std::make_shared<const LoggerImpl::SinkList>(),
+                std::memory_order_release);
+            m_impl->m_sinkRevision.fetch_add(1, std::memory_order_release);
         }
 
         void Logger::SetLoggerName(const String& name) {
@@ -952,16 +1376,21 @@ namespace LikesProgram {
             std::lock_guard<std::mutex> lock(m_impl->m_queueMtx);
             // 名称随消息入队固化，已入队消息保留旧名称。
             m_impl->m_loggerName = name;
+            if (name.Empty()) m_impl->m_loggerNameSnapshot.reset();
+            else m_impl->m_loggerNameSnapshot = std::make_shared<const String>(name);
+            m_impl->m_loggerNameRevision.fetch_add(1, std::memory_order_release);
         }
 
         void Logger::SetThreadName(const String& name) {
             // thread_local 上下文只影响当前调用线程后续创建的消息。
             localContext.threadName = name;
+            ++localContextRevision;
         }
 
         void Logger::ClearThreadName() {
             // 清空后格式化阶段回退到底层 thread::id。
             localContext.threadName.Clear();
+            ++localContextRevision;
         }
 
         void Logger::SetContextField(const String& key, const String& value) {
@@ -982,31 +1411,37 @@ namespace LikesProgram {
             localContext.spanId.Clear();
             localContext.requestId.Clear();
             localContext.fields.clear();
+            ++localContextRevision;
         }
 
         void Logger::SetModule(const String& module) {
             // 模块字段通常标识业务边界，作为消息快照随入队复制。
             localContext.module = module;
+            ++localContextRevision;
         }
 
         void Logger::SetCategory(const String& category) {
             // 类别字段用于同一模块内进一步分组日志主题。
             localContext.category = category;
+            ++localContextRevision;
         }
 
         void Logger::SetTraceId(const String& traceId) {
             // traceId 与 spanId 分离，方便调用链系统按需聚合。
             localContext.traceId = traceId;
+            ++localContextRevision;
         }
 
         void Logger::SetSpanId(const String& spanId) {
             // spanId 只描述当前调用片段，不替代 requestId。
             localContext.spanId = spanId;
+            ++localContextRevision;
         }
 
         void Logger::SetRequestId(const String& requestId) {
             // requestId 面向业务请求排障，生命周期由调用方控制。
             localContext.requestId = requestId;
+            ++localContextRevision;
         }
 
         struct LoggerContextScope::LoggerContextScopeImpl {
@@ -1117,7 +1552,14 @@ namespace LikesProgram {
             }
             catch (...) {
                 // 任一线程创建失败都回到停止态，并等待已创建线程退出。
-                m_impl->m_stop.store(true, std::memory_order_release);
+                {
+                    std::lock_guard<std::mutex> queueLock(m_impl->m_queueMtx);
+                    m_impl->m_stop.store(true, std::memory_order_release);
+                }
+                {
+                    std::lock_guard<std::mutex> retryLock(m_impl->m_retryMtx);
+                    m_impl->m_stop.store(true, std::memory_order_release);
+                }
                 m_impl->m_cv.notify_all();
                 m_impl->m_retryCv.notify_all();
                 if (m_impl->m_worker.joinable()) m_impl->m_worker.join();
@@ -1142,24 +1584,26 @@ namespace LikesProgram {
                 return std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
             };
 
+            bool queuesAreStatic = false; // 未启动 Logger 的空队列无需等待 worker
             {
                 std::lock_guard<std::mutex> startLock(m_impl->m_startMutex);
-                // 未启动且无 worker 可唤醒时只能检查静态状态，不能等待条件变量。
+                // 未启动且无 worker 可唤醒时先验证静态队列，再继续刷新 Sink。
                 if (m_impl->m_stop.load(std::memory_order_acquire) && !m_impl->m_worker.joinable()) {
                     std::lock_guard<std::mutex> queueLock(m_impl->m_queueMtx);
                     std::lock_guard<std::mutex> retryLock(m_impl->m_retryMtx);
                     if (m_impl->m_queue.empty() && m_impl->m_inFlight == 0 &&
                         m_impl->m_retryQueue.empty() && m_impl->m_retryInFlight == 0) {
-                        return true;
+                        queuesAreStatic = true;
                     }
-
-                    m_impl->m_flushTimeouts.fetch_add(1, std::memory_order_relaxed);
-                    return false;
+                    else {
+                        m_impl->m_flushTimeouts.fetch_add(1, std::memory_order_relaxed);
+                        return false;
+                    }
                 }
             }
 
-            bool drained = false;
-            {
+            bool drained = queuesAreStatic; // 静态空队列已经满足主队列 drain 条件
+            if (!queuesAreStatic) {
                 std::unique_lock<std::mutex> lock(m_impl->m_queueMtx);
                 // 主队列 drain 要求队列为空且 worker 没有正在写 Sink 的消息。
                 if (unlimitedTimeout) {
@@ -1180,8 +1624,8 @@ namespace LikesProgram {
                 return false;
             }
 
-            bool retryDrained = false;
-            {
+            bool retryDrained = queuesAreStatic; // 静态空队列也满足重试 drain 条件
+            if (!queuesAreStatic) {
                 std::unique_lock<std::mutex> lock(m_impl->m_retryMtx);
                 // 重试队列 drain 独立等待，确保失败 Sink 的延迟任务也完成。
                 if (unlimitedTimeout) {
@@ -1202,8 +1646,8 @@ namespace LikesProgram {
                 return false;
             }
 
-            std::shared_lock<std::shared_mutex> sinkLock(m_impl->m_sinkMtx);
-            for (auto& sink : m_impl->m_sinks) {
+            const auto sinks = m_impl->m_sinks.Load(std::memory_order_acquire);
+            for (const auto& sink : *sinks) {
                 // Flush 只调用当前有效 Sink，已被替换的旧快照由 worker 自己持有。
                 if (!sink.enabled || !sink.sink) continue;
 
@@ -1230,8 +1674,15 @@ namespace LikesProgram {
         bool Logger::Shutdown(std::chrono::milliseconds timeout, bool clearSink) {
             if (!m_impl) return false;
 
-            // stop 先发布，再唤醒所有可能等待队列、容量或重试延迟的线程。
-            m_impl->m_stop.store(true, std::memory_order_release);
+            // stop 必须在各条件变量的互斥量下发布，避免 worker 检查后、入睡前丢失通知。
+            {
+                std::lock_guard<std::mutex> queueLock(m_impl->m_queueMtx);
+                m_impl->m_stop.store(true, std::memory_order_release);
+            }
+            {
+                std::lock_guard<std::mutex> retryLock(m_impl->m_retryMtx);
+                m_impl->m_stop.store(true, std::memory_order_release);
+            }
             m_impl->m_cv.notify_all();
             m_impl->m_capacityCv.notify_all();
             m_impl->m_retryCv.notify_all();
@@ -1253,9 +1704,12 @@ namespace LikesProgram {
             }
 
             if (clearSink) {
-                std::unique_lock<std::shared_mutex> lock(m_impl->m_sinkMtx);
+                std::lock_guard<std::mutex> lock(m_impl->m_sinkUpdateMtx);
                 // 清理 Sink 只在 worker 退出后执行，不会破坏正在写入的快照。
-                m_impl->m_sinks.clear();
+                m_impl->m_sinks.Store(
+                    std::make_shared<const LoggerImpl::SinkList>(),
+                    std::memory_order_release);
+                m_impl->m_sinkRevision.fetch_add(1, std::memory_order_release);
             }
 
             return drained;
@@ -1269,6 +1723,17 @@ namespace LikesProgram {
 
         void Logger::LogMessageString(Level level, String&& msg,
             const char* file, int line, const char* func) {
+            LogMessageAsync(level, &msg, std::u16string_view(), nullptr, file, line, func);
+        }
+
+        void Logger::LogMessageLiteral(Level level, std::u16string_view msg,
+            const void* literalKey, const char* file, int line, const char* func) {
+            LogMessageAsync(level, nullptr, msg, literalKey, file, line, func);
+        }
+
+        void Logger::LogMessageAsync(Level level, String* ownedMessage,
+            std::u16string_view literal, const void* literalKey,
+            const char* file, int line, const char* func) {
             if (!m_impl) return;
             if (m_impl->m_stop.load(std::memory_order_acquire)) {
                 // 停止态拒绝新日志，避免 Shutdown 后重新激活队列。
@@ -1280,27 +1745,29 @@ namespace LikesProgram {
             if (level < minLevel) return;
 
             try {
-                Message message; // 入队前构造完整快照，后台线程不再访问调用方上下文
+                std::optional<QueuedMessage> pending;
+                if (literalKey) {
+                    pending.emplace();
+                }
+                else if (ownedMessage) {
+                    pending.emplace(std::move(*ownedMessage));
+                }
+                else {
+                    pending.emplace();
+                }
+                QueuedMessage& message = *pending;
                 message.level = level;
-                message.msg = std::move(msg);
-                message.file = (file != nullptr) ? String(file) : String();
+                message.metadata = CaptureQueuedMetadata(literal, literalKey, file, line, func);
                 message.line = line;
                 message.tid = std::this_thread::get_id();
-                message.threadName = CurrentThreadNameFallback();
                 message.timestamp = std::chrono::system_clock::now();
-                message.func = (func != nullptr) ? String(func) : String();
                 message.debug = m_impl->m_debug.load(std::memory_order_acquire);
                 message.minLevel = minLevel;
                 message.encoding = DecodeEncoding(m_impl->m_encoding.load(std::memory_order_acquire));
-                message.module = localContext.module;
-                message.category = localContext.category;
-                message.traceId = localContext.traceId;
-                message.spanId = localContext.spanId;
-                message.requestId = localContext.requestId;
                 message.processId = CurrentProcessId();
-                message.contextFields = localContext.fields;
 
-                bool accepted = false; // 仅成功进入队列后才递增 accepted 并唤醒 worker
+                bool accepted = false; // 仅成功进入队列后才递增 accepted
+                bool notifyWorker = false; // 队列由空转非空时才需要唤醒 worker
                 {
                     std::unique_lock<std::mutex> lock(m_impl->m_queueMtx);
                     if (m_impl->m_stop.load(std::memory_order_acquire)) {
@@ -1309,22 +1776,42 @@ namespace LikesProgram {
                         return;
                     }
 
-                    const LoggerOptions options = m_impl->m_options; // 当前队列策略快照
+                    const size_t maxQueueSize = m_impl->m_options.maxQueueSize;
+                    const QueueOverflowPolicy overflowPolicy =
+                        m_impl->m_options.overflowPolicy;
+                    const std::chrono::milliseconds enqueueTimeout =
+                        m_impl->m_options.enqueueTimeout;
                     // 输出格式和 loggerName 与队列配置同锁读取，成为消息的不可变快照。
-                    message.outputFormat = options.outputFormat;
-                    message.loggerName = m_impl->m_loggerName;
-                    if (options.maxQueueSize > 0) {
-                        if (options.overflowPolicy == QueueOverflowPolicy::Block) {
+                    message.outputFormat = m_impl->m_options.outputFormat;
+                    message.loggerName = m_impl->m_loggerNameSnapshot;
+                    if (maxQueueSize > 0) {
+                        if (overflowPolicy == QueueOverflowPolicy::Block &&
+                            m_impl->m_queue.size() >= maxQueueSize) {
                             // Block 策略等待 worker 释放容量，stop 信号也会唤醒等待者。
-                            const auto hasCapacity = [this, options] {
+                            const auto hasCapacity = [this, maxQueueSize] {
                                 return m_impl->m_stop.load(std::memory_order_acquire) ||
-                                    m_impl->m_queue.size() < options.maxQueueSize;
+                                    m_impl->m_queue.size() < maxQueueSize;
                             };
 
-                            if (options.enqueueTimeout.count() <= 0) {
-                                m_impl->m_capacityCv.wait(lock, hasCapacity);
+                            ++m_impl->m_capacityWaiters;
+                            bool acquiredCapacity = false;
+                            try {
+                                if (enqueueTimeout.count() <= 0) {
+                                    m_impl->m_capacityCv.wait(lock, hasCapacity);
+                                    acquiredCapacity = true;
+                                }
+                                else {
+                                    acquiredCapacity = m_impl->m_capacityCv.wait_for(
+                                        lock, enqueueTimeout, hasCapacity);
+                                }
                             }
-                            else if (!m_impl->m_capacityCv.wait_for(lock, options.enqueueTimeout, hasCapacity)) {
+                            catch (...) {
+                                --m_impl->m_capacityWaiters;
+                                throw;
+                            }
+                            --m_impl->m_capacityWaiters;
+
+                            if (!acquiredCapacity) {
                                 m_impl->m_enqueueTimeouts.fetch_add(1, std::memory_order_relaxed);
                                 // 等待容量超时按丢弃处理，避免调用线程无限阻塞。
                                 m_impl->m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
@@ -1338,14 +1825,15 @@ namespace LikesProgram {
                             }
                         }
 
-                        if (m_impl->m_queue.size() >= options.maxQueueSize) {
-                            if (options.overflowPolicy == QueueOverflowPolicy::DropNewest) {
+                        if (m_impl->m_queue.size() >= maxQueueSize) {
+                            if (overflowPolicy == QueueOverflowPolicy::DropNewest) {
                                 // DropNewest 直接放弃当前消息，保留队列内旧消息顺序。
                                 m_impl->m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
                                 return;
                             }
 
-                            if (options.overflowPolicy == QueueOverflowPolicy::DropOldest && !m_impl->m_queue.empty()) {
+                            if (overflowPolicy == QueueOverflowPolicy::DropOldest &&
+                                !m_impl->m_queue.empty()) {
                                 // DropOldest 为当前消息腾出一个槽位，统计被裁剪的旧消息。
                                 m_impl->m_queue.pop_front();
                                 m_impl->m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
@@ -1354,6 +1842,7 @@ namespace LikesProgram {
                     }
 
                     // push 后立即记录水位，Flush 只关心队列和 in-flight 归零。
+                    notifyWorker = m_impl->m_queue.empty();
                     m_impl->m_queue.push_back(std::move(message));
                     m_impl->m_queueHighWatermark = (std::max)(m_impl->m_queueHighWatermark, m_impl->m_queue.size());
                     accepted = true;
@@ -1362,7 +1851,7 @@ namespace LikesProgram {
                 if (accepted) {
                     // 通知放在锁外，减少 worker 被唤醒后立即竞争同一把锁的概率。
                     m_impl->m_acceptedMessages.fetch_add(1, std::memory_order_relaxed);
-                    m_impl->m_cv.notify_one();
+                    if (notifyWorker) m_impl->m_cv.notify_one();
                 }
             }
             catch (const std::exception& ex) {
@@ -1375,6 +1864,174 @@ namespace LikesProgram {
                 m_impl->m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
                 std::cerr << "[Logger Error] Failed to log message: Unknown exception" << std::endl;
             }
+        }
+
+        bool Logger::LogMessageStringSync(Level level, const String& msg,
+            const char* file, int line, const char* func) {
+            return LogMessageSync(level, &msg, nullptr, std::u16string_view(), nullptr, false,
+                file, line, func);
+        }
+
+        bool Logger::LogMessageStringSync(Level level, String&& msg,
+            const char* file, int line, const char* func) {
+            return LogMessageSync(level, &msg, &msg, std::u16string_view(), nullptr, false,
+                file, line, func);
+        }
+
+        bool Logger::LogMessageViewSync(Level level, std::u16string_view msg,
+            const char* file, int line, const char* func) {
+            return LogMessageSync(level, nullptr, nullptr, msg, nullptr, true, file, line, func);
+        }
+
+        bool Logger::LogMessageLiteralSync(Level level, std::u16string_view msg,
+            const void* literalKey, const char* file, int line, const char* func) {
+            return LogMessageSync(level, nullptr, nullptr, msg, literalKey, true, file, line, func);
+        }
+
+        bool Logger::LogMessageSync(Level level, const String* msg, String* movable,
+            std::u16string_view view, const void* literalKey, bool useView,
+            const char* file, int line, const char* func) {
+            if (!m_impl) return false;
+            const Level minLevel = DecodeLevel( // PImpl 权威级别用于二次过滤
+                m_impl->m_minLevel.load(std::memory_order_acquire));
+            if (level < minLevel) return true;
+
+            try {
+                const size_t slotIndex = localSyncMessageCache.depth++; // 嵌套调用使用下一槽位
+                SyncDepthGuard depthGuard{ localSyncMessageCache.depth };
+                if (slotIndex >= localSyncMessageCache.slots.size()) {
+                    localSyncMessageCache.slots.push_back(std::make_unique<SyncMessageSlot>());
+                }
+                SyncMessageSlot& slot = *localSyncMessageCache.slots[slotIndex];
+                Message& message = slot.message; // 当前递归深度独占、跨调用复用的消息快照
+                message.level = level;
+                if (useView) {
+                    const bool cachedLiteral = literalKey &&
+                        slot.messageLiteralSource == literalKey &&
+                        slot.messageLiteralLine == line;
+                    if (!cachedLiteral && (message.msg.Length() != view.size() ||
+                        (!view.empty() && std::memcmp(message.msg.data(), view.data(),
+                            view.size() * sizeof(char16_t)) != 0))) {
+                        message.msg = String(view);
+                    }
+                    slot.messageLiteralSource = literalKey;
+                    slot.messageLiteralLine = literalKey ? line : 0;
+                }
+                else if (msg) {
+                    if (message.msg != *msg) {
+                        if (movable) message.msg = std::move(*movable);
+                        else message.msg = *msg;
+                    }
+                    slot.messageLiteralSource = nullptr;
+                    slot.messageLiteralLine = 0;
+                }
+                if (slot.fileSource != file) {
+                    message.file = file != nullptr ? String(file) : String();
+                    slot.fileSource = file;
+                }
+                message.line = line;
+                message.tid = std::this_thread::get_id();
+                message.timestamp = std::chrono::system_clock::now();
+                if (slot.functionSource != func) {
+                    message.func = func != nullptr ? String(func) : String();
+                    slot.functionSource = func;
+                }
+                message.debug = m_impl->m_debug.load(std::memory_order_acquire);
+                message.minLevel = minLevel;
+                message.encoding = DecodeEncoding(
+                    m_impl->m_encoding.load(std::memory_order_acquire));
+                if (slot.contextRevision != localContextRevision) {
+                    UpdateCachedString(message.threadName, localContext.threadName);
+                    UpdateCachedString(message.module, localContext.module);
+                    UpdateCachedString(message.category, localContext.category);
+                    UpdateCachedString(message.traceId, localContext.traceId);
+                    UpdateCachedString(message.spanId, localContext.spanId);
+                    UpdateCachedString(message.requestId, localContext.requestId);
+                    if (!ContextFieldsEqual(message.contextFields, localContext.fields)) {
+                        message.contextFields = localContext.fields;
+                    }
+                    slot.contextRevision = localContextRevision;
+                }
+                message.processId = CurrentProcessId();
+                message.outputFormat = NormalizeOutputFormat(static_cast<LogOutputFormat>(
+                    m_impl->m_outputFormat.load(std::memory_order_acquire)));
+                const uint64_t loggerNameRevision =
+                    m_impl->m_loggerNameRevision.load(std::memory_order_acquire);
+                if (slot.loggerNameRevision != loggerNameRevision) {
+                    std::lock_guard<std::mutex> lock(m_impl->m_queueMtx); // 保护配置和名称快照
+                    UpdateCachedString(message.loggerName, m_impl->m_loggerName);
+                    slot.loggerNameRevision =
+                        m_impl->m_loggerNameRevision.load(std::memory_order_relaxed);
+                }
+
+                const uint64_t sinkRevision = m_impl->m_sinkRevision.load(std::memory_order_acquire);
+                if (slot.sinkRevision != sinkRevision) {
+                    slot.sinkSnapshot = m_impl->m_sinks.Load(std::memory_order_acquire);
+                    slot.sinkRevision = m_impl->m_sinkRevision.load(std::memory_order_relaxed);
+                }
+                const auto sinks = std::static_pointer_cast<const LoggerImpl::SinkList>(
+                    slot.sinkSnapshot); // 槽位持有稳定不可变 Sink 快照
+
+                // 同步计数同时构成 accepted/processed；Stats 组合一次原子计数公开三种语义。
+                m_impl->m_synchronousMessages.fetch_add(1, std::memory_order_relaxed);
+                bool succeeded = true; // 聚合全部符合条件 Sink 的写入结果
+                for (const auto& runtime : *sinks) {
+                    if (!runtime.enabled || !runtime.sink || message.level < runtime.minLevel) {
+                        continue;
+                    }
+                    try {
+                        // 仅覆盖格式的 Sink 需要独立消息，普通 Sink 共享只读快照。
+                        if (runtime.overrideOutputFormat) {
+                            Message sinkMessage = message; // 当前 Sink 独占的格式覆盖副本
+                            sinkMessage.outputFormat = NormalizeOutputFormat(runtime.outputFormat);
+                            runtime.sink->Write(sinkMessage);
+                        }
+                        else {
+                            runtime.sink->Write(message);
+                        }
+                    }
+                    catch (const std::exception& ex) {
+                        succeeded = false;
+                        m_impl->m_sinkWriteFailures.fetch_add(1, std::memory_order_relaxed);
+                        std::cerr << "[Logger Error] Synchronous Sink write failed: "
+                            << ex.what() << std::endl;
+                    }
+                    catch (...) {
+                        succeeded = false;
+                        m_impl->m_sinkWriteFailures.fetch_add(1, std::memory_order_relaxed);
+                        std::cerr << "[Logger Error] Synchronous Sink write failed: Unknown exception"
+                            << std::endl;
+                    }
+                }
+                return succeeded;
+            }
+            catch (const std::exception& ex) {
+                return RecordSynchronousConstructionFailure(ex.what());
+            }
+            catch (...) {
+                return RecordSynchronousConstructionFailure(nullptr);
+            }
+        }
+
+        bool Logger::RecordSynchronousConstructionFailure(const char* reason) noexcept {
+            if (!m_impl) return false;
+
+            // 构造失败没有进入 accepted/processed，但属于可观测 dropped 消息。
+            m_impl->m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
+            try {
+                if (reason) {
+                    std::cerr << "[Logger Error] Failed to synchronously construct message: "
+                        << reason << std::endl;
+                }
+                else {
+                    std::cerr << "[Logger Error] Failed to synchronously construct message: "
+                        "Unknown exception" << std::endl;
+                }
+            }
+            catch (...) {
+                // 诊断输出失败不能破坏 LogSync 的稳定 false 契约。
+            }
+            return false;
         }
     }
 }

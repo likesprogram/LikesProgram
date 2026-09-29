@@ -1,4 +1,4 @@
-#include <stringFormat/FormatSpec.hpp>
+#include "stringFormat/FormatSpec.hpp"
 
 namespace LikesProgram {
     namespace StringFormat {
@@ -33,13 +33,9 @@ namespace LikesProgram {
         };
 
         // --- 构造 / 析构 ---
-        FormatSpec::FormatSpec()
-            : m_impl(new FormatSpecImpl()) {
-        }
+        FormatSpec::FormatSpec() : m_impl(new FormatSpecImpl()) { }
 
-        FormatSpec::FormatSpec(int idx, bool explicitIdx)
-            : m_impl(new FormatSpecImpl(idx, explicitIdx)) {
-        }
+        FormatSpec::FormatSpec(int idx, bool explicitIdx) : m_impl(new FormatSpecImpl(idx, explicitIdx)) { }
 
         FormatSpec::~FormatSpec() {
             if (m_impl) {
@@ -49,19 +45,15 @@ namespace LikesProgram {
         }
 
         // --- 拷贝 / 移动 ---
-        FormatSpec::FormatSpec(const FormatSpec& other)
-            : m_impl(new FormatSpecImpl(*other.m_impl)) {
-        }
+        FormatSpec::FormatSpec(const FormatSpec& other) : m_impl(new FormatSpecImpl(*other.m_impl)) { }
 
-        FormatSpec::FormatSpec(FormatSpec&& other) noexcept
-            : m_impl(other.m_impl) {
+        FormatSpec::FormatSpec(FormatSpec&& other) noexcept : m_impl(other.m_impl) {
             other.m_impl = nullptr;
         }
 
         FormatSpec& FormatSpec::operator=(const FormatSpec& other) {
             if (this != &other) {
-                if (!m_impl)
-                    m_impl = new FormatSpecImpl();
+                if (!m_impl) m_impl = new FormatSpecImpl();
                 *m_impl = *other.m_impl;
             }
             return *this;
@@ -69,8 +61,7 @@ namespace LikesProgram {
 
         FormatSpec& FormatSpec::operator=(FormatSpec&& other) noexcept {
             if (this != &other) {
-                if (m_impl)
-                    delete m_impl;
+                if (m_impl) delete m_impl;
                 m_impl = other.m_impl;
                 other.m_impl = nullptr;
             }
@@ -79,10 +70,8 @@ namespace LikesProgram {
 
         // --- 重置 ---
         void FormatSpec::Reset() noexcept {
-            if (m_impl)
-                *m_impl = FormatSpecImpl{};
-            else
-                m_impl = new FormatSpecImpl();
+            if (m_impl) *m_impl = FormatSpecImpl{};
+            else m_impl = new FormatSpecImpl();
         }
 
         // --- Getter / Setter 实现 ---

@@ -1,5 +1,6 @@
 #pragma once
 #include <LikesProgram/Net/system/LikesProgramNetExport.hpp>
+#include <LikesProgram/Net/BufferLease.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -41,6 +42,8 @@ namespace LikesProgram {
             std::uint8_t* BeginWrite() noexcept;
             // 返回只读可写区域起始地址，便于诊断。
             const std::uint8_t* BeginWrite() const noexcept;
+            // 预留 len 字节连续写空间并返回写入起点，供 socket 直接写入 Buffer。
+            std::uint8_t* PrepareWrite(std::size_t len);
 
             // 消费 len 字节，超出时等价于清空。
             void Consume(std::size_t len) noexcept;
@@ -48,6 +51,8 @@ namespace LikesProgram {
             void RetrieveAll() noexcept;
             // 空闲容量过大时回收，避免长期连接保留尖峰内存。
             void TrimIfLarge();
+            // 将 provided-buffer 未消费字节复制到自有存储，允许安全跨越 completion 生命周期。
+            void Materialize();
 
             // 追加任意字节块。
             void Append(const void* data, std::size_t len);
@@ -55,6 +60,8 @@ namespace LikesProgram {
             void Append(const std::uint8_t* data, std::size_t len);
             // 追加另一个缓冲的可读区域。
             void Append(const Buffer& other);
+            // 接管 provided-buffer lease；空 Buffer 直接零复制引用，否则物化为连续存储。
+            void Append(BufferLease&& lease);
 
             // 告知缓冲外部已经写入 len 字节。
             void HasWritten(std::size_t len) noexcept;
@@ -72,6 +79,10 @@ namespace LikesProgram {
             const std::uint8_t* Begin() const noexcept;
             // 移动或扩容，为追加写入腾出空间。
             void MakeSpace(std::size_t len);
+            // 把当前 lease 未消费字节物化到自有连续存储。
+            void MaterializeLease();
+            // 从另一个 Buffer 深复制可读字节，不复制 lease 归还权。
+            void CopyFrom(const Buffer& other);
 
             BufferImpl* m_impl = nullptr;          // 缓冲实现，避免导出类携带 std::vector
         };

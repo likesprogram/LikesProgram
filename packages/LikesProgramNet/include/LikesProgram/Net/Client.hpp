@@ -3,6 +3,7 @@
 #include <LikesProgram/Net/Address.hpp>
 #include <LikesProgram/Net/ConnectionFactory.hpp>
 #include <LikesProgram/Net/Connection.hpp>
+#include <LikesProgram/Net/Protocol.hpp>
 #include <cstdint>
 #include <memory>
 

@@ -1,45 +1,35 @@
-﻿#include <LikesProgram/Config/ConfigurationInternal.hpp>
+﻿#include "LikesProgram/Config/ConfigurationInternal.hpp"
 
 namespace LikesProgram {
     namespace Config {
         using namespace Internal;
 
         // 构造 null 配置节点，内部 variant 默认持有 monostate。
-        ConfigValue::ConfigValue() : m_impl(new ConfigValueImpl{}) {
-        }
+        ConfigValue::ConfigValue() : m_impl(new ConfigValueImpl{ ConfigNode() }) { }
 
         // 构造字符串节点，保留原始文本内容。
-        ConfigValue::ConfigValue(const String& raw) : m_impl(new ConfigValueImpl{}) {
-            m_impl->m_value = raw;
-        }
+        ConfigValue::ConfigValue(const String& raw) : m_impl(new ConfigValueImpl{ ConfigNode(ConfigText(raw)) }) { }
+
+        // 移动接管字符串节点，解析临时值不再深拷贝 Core/String PImpl。
+        ConfigValue::ConfigValue(String&& raw) : m_impl(new ConfigValueImpl{ ConfigNode(ConfigText(std::move(raw))) }) { }
 
         // 从 UTF-16 字面量构造字符串节点，空指针按空字符串处理。
-        ConfigValue::ConfigValue(const char16_t* raw) : ConfigValue(String(raw ? raw : u"")) {
-        }
+        ConfigValue::ConfigValue(const char16_t* raw) : ConfigValue(String(raw ? raw : u"")) { }
 
         // 构造 int64 数值节点。
-        ConfigValue::ConfigValue(int64_t value) : m_impl(new ConfigValueImpl{}) {
-            m_impl->m_value = value;
-        }
+        ConfigValue::ConfigValue(int64_t value) : m_impl(new ConfigValueImpl{ ConfigNode(value) }) { }
 
         // int 入口统一提升为 int64，避免 variant 中出现多种整数类型。
-        ConfigValue::ConfigValue(int value) : ConfigValue(static_cast<int64_t>(value)) {
-        }
+        ConfigValue::ConfigValue(int value) : ConfigValue(static_cast<int64_t>(value)) { }
 
         // 构造 double 数值节点。
-        ConfigValue::ConfigValue(double value) : m_impl(new ConfigValueImpl{}) {
-            m_impl->m_value = value;
-        }
+        ConfigValue::ConfigValue(double value) : m_impl(new ConfigValueImpl{ ConfigNode(value) }) { }
 
         // 构造 bool 节点。
-        ConfigValue::ConfigValue(bool value) : m_impl(new ConfigValueImpl{}) {
-            m_impl->m_value = value;
-        }
+        ConfigValue::ConfigValue(bool value) : m_impl(new ConfigValueImpl{ ConfigNode(value) }) { }
 
-        // 深拷贝节点存储，数组和对象会复制完整子树。
-        ConfigValue::ConfigValue(const ConfigValue& other) : m_impl(new ConfigValueImpl{}) {
-            if (other.m_impl) m_impl->m_value = other.m_impl->m_value;
-        }
+        // 公开复制显式深克隆内部树，结果不借用源根或任一父节点。
+        ConfigValue::ConfigValue(const ConfigValue& other) : m_impl(new ConfigValueImpl{ other.m_impl ? CloneNode(other.m_impl->m_value) : ConfigNode() }) { }
 
         // 移动接管节点实现对象，源对象置空后仍可析构。
         ConfigValue::ConfigValue(ConfigValue&& other) noexcept : m_impl(other.m_impl) {
@@ -52,11 +42,13 @@ namespace LikesProgram {
             m_impl = nullptr;
         }
 
-        // 拷贝赋值节点存储，源为空时回到 null。
+        // 拷贝赋值先完整克隆新根，成功后再替换以保持强异常保证。
         ConfigValue& ConfigValue::operator=(const ConfigValue& other) {
             if (this == &other) return *this;
-            EnsureImpl();
-            m_impl->m_value = other.m_impl ? other.m_impl->m_value : ConfigStorage{};
+
+            auto* replacement = new ConfigValueImpl{ other.m_impl ? CloneNode(other.m_impl->m_value) : ConfigNode() }; // 独立新根
+            delete m_impl;
+            m_impl = replacement;
             return *this;
         }
 
@@ -77,14 +69,14 @@ namespace LikesProgram {
         // 创建空数组节点。
         ConfigValue ConfigValue::Array() {
             ConfigValue value; // 待返回的数组节点
-            value.m_impl->m_value = ConfigArray{};
+            value.m_impl->m_value.m_value = ConfigArray{};
             return value;
         }
 
         // 创建空对象节点。
         ConfigValue ConfigValue::Object() {
             ConfigValue value; // 待返回的对象节点
-            value.m_impl->m_value = ConfigObject{};
+            value.m_impl->m_value.m_value = ConfigObject{};
             return value;
         }
 
@@ -97,7 +89,7 @@ namespace LikesProgram {
         ConfigValueType ConfigValue::Type() const {
             const auto& storage = ConfigValueAccess::Storage(*this); // 当前节点只读存储
             if (std::holds_alternative<std::monostate>(storage)) return ConfigValueType::Null;
-            if (std::holds_alternative<String>(storage)) return ConfigValueType::String;
+            if (std::holds_alternative<ConfigText>(storage)) return ConfigValueType::String;
             if (std::holds_alternative<int64_t>(storage)) return ConfigValueType::Int64;
             if (std::holds_alternative<double>(storage)) return ConfigValueType::Double;
             if (std::holds_alternative<bool>(storage)) return ConfigValueType::Bool;
@@ -109,13 +101,13 @@ namespace LikesProgram {
         // 返回类型名称，供错误消息、诊断和调试输出使用。
         String ConfigValue::TypeName() const {
             switch (Type()) {
-            case ConfigValueType::Null: return u"null";
-            case ConfigValueType::String: return u"string";
-            case ConfigValueType::Int64: return u"int64";
-            case ConfigValueType::Double: return u"double";
-            case ConfigValueType::Bool: return u"bool";
-            case ConfigValueType::Array: return u"array";
-            case ConfigValueType::Object: return u"object";
+                case ConfigValueType::Null: return u"null";
+                case ConfigValueType::String: return u"string";
+                case ConfigValueType::Int64: return u"int64";
+                case ConfigValueType::Double: return u"double";
+                case ConfigValueType::Bool: return u"bool";
+                case ConfigValueType::Array: return u"array";
+                case ConfigValueType::Object: return u"object";
             }
             return u"unknown";
         }
@@ -143,8 +135,8 @@ namespace LikesProgram {
         const String& ConfigValue::Raw() const noexcept {
             static const String empty; // 非字符串节点共享的空串哨兵
             if (!m_impl) return empty;
-            const auto* raw = std::get_if<String>(&m_impl->m_value); // 字符串分支指针
-            return raw ? *raw : empty;
+            const auto* raw = std::get_if<ConfigText>(&m_impl->m_value.m_value); // 字符串分支指针
+            return raw ? raw->AsString() : empty;
         }
 
         // 判断节点是否语义为空：null、空字符串、空数组或空对象。
@@ -206,7 +198,17 @@ namespace LikesProgram {
         // 判断对象节点是否包含 key，支持 FindObjectEntry 的线性顺序查找。
         bool ConfigValue::Contains(const String& key) const {
             const auto* object = ConfigValueAccess::Object(*this); // 当前对象分支
-            return object && FindObjectEntry(*object, key);
+            if (!object) return false;
+            if (FindObjectEntry(*object, key)) return true;
+            if (!HasDot(key)) return false;
+
+            const ConfigNode* current = &ConfigValueAccess::Node(*this); // 从根开始借用内部节点
+            for (const auto& part : SplitDottedPath(key)) {
+                const auto* currentObject = ConfigValueAccess::Object(*current);
+                if (!currentObject || !FindObjectEntry(*currentObject, part)) return false;
+                current = &FindObjectEntry(*currentObject, part)->value;
+            }
+            return true;
         }
 
         // 读取对象字段，直接 key 优先，未命中时支持 dotted path 递归访问。
@@ -214,10 +216,10 @@ namespace LikesProgram {
             const auto* object = ConfigValueAccess::Object(*this); // 当前对象分支
             if (!object) return ConfigValue();
 
-            if (const auto* entry = FindObjectEntry(*object, key)) return entry->value;
+            if (const auto* entry = FindObjectEntry(*object, key)) return ConfigValueAccess::FromNode(CloneNode(entry->value));
             if (!HasDot(key)) return ConfigValue();
 
-            const ConfigValue* current = this; // dotted path 遍历只借用节点，避免逐层复制子树
+            const ConfigNode* current = &ConfigValueAccess::Node(*this); // dotted path 只借用内部节点
             for (const auto& part : SplitDottedPath(key)) {
                 const auto* currentObject = ConfigValueAccess::Object(*current); // 当前层对象分支
                 if (!currentObject) return ConfigValue();
@@ -226,14 +228,14 @@ namespace LikesProgram {
                 if (!entry) return ConfigValue();
                 current = &entry->value;
             }
-            return *current;
+            return ConfigValueAccess::FromNode(CloneNode(*current));
         }
 
         // 读取数组元素，越界或非数组时返回 null 节点。
         ConfigValue ConfigValue::At(size_t index) const {
             const auto* array = ConfigValueAccess::Array(*this); // 当前数组分支
             if (!array || index >= array->size()) return ConfigValue();
-            return (*array)[index];
+            return ConfigValueAccess::FromNode(CloneNode((*array)[index]));
         }
 
         // 写入对象字段，非对象节点会被自动替换为空对象。
@@ -242,15 +244,15 @@ namespace LikesProgram {
             String normalizedKey = TrimAscii(key); // 裁剪后的字段名或 dotted path
             if (normalizedKey.Empty()) return;
 
-            if (!IsObject()) m_impl->m_value = ConfigObject{};
-            auto& object = std::get<ConfigObject>(m_impl->m_value); // 可写对象分支
+            if (!IsObject()) m_impl->m_value.m_value = ConfigObject{};
+            auto& object = std::get<ConfigObject>(m_impl->m_value.m_value); // 可写对象分支
 
             if (auto* entry = FindObjectEntry(object, normalizedKey)) {
-                entry->value = value;
+                entry->value = CloneNode(ConfigValueAccess::Node(value));
                 return;
             }
 
-            object.push_back(ConfigObjectEntry{ normalizedKey, value });
+            object.push_back(ConfigObjectEntry{ ConfigText(normalizedKey), CloneNode(ConfigValueAccess::Node(value)) });
         }
 
         // 移动写入对象字段，适合解析器把临时子树挂到父对象。
@@ -260,31 +262,31 @@ namespace LikesProgram {
             String normalizedKey = TrimAscii(key); // 裁剪后的字段名或 dotted path
             if (normalizedKey.Empty()) return;
 
-            if (!IsObject()) m_impl->m_value = ConfigObject{};
-            auto& object = std::get<ConfigObject>(m_impl->m_value); // 可写对象分支
+            if (!IsObject()) m_impl->m_value.m_value = ConfigObject{};
+            auto& object = std::get<ConfigObject>(m_impl->m_value.m_value); // 可写对象分支
 
             // 重复 key 保持覆盖语义，移动赋值避免复制大数组/对象。
             if (auto* entry = FindObjectEntry(object, normalizedKey)) {
-                entry->value = std::move(value);
+                entry->value = ConfigValueAccess::TakeNode(value);
                 return;
             }
 
-            object.push_back(ConfigObjectEntry{ normalizedKey, std::move(value) });
+            object.push_back(ConfigObjectEntry{ ConfigText(normalizedKey), ConfigValueAccess::TakeNode(value) });
         }
 
         // 向数组追加节点，非数组节点会被自动替换为空数组。
         void ConfigValue::PushBack(const ConfigValue& value) {
             EnsureImpl();
-            if (!IsArray()) m_impl->m_value = ConfigArray{};
-            std::get<ConfigArray>(m_impl->m_value).push_back(value);
+            if (!IsArray()) m_impl->m_value.m_value = ConfigArray{};
+            std::get<ConfigArray>(m_impl->m_value.m_value).push_back(CloneNode(ConfigValueAccess::Node(value)));
         }
 
         // 向数组移动追加节点，减少解析大数组时的子树复制。
         void ConfigValue::PushBack(ConfigValue&& value) {
             // 数组热路径接收临时值时直接转移 PImpl，减少解析阶段深拷贝。
             EnsureImpl();
-            if (!IsArray()) m_impl->m_value = ConfigArray{};
-            std::get<ConfigArray>(m_impl->m_value).push_back(std::move(value));
+            if (!IsArray()) m_impl->m_value.m_value = ConfigArray{};
+            std::get<ConfigArray>(m_impl->m_value.m_value).push_back(ConfigValueAccess::TakeNode(value));
         }
 
         // 从对象中移除 key，返回是否实际删除了字段。
@@ -294,10 +296,10 @@ namespace LikesProgram {
 
             String normalizedKey = TrimAscii(key); // 裁剪后的目标字段名
             auto oldSize = object->size(); // 删除前字段数量
-            object->erase(std::remove_if(object->begin(), object->end(),
-                [&normalizedKey](const ConfigObjectEntry& entry) {
-                    return entry.key == normalizedKey;
-                }), object->end());
+            object->erase(std::remove_if(
+                object->begin(), object->end(),
+                [&normalizedKey](const ConfigObjectEntry& entry) { return entry.key.Equals(normalizedKey); }), object->end()
+            );
 
             return object->size() != oldSize;
         }
@@ -307,14 +309,14 @@ namespace LikesProgram {
             std::vector<String> keys; // 输出字段名列表
             if (const auto* object = ConfigValueAccess::Object(*this)) {
                 keys.reserve(object->size());
-                for (const auto& entry : *object) keys.push_back(entry.key);
+                for (const auto& entry : *object) keys.push_back(entry.key.AsString());
             }
             return keys;
         }
 
         // 比较两个节点的完整存储内容，数组和对象按顺序比较。
         bool ConfigValue::operator==(const ConfigValue& other) const {
-            return ConfigValueAccess::Storage(*this) == ConfigValueAccess::Storage(other);
+            return ConfigValueAccess::Node(*this) == ConfigValueAccess::Node(other);
         }
     }
 }

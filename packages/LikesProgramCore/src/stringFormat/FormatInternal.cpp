@@ -1,7 +1,8 @@
-#include <stringFormat/FormatInternal.hpp>
+#include "stringFormat/FormatInternal.hpp"
 #include <LikesProgram/Core/time/Time.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <iomanip>
@@ -20,37 +21,112 @@ namespace LikesProgram {
 
             // 判断类型字符是否属于 v1.0 规范内建类型。
             bool IsKnownFormatType(char32_t type) {
-                static const char32_t types[] = { // 当前格式器支持的内建类型字符表
-                    U's', U'S', U'd', U'i', U'o', U'O', U'u', U'x', U'X',
-                    U'b', U'B', U'f', U'F', U'e', U'E', U'g', U'G',
-                    U'c', U'p', U'P', U't', U'T', U'%'
-                };
-                for (auto t : types) {
-                    if (type == t) return true;
+                switch (type) {
+                    case U's': case U'S': case U'd': case U'i': case U'o': case U'O':
+                    case U'u': case U'x': case U'X': case U'b': case U'B': case U'f':
+                    case U'F': case U'e': case U'E': case U'g': case U'G': case U'c':
+                    case U'p': case U'P': case U't': case U'T': case U'%': return true;
+                    default: return false;
                 }
-                return false;
             }
 
             // 判断类型字符是否可以走整数格式化路径。
             bool IsIntegerType(char32_t type) {
-                return type == U's' || type == U'd' || type == U'i' ||
-                    type == U'x' || type == U'X' || type == U'b' ||
-                    type == U'B' || type == U'o' || type == U'O' ||
-                    type == U'c';
+                return type == U's' || type == U'd' || type == U'i' || type == U'x' || type == U'X' || type == U'b' || type == U'B' || type == U'o' || type == U'O' || type == U'c';
             }
 
             // 判断类型字符是否可以走浮点格式化路径。
             bool IsFloatingType(char32_t type) {
-                return type == U's' || type == U'f' || type == U'F' ||
-                    type == U'e' || type == U'E' || type == U'g' ||
-                    type == U'G' || type == U'%';
+                return type == U's' || type == U'f' || type == U'F' || type == U'e' || type == U'E' || type == U'g' || type == U'G' || type == U'%';
             }
+
+            // 短结果使用固定内联存储，超出容量后保留全部内容并切换到 std::wstring。
+            class FormatOutputBuffer {
+            public:
+                void reserve(size_t capacity) {
+                    if (m_heapBacked) m_heap.reserve(capacity);
+                    else if (capacity > m_inline.size()) MoveToHeap(capacity);
+                }
+
+                size_t size() const noexcept { return m_heapBacked ? m_heap.size() : m_inlineSize; }
+
+                const wchar_t* data() const noexcept { return m_heapBacked ? m_heap.data() : m_inline.data(); }
+
+                void push_back(wchar_t value) {
+                    if (m_heapBacked) {
+                        m_heap.push_back(value);
+                        return;
+                    }
+                    if (m_inlineSize < m_inline.size()) {
+                        m_inline[m_inlineSize++] = value;
+                        return;
+                    }
+                    MoveToHeap(m_inlineSize + 1);
+                    m_heap.push_back(value);
+                }
+
+                void append(size_t count, wchar_t value) {
+                    if (count == 0) return;
+                    if (m_heapBacked) m_heap.append(count, value);
+                    else if (count <= m_inline.size() - m_inlineSize) {
+                        std::fill_n(m_inline.data() + m_inlineSize, count, value);
+                        m_inlineSize += count;
+                    } else {
+                        MoveToHeap(m_inlineSize + count);
+                        m_heap.append(count, value);
+                    }
+                }
+
+                void append(const wchar_t* text, size_t length) {
+                    if (length == 0) return;
+                    if (m_heapBacked) m_heap.append(text, length);
+                    else if (length <= m_inline.size() - m_inlineSize) {
+                        std::copy_n(text, length, m_inline.data() + m_inlineSize);
+                        m_inlineSize += length;
+                    } else {
+                        MoveToHeap(m_inlineSize + length);
+                        m_heap.append(text, length);
+                    }
+                }
+
+                void append(std::wstring_view text) {
+                    append(text.data(), text.size());
+                }
+
+                FormatOutputBuffer& operator+=(std::wstring_view text) {
+                    append(text);
+                    return *this;
+                }
+
+                FormatOutputBuffer& operator+=(const wchar_t* text) {
+                    append(text, std::char_traits<wchar_t>::length(text));
+                    return *this;
+                }
+
+                std::wstring_view view() const noexcept {
+                    return std::wstring_view(data(), size());
+                }
+
+            private:
+                void MoveToHeap(size_t capacity) {
+                    m_heap.reserve(capacity);
+                    m_heap.assign(m_inline.data(), m_inlineSize);
+                    m_heapBacked = true;
+                }
+
+                std::array<wchar_t, 128> m_inline;
+                size_t m_inlineSize = 0;
+                bool m_heapBacked = false;
+                std::wstring m_heap;
+            };
 
             // 将 FormatSpec 拍平成值类型，减少热路径虚调用和 PImpl 间接访问。
             struct FormatSpecSnapshot {
                 int index = -1;                    // 参数索引，-1 表示自动索引
                 bool explicitIndex = false;        // 是否显式写了索引
                 char32_t type = U's';              // 格式类型字符
+                bool knownType = true;              // 类型字符是否属于内建集合
+                bool integerType = true;            // 类型字符是否可走整数快路径
                 char32_t sign = 0;                 // 符号控制字符
                 char32_t align = U'>';             // 对齐方式
                 bool alternate = false;            // 是否输出进制前缀
@@ -61,10 +137,11 @@ namespace LikesProgram {
                 String typeExpand;                 // 类型扩展内容
 
                 FormatSpecSnapshot() = default;
-                explicit FormatSpecSnapshot(const FormatSpec& spec)
-                    : index(spec.GetIndex()),
+                explicit FormatSpecSnapshot(const FormatSpec& spec) : index(spec.GetIndex()),
                     explicitIndex(spec.HasExplicitIndex()),
                     type(spec.GetType()),
+                    knownType(IsKnownFormatType(type)),
+                    integerType(IsIntegerType(type)),
                     sign(spec.GetSign()),
                     align(spec.GetAlign()),
                     alternate(spec.GetAlternateForm()),
@@ -95,13 +172,13 @@ namespace LikesProgram {
                 if (!alternate) return std::wstring();
                 // # 标志只对二/八/十六进制产生前缀。
                 switch (type) {
-                case U'x': return L"0x";
-                case U'X': return L"0X";
-                case U'b': return L"0b";
-                case U'B': return L"0B";
-                case U'o': return L"0o";
-                case U'O': return L"0O";
-                default: return std::wstring();
+                    case U'x': return L"0x";
+                    case U'X': return L"0X";
+                    case U'b': return L"0b";
+                    case U'B': return L"0B";
+                    case U'o': return L"0o";
+                    case U'O': return L"0O";
+                    default: return std::wstring();
                 }
             }
 
@@ -124,23 +201,12 @@ namespace LikesProgram {
                 const char32_t type = spec.GetType();
                 if (!IsIntegerType(type)) return std::wstring();
 
-                if (type == U'c') {
-                    return String(static_cast<char32_t>(value)).ToWString();
-                }
+                if (type == U'c') return String(static_cast<char32_t>(value)).ToWString();
 
                 const bool negative = value < 0; // 有符号整数是否为负
-                if (type == U'x' || type == U'X') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(static_cast<unsigned long long>(value), 16, type == U'X');
-                }
-                if (type == U'b' || type == U'B') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(static_cast<unsigned long long>(value), 2, false);
-                }
-                if (type == U'o' || type == U'O') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(static_cast<unsigned long long>(value), 8, false);
-                }
+                if (type == U'x' || type == U'X') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(static_cast<unsigned long long>(value), 16, type == U'X');
+                if (type == U'b' || type == U'B') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(static_cast<unsigned long long>(value), 2, false);
+                if (type == U'o' || type == U'O') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(static_cast<unsigned long long>(value), 8, false);
 
                 return SignPrefix(negative, spec) + UnsignedToBase(SignedMagnitude(value), 10, false);
             }
@@ -149,28 +215,18 @@ namespace LikesProgram {
                 const char32_t type = spec.GetType();
                 if (!IsIntegerType(type)) return std::wstring();
 
-                if (type == U'c') {
-                    return String(static_cast<char32_t>(value)).ToWString();
-                }
-
-                if (type == U'x' || type == U'X') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(value, 16, type == U'X');
-                }
-                if (type == U'b' || type == U'B') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(value, 2, false);
-                }
-                if (type == U'o' || type == U'O') {
-                    return IntegerPrefix(type, spec.GetAlternateForm()) +
-                        UnsignedToBase(value, 8, false);
-                }
+                if (type == U'c') return String(static_cast<char32_t>(value)).ToWString();
+                if (type == U'x' || type == U'X') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(value, 16, type == U'X');
+                if (type == U'b' || type == U'B') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(value, 2, false);
+                if (type == U'o' || type == U'O') return IntegerPrefix(type, spec.GetAlternateForm()) + UnsignedToBase(value, 8, false);
 
                 return SignPrefix(false, spec) + UnsignedToBase(value, 10, false);
             }
 
-            std::optional<std::wstring> FormatIntegerFast(unsigned long long magnitude, bool negative, const FormatSpecSnapshot& spec) {
-                if (!IsIntegerType(spec.type) || spec.type == U'c') return std::nullopt;
+            template<typename Output>
+            bool AppendIntegerFast(Output& out, unsigned long long magnitude, bool negative,
+                const FormatSpecSnapshot& spec) {
+                if (!spec.integerType || spec.type == U'c') return false;
 
                 unsigned base = 10;          // 当前整数输出进制
                 bool upper = false;          // 十六进制字母是否大写
@@ -179,12 +235,10 @@ namespace LikesProgram {
                     base = 16;
                     upper = spec.type == U'X';
                     if (spec.alternate) prefix = upper ? std::wstring_view(L"0X", 2) : std::wstring_view(L"0x", 2);
-                }
-                else if (spec.type == U'b' || spec.type == U'B') {
+                } else if (spec.type == U'b' || spec.type == U'B') {
                     base = 2;
                     if (spec.alternate) prefix = spec.type == U'B' ? std::wstring_view(L"0B", 2) : std::wstring_view(L"0b", 2);
-                }
-                else if (spec.type == U'o' || spec.type == U'O') {
+                } else if (spec.type == U'o' || spec.type == U'O') {
                     base = 8;
                     if (spec.alternate) prefix = spec.type == U'O' ? std::wstring_view(L"0O", 2) : std::wstring_view(L"0o", 2);
                 }
@@ -210,24 +264,25 @@ namespace LikesProgram {
                 const bool simpleFill = spec.fill.size() == 1; // 快路径只处理单 code unit 填充
                 const wchar_t padChar = zeroInternal && spec.zeroPad ? L'0' : (simpleFill ? spec.fill[0] : L' '); // 实际填充字符
 
-                std::wstring out; // 当前整数格式化输出缓冲
-                if (!simpleFill && pad != 0 && !zeroInternal) return std::nullopt;
-                out.reserve(rawLen + (simpleFill ? pad : 0));
+                if (!simpleFill && pad != 0 && !zeroInternal) return false;
+                out.reserve(out.size() + rawLen + (simpleFill ? pad : 0));
 
                 // 右/居中默认先写外部填充，'=' 对齐则延后到符号和前缀之后。
-                if (!zeroInternal && spec.align != U'<') {
-                    out.append(pad, padChar);
-                }
+                if (!zeroInternal && spec.align != U'<') out.append(pad, padChar);
                 if (signChar) out.push_back(signChar);
                 out.append(prefix);
                 if (zeroInternal) out.append(pad, padChar);
-                for (size_t i = 0; i < digitCount; ++i) {
-                    out.push_back(digitsBuffer[digitCount - 1 - i]);
-                }
+                for (size_t i = 0; i < digitCount; ++i) out.push_back(digitsBuffer[digitCount - 1 - i]);
+
                 // 左对齐填充放到数字主体之后。
-                if (!zeroInternal && spec.align == U'<') {
-                    out.append(pad, padChar);
-                }
+                if (!zeroInternal && spec.align == U'<') out.append(pad, padChar);
+                return true;
+            }
+
+            std::optional<std::wstring> FormatIntegerFast(unsigned long long magnitude, bool negative,
+                const FormatSpecSnapshot& spec) {
+                std::wstring out; // 兼容返回式调用点的整数缓冲
+                if (!AppendIntegerFast(out, magnitude, negative, spec)) return std::nullopt;
                 return out;
             }
 
@@ -240,16 +295,10 @@ namespace LikesProgram {
 
             size_t NumericPrefixLength(const std::wstring& src) {
                 size_t pos = 0; // 数值前缀扫描位置
-                if (pos < src.size() && (src[pos] == L'+' || src[pos] == L'-' || src[pos] == L' ')) {
-                    ++pos;
-                }
+                if (pos < src.size() && (src[pos] == L'+' || src[pos] == L'-' || src[pos] == L' ')) ++pos;
                 if (pos + 1 < src.size() && src[pos] == L'0') {
                     const wchar_t marker = src[pos + 1]; // 进制前缀标记字符
-                    if (marker == L'x' || marker == L'X' ||
-                        marker == L'b' || marker == L'B' ||
-                        marker == L'o' || marker == L'O') {
-                        pos += 2;
-                    }
+                    if (marker == L'x' || marker == L'X' || marker == L'b' || marker == L'B' || marker == L'o' || marker == L'O') pos += 2;
                 }
                 return pos;
             }
@@ -259,13 +308,8 @@ namespace LikesProgram {
                 size_t count = 0; // 已统计的 Unicode code point 数
                 for (size_t i = 0; i < src.size();) {
                     const wchar_t c = src[i]; // 当前 UTF-16 单元
-                    if (c >= 0xD800 && c <= 0xDBFF &&
-                        i + 1 < src.size() && src[i + 1] >= 0xDC00 && src[i + 1] <= 0xDFFF) {
-                        i += 2;
-                    }
-                    else {
-                        ++i;
-                    }
+                    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < src.size() && src[i + 1] >= 0xDC00 && src[i + 1] <= 0xDFFF) i += 2;
+                    else ++i;
                     ++count;
                 }
                 return count;
@@ -283,13 +327,8 @@ namespace LikesProgram {
                 size_t offset = 0; // 精度截断对应的 UTF-16 偏移
                 size_t count = 0; // 已保留的 Unicode code point 数
                 while (offset < value.size() && count < static_cast<size_t>(precision)) {
-                    if (value[offset] >= 0xD800 && value[offset] <= 0xDBFF &&
-                        offset + 1 < value.size() && value[offset + 1] >= 0xDC00 && value[offset + 1] <= 0xDFFF) {
-                        offset += 2;
-                    }
-                    else {
-                        ++offset;
-                    }
+                    if (value[offset] >= 0xD800 && value[offset] <= 0xDBFF && offset + 1 < value.size() && value[offset + 1] >= 0xDC00 && value[offset + 1] <= 0xDFFF) offset += 2;
+                    else ++offset;
                     ++count;
                 }
                 return value.substr(0, offset);
@@ -316,8 +355,7 @@ namespace LikesProgram {
                     if (cp <= 0xFFFF) {
                         if (cp >= 0xD800 && cp <= 0xDFFF) throw std::runtime_error("Invalid UTF-32 surrogate codepoint");
                         out.push_back(static_cast<wchar_t>(cp));
-                    }
-                    else {
+                    } else {
                         if (cp > 0x10FFFF) throw std::runtime_error("Invalid UTF-32 codepoint");
                         cp -= 0x10000;
                         out.push_back(static_cast<wchar_t>((cp >> 10) + 0xD800));
@@ -330,11 +368,52 @@ namespace LikesProgram {
 #endif
             }
 
+            template<typename Output>
+            void AppendU16ViewToWString(Output& out, std::u16string_view value) {
+                if (value.empty()) return;
+#if WCHAR_MAX == 0xFFFF
+                out.append(reinterpret_cast<const wchar_t*>(value.data()), value.size());
+#else
+                out += String(value).ToWString();
+#endif
+            }
+
+            template<typename Output>
+            void AppendU32ViewToWString(Output& out, std::u32string_view value) {
+                if (value.empty()) return;
+#if WCHAR_MAX == 0xFFFF
+                out.reserve(out.size() + value.size());
+                for (char32_t cp : value) {
+                    if (cp <= 0xFFFF) {
+                        if (cp >= 0xD800 && cp <= 0xDFFF) throw std::runtime_error("Invalid UTF-32 surrogate codepoint");
+                        out.push_back(static_cast<wchar_t>(cp));
+                    } else {
+                        if (cp > 0x10FFFF) throw std::runtime_error("Invalid UTF-32 codepoint");
+                        cp -= 0x10000;
+                        out.push_back(static_cast<wchar_t>((cp >> 10) + 0xD800));
+                        out.push_back(static_cast<wchar_t>((cp & 0x3FF) + 0xDC00));
+                    }
+                }
+#else
+                out.append(reinterpret_cast<const wchar_t*>(value.data()), value.size());
+#endif
+            }
+
             void AppendStringToWString(std::wstring& out, const String& value) {
 #if WCHAR_MAX == 0xFFFF
                 out.append(reinterpret_cast<const wchar_t*>(value.data()), value.Length());
 #else
                 out += value.ToWString();
+#endif
+            }
+
+            String StringFromWStringView(std::wstring_view value) {
+#if WCHAR_MAX == 0xFFFF
+                // Windows 宽缓冲已经是 UTF-16，直接按视图复制到最终 String。
+                return String(std::u16string_view(reinterpret_cast<const char16_t*>(value.data()), value.size()));
+#else
+                // POSIX wchar_t 为 UTF-32，直接转写到 String，避免 u32/u16 两级临时字符串。
+                return String(std::u32string_view(reinterpret_cast<const char32_t*>(value.data()), value.size()));
 #endif
             }
 
@@ -360,8 +439,7 @@ namespace LikesProgram {
                     if (tok.isPlaceholder) {
                         out.spec = FormatSpecSnapshot(tok.spec);
                         if (out.spec.explicitIndex) plan->hasExplicitIndex = true;
-                    }
-                    else {
+                    } else {
                         out.literal.reserve(tok.literal.Length());
                         AppendStringToWString(out.literal, tok.literal);
                     }
@@ -373,9 +451,7 @@ namespace LikesProgram {
             std::vector<Any> MaterializeArgs(const FormatArgView* args, size_t argCount) {
                 std::vector<Any> out; // 由轻量视图物化出的 std::any 参数列表
                 out.reserve(argCount);
-                for (size_t i = 0; i < argCount; ++i) {
-                    out.emplace_back(args[i].makeAny ? args[i].makeAny(args[i].value) : Any());
-                }
+                for (size_t i = 0; i < argCount; ++i) out.emplace_back(args[i].makeAny ? args[i].makeAny(args[i].value) : Any());
                 return out;
             }
         }
@@ -401,12 +477,8 @@ namespace LikesProgram {
             // 支持 std::u16string_view 透明查找的等值比较。
             struct U16Equal {
                 using is_transparent = void;
-                bool operator()(std::u16string_view lhs, std::u16string_view rhs) const noexcept {
-                    return lhs == rhs;
-                }
-                bool operator()(const std::u16string& lhs, const std::u16string& rhs) const noexcept {
-                    return lhs == rhs;
-                }
+                bool operator()(std::u16string_view lhs, std::u16string_view rhs) const noexcept { return lhs == rhs; }
+                bool operator()(const std::u16string& lhs, const std::u16string& rhs) const noexcept { return lhs == rhs; }
             };
 
             mutable std::shared_mutex m_mutex; // 保护 formatter 注册表
@@ -418,8 +490,7 @@ namespace LikesProgram {
             std::unordered_map<std::u16string, std::shared_ptr<const FormatParser::Result>, U16Hash, U16Equal> m_parseCache; // 格式串到解析结果的缓存
         };
 
-        FormatInternal::FormatInternal() : m_impl(new FormatInternalImpl()) {
-        }
+        FormatInternal::FormatInternal() : m_impl(new FormatInternalImpl()) { }
 
         FormatInternal::~FormatInternal() {
             delete m_impl;
@@ -474,8 +545,7 @@ namespace LikesProgram {
             return *this;
         }
 
-        FormatInternal::FormatInternal(FormatInternal&& other) noexcept
-            : m_impl(other.m_impl) {
+        FormatInternal::FormatInternal(FormatInternal&& other) noexcept : m_impl(other.m_impl) {
             other.m_impl = nullptr;
         }
 
@@ -516,18 +586,19 @@ namespace LikesProgram {
             return m_impl->m_nameFormatters.find(name) != m_impl->m_nameFormatters.end();
         }
 
-        const FormatParser::Result* FormatInternal::GetParsedFormat(const String& fmt) {
+        const FormatParser::Result* FormatInternal::GetParsedFormat(const String& fmt, const void* stableKey) {
             const std::u16string_view keyView(fmt.data(), fmt.Length()); // 以 UTF-16 内容作为解析缓存键
             struct LocalParseCache {
                 const FormatInternal* owner = nullptr; // 缓存所属 FormatInternal 实例
+                const void* stableKey = nullptr;       // 不可变字面量的稳定源码地址
                 std::u16string key;                    // 最近一次格式串键
                 std::shared_ptr<const FormatParser::Result> value; // 最近一次解析结果
             };
             thread_local LocalParseCache localCache; // 每线程最近一次命中缓存
 
-            if (localCache.owner == this && localCache.value &&
-                std::u16string_view(localCache.key) == keyView) {
-                return localCache.value.get();
+            if (localCache.owner == this && localCache.value) {
+                if (stableKey && localCache.stableKey == stableKey) return localCache.value.get();
+                if (!stableKey && !localCache.stableKey && std::u16string_view(localCache.key) == keyView) return localCache.value.get();
             }
 
             {
@@ -535,7 +606,9 @@ namespace LikesProgram {
                 auto it = m_impl->m_parseCache.find(keyView);     // 全局缓存候选项
                 if (it != m_impl->m_parseCache.end()) {
                     localCache.owner = this;
-                    localCache.key.assign(keyView);
+                    localCache.stableKey = stableKey;
+                    if (stableKey) localCache.key.clear();
+                    else localCache.key.assign(keyView);
                     localCache.value = it->second;
                     return localCache.value.get();
                 }
@@ -549,19 +622,21 @@ namespace LikesProgram {
                 auto it = m_impl->m_parseCache.find(std::u16string_view(key)); // 并发写入后的二次检查
                 if (it != m_impl->m_parseCache.end()) {
                     localCache.owner = this;
-                    localCache.key.assign(keyView);
+                    localCache.stableKey = stableKey;
+                    if (stableKey) localCache.key.clear();
+                    else localCache.key.assign(keyView);
                     localCache.value = it->second;
                     return localCache.value.get();
                 }
 
-                if (m_impl->m_parseCache.size() >= kParseCacheMaxEntries) {
-                    m_impl->m_parseCache.clear();
-                }
+                if (m_impl->m_parseCache.size() >= kParseCacheMaxEntries) m_impl->m_parseCache.clear();
                 // 全局缓存拥有 key 字符串，线程本地缓存只保存最近一次命中。
                 m_impl->m_parseCache.emplace(std::move(key), parsed);
             }
             localCache.owner = this;
-            localCache.key.assign(keyView);
+            localCache.stableKey = stableKey;
+            if (stableKey) localCache.key.clear();
+            else localCache.key.assign(keyView);
             localCache.value = parsed;
             // 返回裸指针但所有权由 shared_ptr 缓存保持。
             return localCache.value.get();
@@ -587,9 +662,7 @@ namespace LikesProgram {
                 for (const auto& tok : res.tokens) {
                     if (!tok.isPlaceholder || !tok.spec.HasExplicitIndex()) continue;
                     const int idx = tok.spec.GetIndex(); // 当前显式指定的参数索引
-                    if (idx >= 0 && static_cast<size_t>(idx) < argCount) {
-                        used[static_cast<size_t>(idx)] = true;
-                    }
+                    if (idx >= 0 && static_cast<size_t>(idx) < argCount) used[static_cast<size_t>(idx)] = true;
                 }
             }
 
@@ -606,9 +679,7 @@ namespace LikesProgram {
                 const FormatSpec& spec = tok.spec; // 当前占位符规格
                 int chosenIndex = -1;              // 当前占位符最终使用的参数索引
 
-                if (spec.HasExplicitIndex()) {
-                    chosenIndex = spec.GetIndex();
-                }
+                if (spec.HasExplicitIndex()) chosenIndex = spec.GetIndex();
                 else {
                     while (hasExplicitIndex && nextAuto < argCount && used[nextAuto]) ++nextAuto;
                     if (nextAuto < argCount) {
@@ -624,24 +695,27 @@ namespace LikesProgram {
                 }
 
                 std::wstring formattedText = FormatArgumentToWString(&args[static_cast<size_t>(chosenIndex)], spec); // 参数格式化结果
-                if (!spec.GetWidth()) {
-                    output += formattedText;
-                }
-                else {
-                    output += ApplyAlignmentAndFill(formattedText, spec);
-                }
+                if (!spec.GetWidth()) output += formattedText;
+                else output += ApplyAlignmentAndFill(formattedText, spec);
             }
 
-            return String(output);
+            return StringFromWStringView(output);
         }
 
         String FormatInternal::FormatViews(const String& fmt, const FormatArgView* args, size_t argCount) {
-            if (m_impl->m_nameFormatterCount.load(std::memory_order_acquire) != 0 ||
-                m_impl->m_typeFormatterCount.load(std::memory_order_acquire) != 0) {
-                return FormatAny(fmt, MaterializeArgs(args, argCount));
-            }
+            return FormatViewsImpl(fmt, args, argCount, nullptr);
+        }
 
-            const auto* resPtr = GetParsedFormat(fmt); // 当前格式串解析结果缓存指针
+        String FormatInternal::FormatViewsStable(const String& fmt, const FormatArgView* args,
+            size_t argCount, const void* stableKey) {
+            return FormatViewsImpl(fmt, args, argCount, stableKey);
+        }
+
+        String FormatInternal::FormatViewsImpl(const String& fmt, const FormatArgView* args,
+            size_t argCount, const void* stableKey) {
+            if (m_impl->m_nameFormatterCount.load(std::memory_order_acquire) != 0 || m_impl->m_typeFormatterCount.load(std::memory_order_acquire) != 0) return FormatAny(fmt, MaterializeArgs(args, argCount));
+
+            const auto* resPtr = GetParsedFormat(fmt, stableKey); // 当前格式串解析结果缓存指针
             struct LocalPlanCache {
                 const FormatParser::Result* source = nullptr; // 当前线程缓存对应的解析结果
                 std::shared_ptr<const CompiledFormatPlan> plan; // 当前线程缓存的编译计划
@@ -654,63 +728,52 @@ namespace LikesProgram {
             const auto& plan = *planCache.plan; // 本次格式化使用的编译计划
             if (plan.hasFatalError) return String(U"{!}");
 
-            auto formatSnapshot = [&](const FormatArgView& arg, const FormatSpecSnapshot& spec, bool& handled) -> std::wstring {
-                handled = true;
-                if (!IsKnownFormatType(spec.type)) return L"{!type}";
-                if (spec.type == U'u') {
-                    handled = false;
-                    return {};
+            auto appendSnapshot = [&](FormatOutputBuffer& destination, const FormatArgView& arg,
+                const FormatSpecSnapshot& spec) -> bool {
+                if (!spec.knownType) {
+                    destination += L"{!type}";
+                    return true;
                 }
+                if (spec.type == U'u') return false;
 
-                const auto& ti = arg.type; // 当前参数视图携带的静态类型
-                auto formatSigned = [&](long long value) -> std::optional<std::wstring> { // 有符号整数快路径格式化器
-                    return FormatIntegerFast(SignedMagnitude(value), value < 0, spec);
+                auto appendSigned = [&](long long value) { // 有符号整数直接写入最终缓冲
+                    return AppendIntegerFast(destination, SignedMagnitude(value), value < 0, spec);
                 };
-                auto formatUnsigned = [&](unsigned long long value) -> std::optional<std::wstring> { // 无符号整数快路径格式化器
-                    return FormatIntegerFast(value, false, spec);
+                auto appendUnsigned = [&](unsigned long long value) { // 无符号整数直接写入最终缓冲
+                    return AppendIntegerFast(destination, value, false, spec);
                 };
 
-                std::optional<std::wstring> formatted; // 快路径格式化结果，空值表示回退
-                if (ti == typeid(int)) formatted = formatSigned(*static_cast<const int*>(arg.value));
-                else if (ti == typeid(short)) formatted = formatSigned(*static_cast<const short*>(arg.value));
-                else if (ti == typeid(long)) formatted = formatSigned(*static_cast<const long*>(arg.value));
-                // 整数族不物化 std::any，直接读取 FormatArgView 中的原值。
-                else if (ti == typeid(long long)) formatted = formatSigned(*static_cast<const long long*>(arg.value));
-                else if (ti == typeid(unsigned int)) formatted = formatUnsigned(*static_cast<const unsigned int*>(arg.value));
-                else if (ti == typeid(unsigned short)) formatted = formatUnsigned(*static_cast<const unsigned short*>(arg.value));
-                // 无符号整数同样保持 view 快路径，避免临时 Any。
-                else if (ti == typeid(unsigned long)) formatted = formatUnsigned(*static_cast<const unsigned long*>(arg.value));
-                else if (ti == typeid(unsigned long long)) formatted = formatUnsigned(*static_cast<const unsigned long long*>(arg.value));
-                else if ((spec.type == U's' || spec.type == U'S') && ti == typeid(const char32_t*)) {
-                    if (spec.width || spec.precision) {
-                        handled = false;
-                        return {};
-                    }
-                    // 指针字符串视图快路径只处理无宽度/精度的纯文本输出。
-                    const char32_t* ptr = static_cast<const char32_t*>(arg.value);
-                    formatted = ptr ? U32ViewToWString(std::u32string_view(ptr)) : std::wstring();
-                }
-                else if ((spec.type == U's' || spec.type == U'S') && ti == typeid(std::u32string_view)) {
-                    if (spec.width || spec.precision) {
-                        handled = false;
-                        return {};
-                    }
-                    formatted = U32ViewToWString(*static_cast<const std::u32string_view*>(arg.value));
-                }
-                else if ((spec.type == U's' || spec.type == U'S') && ti == typeid(std::u16string_view)) {
-                    if (spec.width || spec.precision) {
-                        handled = false;
-                        return {};
-                    }
-                    formatted = U16ViewToWString(*static_cast<const std::u16string_view*>(arg.value));
+                switch (arg.kind) {
+                    case FormatArgKind::SignedInt: return appendSigned(*static_cast<const int*>(arg.value));
+                    case FormatArgKind::SignedShort: return appendSigned(*static_cast<const short*>(arg.value));
+                    case FormatArgKind::SignedLong: return appendSigned(*static_cast<const long*>(arg.value));
+                    case FormatArgKind::SignedLongLong: return appendSigned(*static_cast<const long long*>(arg.value));
+                    case FormatArgKind::UnsignedInt: return appendUnsigned(*static_cast<const unsigned int*>(arg.value));
+                    case FormatArgKind::UnsignedShort: return appendUnsigned(*static_cast<const unsigned short*>(arg.value));
+                    case FormatArgKind::UnsignedLong: return appendUnsigned(*static_cast<const unsigned long*>(arg.value));
+                    case FormatArgKind::UnsignedLongLong: return appendUnsigned(*static_cast<const unsigned long long*>(arg.value));
+                    default: break;
                 }
 
-                if (!formatted) {
-                    handled = false;
-                    return {};
+                if ((spec.type == U's' || spec.type == U'S') && !spec.width && !spec.precision) {
+                    if (arg.kind == FormatArgKind::Utf32Pointer) {
+                        const char32_t* ptr = static_cast<const char32_t*>(arg.value); // UTF-32 指针参数
+                        if (ptr) {
+                            const size_t length = arg.extent != 0 ? arg.extent : std::char_traits<char32_t>::length(ptr); // 字面量优先使用静态长度
+                            AppendU32ViewToWString(destination, std::u32string_view(ptr, length));
+                        }
+                        return true;
+                    }
+                    if (arg.kind == FormatArgKind::Utf32View) {
+                        AppendU32ViewToWString(destination, *static_cast<const std::u32string_view*>(arg.value));
+                        return true;
+                    }
+                    if (arg.kind == FormatArgKind::Utf16View) {
+                        AppendU16ViewToWString(destination, *static_cast<const std::u16string_view*>(arg.value));
+                        return true;
+                    }
                 }
-
-                return *formatted;
+                return false;
             };
 
             std::vector<bool> used; // 显式索引模式下记录已被占用的参数
@@ -719,14 +782,12 @@ namespace LikesProgram {
                 for (const auto& tok : plan.tokens) {
                     if (!tok.isPlaceholder || !tok.spec.explicitIndex) continue;
                     const int idx = tok.spec.index; // 当前显式指定的参数索引
-                    if (idx >= 0 && static_cast<size_t>(idx) < argCount) {
-                        used[static_cast<size_t>(idx)] = true;
-                    }
+                    if (idx >= 0 && static_cast<size_t>(idx) < argCount) used[static_cast<size_t>(idx)] = true;
                 }
             }
 
             size_t nextAuto = 0; // 自动索引下一候选参数
-            std::wstring output; // 宽字符输出缓冲，最后一次性构造 String
+            FormatOutputBuffer output; // 常见短结果留在栈上，超长结果自动回退堆分配
             output.reserve(fmt.Length() + argCount * 8);
 
             for (const auto& tok : plan.tokens) {
@@ -738,9 +799,7 @@ namespace LikesProgram {
                 const FormatSpecSnapshot& spec = tok.spec; // 拍平后的占位符规格
                 int chosenIndex = -1;                      // 当前占位符最终使用的参数索引
 
-                if (spec.explicitIndex) {
-                    chosenIndex = spec.index;
-                }
+                if (spec.explicitIndex) chosenIndex = spec.index;
                 else {
                     while (plan.hasExplicitIndex && nextAuto < argCount && used[nextAuto]) ++nextAuto;
                     if (nextAuto < argCount) {
@@ -755,20 +814,17 @@ namespace LikesProgram {
                     continue;
                 }
 
-                bool handled = false; // 是否命中 FormatArgView 快路径
-                std::wstring formattedText = formatSnapshot(args[static_cast<size_t>(chosenIndex)], spec, handled); // 快路径格式化结果
-                if (!handled) {
+                if (!appendSnapshot(output, args[static_cast<size_t>(chosenIndex)], spec)) {
                     return FormatAny(fmt, MaterializeArgs(args, argCount));
                 }
-
-                output += formattedText;
             }
 
-            return String(output);
+            return StringFromWStringView(output.view());
         }
 
         String FormatInternal::FormatArgument(const Any* argPtr, const FormatSpec& spec) const {
-            return String(FormatArgumentToWString(argPtr, spec));
+            const std::wstring output = FormatArgumentToWString(argPtr, spec); // 单参数宽字符结果
+            return StringFromWStringView(output);
         }
 
         std::wstring FormatInternal::FormatArgumentToWString(const Any* argPtr, const FormatSpec& spec) const {
@@ -787,9 +843,7 @@ namespace LikesProgram {
             std::type_index tid = std::type_index(a.type()); // 用户类型 formatter 的查找键
             if (auto out = TryInvokeTypeFormatter(tid, a, spec)) return out->ToWString();
 
-            if (auto bs = FormatBuiltInToStdString(a, spec)) {
-                return *bs;
-            }
+            if (auto bs = FormatBuiltInToStdString(a, spec)) return *bs;
 
             String str; // std::any 转 String 的回退承载对象
             if (String::FromAny(a, str)) {
@@ -805,9 +859,7 @@ namespace LikesProgram {
             if (!IsKnownFormatType(spec.GetType())) return L"{!type}";
             if (spec.GetType() == U'u') return L"{!type}";
 
-            if (auto bs = FormatBuiltInViewToStdString(arg, spec)) {
-                return *bs;
-            }
+            if (auto bs = FormatBuiltInViewToStdString(arg, spec)) return *bs;
 
             handled = false;
             return std::wstring();
@@ -901,10 +953,7 @@ namespace LikesProgram {
                     else return std::nullopt;
 
                     std::wostringstream oss; // 指针十六进制输出缓冲
-                    oss << L"0x"
-                        << std::uppercase << std::hex
-                        << std::setw(sizeof(void*) * 2) << std::setfill(L'0')
-                        << reinterpret_cast<std::uintptr_t>(ptr);
+                    oss << L"0x" << std::uppercase << std::hex << std::setw(sizeof(void*) * 2) << std::setfill(L'0') << reinterpret_cast<std::uintptr_t>(ptr);
                     // 指针统一输出固定宽度十六进制，便于跨平台比较。
                     return oss.str();
                 }
@@ -973,8 +1022,7 @@ namespace LikesProgram {
                     char32_t* ptr = static_cast<char32_t*>(const_cast<void*>(arg.value));
                     return ApplyWStringPrecision(ptr ? U32ViewToWString(std::u32string_view(ptr)) : std::wstring(), spec);
                 }
-            }
-            catch (...) {
+            } catch (...) {
                 return std::nullopt;
             }
 
@@ -985,8 +1033,7 @@ namespace LikesProgram {
             try {
                 const char32_t type = spec.GetType(); // 当前格式类型字符
 
-                if (a.type() == typeid(int) || a.type() == typeid(short) ||
-                    a.type() == typeid(long) || a.type() == typeid(long long)) {
+                if (a.type() == typeid(int) || a.type() == typeid(short) || a.type() == typeid(long) || a.type() == typeid(long long)) {
                     long long v = 0; // 提升后的有符号整数值
                     if (a.type() == typeid(int)) v = std::any_cast<int>(a);
                     else if (a.type() == typeid(short)) v = std::any_cast<short>(a);
@@ -1000,10 +1047,7 @@ namespace LikesProgram {
                     return out;
                 }
 
-                if (a.type() == typeid(unsigned int) ||
-                    a.type() == typeid(unsigned short) ||
-                    a.type() == typeid(unsigned long) ||
-                    a.type() == typeid(unsigned long long)) {
+                if (a.type() == typeid(unsigned int) || a.type() == typeid(unsigned short) || a.type() == typeid(unsigned long) || a.type() == typeid(unsigned long long)) {
                     unsigned long long v = 0; // 提升后的无符号整数值
                     if (a.type() == typeid(unsigned int)) v = std::any_cast<unsigned int>(a);
                     else if (a.type() == typeid(unsigned short)) v = std::any_cast<unsigned short>(a);
@@ -1029,19 +1073,11 @@ namespace LikesProgram {
                     std::wostringstream oss; // 浮点格式化输出缓冲
                     const int prec = spec.GetPrecision().value_or(6); // 浮点输出精度
 
-                    if (type == U'e' || type == U'E') {
-                        oss << std::scientific << std::setprecision(prec);
-                    }
-                    else if (type == U'g' || type == U'G') {
-                        oss << std::defaultfloat << std::setprecision(prec);
-                    }
-                    else {
-                        oss << std::fixed << std::setprecision(prec);
-                    }
+                    if (type == U'e' || type == U'E') oss << std::scientific << std::setprecision(prec);
+                    else if (type == U'g' || type == U'G') oss << std::defaultfloat << std::setprecision(prec);
+                    else oss << std::fixed << std::setprecision(prec);
 
-                    if (type == U'E' || type == U'F' || type == U'G') {
-                        oss << std::uppercase;
-                    }
+                    if (type == U'E' || type == U'F' || type == U'G') oss << std::uppercase;
 
                     const bool percent = type == U'%'; // 是否按百分比格式输出
                     const long double formattedValue = percent ? v * 100.0L : v;
@@ -1059,37 +1095,27 @@ namespace LikesProgram {
                 }
 
                 if (a.type() == typeid(char)) {
-                    if (type == U'c' || type == U's' || type == U'S') {
-                        return String(std::any_cast<char>(a)).ToWString();
-                    }
+                    if (type == U'c' || type == U's' || type == U'S') return String(std::any_cast<char>(a)).ToWString();
                     return FormatSignedInteger(static_cast<unsigned char>(std::any_cast<char>(a)), spec);
                 }
 
                 if (a.type() == typeid(char8_t)) {
-                    if (type == U'c' || type == U's' || type == U'S') {
-                        return String(std::any_cast<char8_t>(a)).ToWString();
-                    }
+                    if (type == U'c' || type == U's' || type == U'S') return String(std::any_cast<char8_t>(a)).ToWString();
                     return FormatUnsignedInteger(static_cast<unsigned char>(std::any_cast<char8_t>(a)), spec);
                 }
 
                 if (a.type() == typeid(char16_t)) {
-                    if (type == U'c' || type == U's' || type == U'S') {
-                        return String(std::any_cast<char16_t>(a)).ToWString();
-                    }
+                    if (type == U'c' || type == U's' || type == U'S') return String(std::any_cast<char16_t>(a)).ToWString();
                     return FormatUnsignedInteger(static_cast<unsigned long long>(std::any_cast<char16_t>(a)), spec);
                 }
 
                 if (a.type() == typeid(char32_t)) {
-                    if (type == U'c' || type == U's' || type == U'S') {
-                        return String(std::any_cast<char32_t>(a)).ToWString();
-                    }
+                    if (type == U'c' || type == U's' || type == U'S') return String(std::any_cast<char32_t>(a)).ToWString();
                     return FormatUnsignedInteger(static_cast<unsigned long long>(std::any_cast<char32_t>(a)), spec);
                 }
 
                 if (a.type() == typeid(wchar_t)) {
-                    if (type == U'c' || type == U's' || type == U'S') {
-                        return std::wstring(1, std::any_cast<wchar_t>(a));
-                    }
+                    if (type == U'c' || type == U's' || type == U'S') return std::wstring(1, std::any_cast<wchar_t>(a));
                     return FormatUnsignedInteger(static_cast<unsigned long long>(std::any_cast<wchar_t>(a)), spec);
                 }
 
@@ -1100,10 +1126,7 @@ namespace LikesProgram {
                     else return std::nullopt;
 
                     std::wostringstream oss; // 指针十六进制输出缓冲
-                    oss << L"0x"
-                        << std::uppercase << std::hex
-                        << std::setw(sizeof(void*) * 2) << std::setfill(L'0')
-                        << reinterpret_cast<std::uintptr_t>(ptr);
+                    oss << L"0x" << std::uppercase << std::hex << std::setw(sizeof(void*) * 2) << std::setfill(L'0') << reinterpret_cast<std::uintptr_t>(ptr);
                     return oss.str();
                 }
 
@@ -1211,8 +1234,7 @@ namespace LikesProgram {
                     if (spec.GetTypeExpand().Empty()) return LikesProgram::Time::FormatTime(tp).ToWString();
                     return LikesProgram::Time::FormatTime(tp, spec.GetTypeExpand()).ToWString();
                 }
-            }
-            catch (...) {
+            } catch (...) {
                 return std::nullopt;
             }
 
@@ -1231,8 +1253,7 @@ namespace LikesProgram {
 
             try {
                 return formatter(a, spec);
-            }
-            catch (...) {
+            } catch (...) {
                 return std::nullopt;
             }
         }
@@ -1249,8 +1270,7 @@ namespace LikesProgram {
 
             try {
                 return formatter(a, spec);
-            }
-            catch (...) {
+            } catch (...) {
                 return std::nullopt;
             }
         }
@@ -1268,12 +1288,8 @@ namespace LikesProgram {
 
             auto appendFill = [&](std::wstring& out, size_t count) { // 按 code point 数追加填充文本
                 if (count == 0) return;
-                if (fill.size() == 1) {
-                    out.append(count, fill[0]);
-                }
-                else {
-                    out += RepeatFillToLen(fill, count);
-                }
+                if (fill.size() == 1) out.append(count, fill[0]);
+                else out += RepeatFillToLen(fill, count);
             };
 
             if (spec.GetAlign() == U'=') {
@@ -1288,34 +1304,34 @@ namespace LikesProgram {
             }
 
             switch (spec.GetAlign()) {
-            case U'<': {
-                std::wstring out; // 左对齐输出缓冲
-                out.reserve(src.size() + padUnits * fill.size());
-                out += src;
-                appendFill(out, padUnits);
-                // 左对齐先写原文，再补右侧填充。
-                return out;
-            }
-            case U'^': {
-                const size_t leftPad = padUnits / 2;       // 居中对齐左侧填充数
-                const size_t rightPad = padUnits - leftPad; // 居中对齐右侧填充数
-                std::wstring out; // 居中对齐输出缓冲
-                out.reserve(src.size() + padUnits * fill.size());
-                appendFill(out, leftPad);
-                out += src;
-                // 居中对齐将奇数填充放到右侧。
-                appendFill(out, rightPad);
-                return out;
-            }
-            case U'>':
-            default: {
-                std::wstring out; // 右对齐输出缓冲
-                out.reserve(src.size() + padUnits * fill.size());
-                appendFill(out, padUnits);
-                out += src;
-                // 右对齐先写填充，再写原文。
-                return out;
-            }
+                case U'<': {
+                    std::wstring out; // 左对齐输出缓冲
+                    out.reserve(src.size() + padUnits * fill.size());
+                    out += src;
+                    appendFill(out, padUnits);
+                    // 左对齐先写原文，再补右侧填充。
+                    return out;
+                }
+                case U'^': {
+                    const size_t leftPad = padUnits / 2;       // 居中对齐左侧填充数
+                    const size_t rightPad = padUnits - leftPad; // 居中对齐右侧填充数
+                    std::wstring out; // 居中对齐输出缓冲
+                    out.reserve(src.size() + padUnits * fill.size());
+                    appendFill(out, leftPad);
+                    out += src;
+                    // 居中对齐将奇数填充放到右侧。
+                    appendFill(out, rightPad);
+                    return out;
+                }
+                case U'>':
+                default: {
+                    std::wstring out; // 右对齐输出缓冲
+                    out.reserve(src.size() + padUnits * fill.size());
+                    appendFill(out, padUnits);
+                    out += src;
+                    // 右对齐先写填充，再写原文。
+                    return out;
+                }
             }
         }
 
@@ -1325,15 +1341,11 @@ namespace LikesProgram {
 
             std::wstring out; // 重复填充生成的宽字符串
             out.reserve(count);
-            while (out.size() < count) {
-                out += fill;
-            }
+            while (out.size() < count) out += fill;
             if (out.size() > count) {
                 out.resize(count);
 #if WCHAR_MAX == 0xFFFF
-                if (!out.empty() && out.back() >= 0xD800 && out.back() <= 0xDBFF) {
-                    out.pop_back();
-                }
+                if (!out.empty() && out.back() >= 0xD800 && out.back() <= 0xDBFF) out.pop_back();
 #endif
             }
             return out;

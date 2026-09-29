@@ -1,9 +1,13 @@
 #pragma once
 
+#include <LikesProgram/Core/String.hpp>
+
 #include <atomic>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string_view>
 
 namespace LikesProgram {
     namespace Metrics {
@@ -18,22 +22,14 @@ namespace LikesProgram {
 
             // 计算饱和浮点加法结果，确保长期运行累计值仍保持有限。
             inline double SaturatingAdd(double current, double delta) {
-                if (!std::isfinite(current)) current = 0.0;
-                if (!std::isfinite(delta)) return current;
-
                 constexpr double maxValue = std::numeric_limits<double>::max(); // 正向导出上界
                 constexpr double minValue = std::numeric_limits<double>::lowest(); // 负向导出下界
-                if (delta > 0.0 && current > maxValue - delta) return maxValue;
-                if (delta < 0.0 && current < minValue - delta) return minValue;
-
                 const double next = current + delta; // 正常热路径只做一次浮点加法
                 return std::isfinite(next) ? next : (delta >= 0.0 ? maxValue : minValue);
             }
 
             // 对原子 double 执行有限值饱和累加，避免 fetch_add 直接溢出为 inf。
             inline void AddFiniteSaturating(std::atomic<double>& target, double delta) {
-                if (!std::isfinite(delta)) return;
-
                 double current = target.load(std::memory_order_relaxed); // CAS 循环的当前快照
                 while (true) {
                     const double next = SaturatingAdd(current, delta); // 候选有限累加结果
@@ -42,6 +38,23 @@ namespace LikesProgram {
                         return;
                     }
                 }
+            }
+
+            // double 的有限边界加减 1 仍保持有限，单位热路径可直接使用原子浮点累加。
+            inline void AddFiniteUnit(std::atomic<double>& target, double delta) {
+                target.fetch_add(delta, std::memory_order_relaxed);
+            }
+
+            // Prometheus 文本与现有 API 保持固定六位小数，绕过通用格式解析器热路径。
+            inline LikesProgram::String FormatFixedSix(double value) {
+                char buffer[64]{};
+                const auto converted = std::to_chars(
+                    buffer, buffer + sizeof(buffer), value, std::chars_format::fixed, 6);
+                if (converted.ec != std::errc{}) {
+                    return LikesProgram::String::Format(u"{:.6f}", value);
+                }
+                return LikesProgram::String(std::string_view(
+                    buffer, static_cast<std::size_t>(converted.ptr - buffer)));
             }
 
             // 对 int64 计数做饱和加法，长期运行到上界后保持稳定。

@@ -45,13 +45,20 @@ int main() {
 
     auto sink = std::make_shared<CountingSink>(); // 验证自定义 Sink 注入和分发
     logger.AddSink(sink);
-    if (!logger.Start()) return 2;
+
+    // 未启动 Logger 时同步分发，并验证停止态 Flush 仍访问当前 Sink。
+    if (!logger.LogSync(LikesProgram::Log::Level::Warn,
+            std::source_location::current(), u"logging sync consumer {}", 1)) return 2;
+    if (!logger.Flush(std::chrono::seconds(5))) return 3;
+    if (sink->Count() != 1) return 4;
+
+    if (!logger.Start()) return 5;
 
     logger.Log(LikesProgram::Log::Level::Info, std::source_location::current(),
         u"logging consumer check");
-    if (!logger.Flush(std::chrono::seconds(5))) return 3;
-    if (!logger.Shutdown(std::chrono::seconds(5), true)) return 4;
-    if (sink->Count() != 1) return 5;
+    if (!logger.Flush(std::chrono::seconds(5))) return 6;
+    if (!logger.Shutdown(std::chrono::seconds(5), true)) return 7;
+    if (sink->Count() != 2) return 8;
 
     std::cout << LikesProgram::Logging::PackageName()
         << " consumer check passed\n";

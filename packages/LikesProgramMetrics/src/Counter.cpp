@@ -1,5 +1,5 @@
 #include <LikesProgram/Metrics/Counter.hpp>
-#include <metrics/MetricsInternal.hpp>
+#include "metrics/MetricsInternal.hpp"
 
 #include <atomic>
 #include <cmath>
@@ -57,9 +57,19 @@ namespace LikesProgram {
             m_impl = nullptr;
         }
 
+        void Counter::Increment() {
+            if (!m_impl) return;
+            Internal::AddFiniteUnit(m_impl->m_value, 1.0);
+        }
+
         void Counter::Increment(double value) {
             // Counter 保持单调：负数、NaN 和 Inf 输入都不改变状态。
-            if (!m_impl || value < 0.0 || !std::isfinite(value)) return;
+            if (!m_impl) return;
+            if (value == 1.0) {
+                Internal::AddFiniteUnit(m_impl->m_value, 1.0);
+                return;
+            }
+            if (value < 0.0 || !std::isfinite(value)) return;
             Internal::AddFiniteSaturating(m_impl->m_value, value);
         }
 
@@ -91,13 +101,13 @@ namespace LikesProgram {
         }
 
         LikesProgram::String Counter::ToPrometheus() const {
-            const auto labels = LabelsCopy();              // 导出使用同一份标签快照
-            const LikesProgram::String value = LikesProgram::String::Format(u"{:.6f}", Value());
+            const LikesProgram::String labels = PrometheusLabels();
+            const LikesProgram::String value = Internal::FormatFixedSix(Value());
             LikesProgram::String result = u"# HELP ";      // Prometheus 文本输出缓冲
 
             result.Append(m_name).Append(u" ").Append(m_help).Append(u"\n");
             result.Append(u"# TYPE ").Append(m_name).Append(u" ").Append(Type()).Append(u"\n");
-            result.Append(m_name).Append(FormatLabels(labels)).Append(u" ").Append(value).Append(u"\n");
+            result.Append(m_name).Append(labels).Append(u" ").Append(value).Append(u"\n");
             return result;
         }
 
@@ -119,7 +129,7 @@ namespace LikesProgram {
             }
 
             json.Append(u"},\"value\":")
-                .Append(LikesProgram::String::Format(u"{:.6f}", Value()))
+                .Append(Internal::FormatFixedSix(Value()))
                 .Append(u"}");
             return json;
         }

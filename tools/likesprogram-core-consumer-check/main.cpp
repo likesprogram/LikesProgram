@@ -18,6 +18,10 @@ int main() {
         u"core \"ok\"").ToStdString(); // 验证公开 JSON 转义辅助能力
     if (escaped != "core \\\"ok\\\"") return 2;
 
+    const LikesProgram::String nonBmp{ U"A\U0001F600B" }; // 验证安装态公开头的长度别名语义
+    if (nonBmp.Size() != 3 || nonBmp.size() != 3) return 3;
+    if (nonBmp.Length() != 4 || nonBmp.length() != 4) return 4;
+
     std::cout << expected << " core consumer check passed\n";
     return 0;
 }

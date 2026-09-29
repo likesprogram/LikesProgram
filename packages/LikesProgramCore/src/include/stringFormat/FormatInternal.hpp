@@ -1,7 +1,7 @@
 #pragma once
 #include <LikesProgram/Core/String.hpp>
-#include <stringFormat/FormatParser.hpp>
-#include <stringFormat/FormatSpec.hpp>
+#include "stringFormat/FormatParser.hpp"
+#include "stringFormat/FormatSpec.hpp"
 #include <any>
 #include <functional>
 #include <optional>
@@ -42,11 +42,16 @@ namespace LikesProgram {
             String FormatAny(const String& fmt, const std::vector<Any>& args);
             // 使用参数视图格式化，优先走无 Any 快路径。
             String FormatViews(const String& fmt, const FormatArgView* args, size_t argCount);
+            // 使用稳定字面量地址复用解析与编译计划。
+            String FormatViewsStable(const String& fmt, const FormatArgView* args, size_t argCount,
+                const void* stableKey);
 
         private: // 内部实现函数
 
             // 获取或构建格式串解析结果，结果由解析缓存持有。
-            const FormatParser::Result* GetParsedFormat(const String& fmt);
+            const FormatParser::Result* GetParsedFormat(const String& fmt, const void* stableKey = nullptr);
+            // 参数视图格式化的统一实现，stableKey 只用于不可变字面量。
+            String FormatViewsImpl(const String& fmt, const FormatArgView* args, size_t argCount, const void* stableKey);
 
             // 将一组参数（any）和一个 FormatSpec 渲染为 String
             String FormatArgument(const Any* argPtr, const FormatSpec& spec) const;
@@ -74,8 +79,7 @@ namespace LikesProgram {
             String TryStringConstructor(const Any& a) {
                 try {
                     return String(std::any_cast<T>(a));
-                }
-                catch (...) {}
+                } catch (...) {}
                 return String(); // 失败返回空 String 或占位符
             }
 

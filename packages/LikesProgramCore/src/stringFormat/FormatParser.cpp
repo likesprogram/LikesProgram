@@ -1,4 +1,4 @@
-#include <stringFormat/FormatParser.hpp>
+#include "stringFormat/FormatParser.hpp"
 
 #include <limits>
 #include <sstream>
@@ -70,13 +70,11 @@ namespace LikesProgram {
                         FormatSpec spec = ParsePlaceholder(content);
                         spec.SetRaw(content);
                         t.spec = std::move(spec);
-                    }
-                    catch (const std::exception& ex) {
+                    } catch (const std::exception& ex) {
                         res.errors.push_back({ tokenStart, String(std::string("ParsePlaceholder error: ") + ex.what()) });
                         t.isPlaceholder = false;
                         t.literal = String(U"{!}");
-                    }
-                    catch (...) {
+                    } catch (...) {
                         res.errors.push_back({ tokenStart, String("ParsePlaceholder unknown error") });
                         t.isPlaceholder = false;
                         t.literal = String(U"{!}");
@@ -176,9 +174,7 @@ namespace LikesProgram {
             }
 
             SkipSpaces(inside, i);
-            if (i != insideSize) {
-                ThrowFormatError(U"invalid placeholder tail", inside, i);
-            }
+            if (i != insideSize) ThrowFormatError(U"invalid placeholder tail", inside, i);
 
             return spec;
         }
@@ -195,9 +191,7 @@ namespace LikesProgram {
             int val = 0; // 当前解析出的非负整数
             while (i < sSize && IsAsciiDigit(s[i])) {
                 const int digit = static_cast<int>(s[i] - U'0'); // 当前 ASCII 数字值
-                if (val > (std::numeric_limits<int>::max() - digit) / 10) {
-                    ThrowFormatError(U"number too large", s, i);
-                }
+                if (val > (std::numeric_limits<int>::max() - digit) / 10) ThrowFormatError(U"number too large", s, i);
                 val = val * 10 + digit;
                 ++i;
             }
@@ -222,23 +216,18 @@ namespace LikesProgram {
                     if (c == U'\\' && i < sSize) {
                         c = s[i++];
                         switch (c) {
-                        case U'n': fill.Append(U'\n'); break;
-                        case U't': fill.Append(U'\t'); break;
-                        case U'r': fill.Append(U'\r'); break;
-                        case U'\\': fill.Append(U'\\'); break;
-                        case U'\'': fill.Append(U'\''); break;
-                        case U'"': fill.Append(U'"'); break;
-                        default: fill.Append(c); break;
+                            case U'n': fill.Append(U'\n'); break;
+                            case U't': fill.Append(U'\t'); break;
+                            case U'r': fill.Append(U'\r'); break;
+                            case U'\\': fill.Append(U'\\'); break;
+                            case U'\'': fill.Append(U'\''); break;
+                            case U'"': fill.Append(U'"'); break;
+                            default: fill.Append(c); break;
                         }
-                    }
-                    else {
-                        fill.Append(c);
-                    }
+                    } else fill.Append(c);
                 }
 
-                if (!closed || i >= sSize || !IsAlignChar(s[i])) {
-                    ThrowFormatError(U"quoted fill must be followed by alignment", s, i);
-                }
+                if (!closed || i >= sSize || !IsAlignChar(s[i])) ThrowFormatError(U"quoted fill must be followed by alignment", s, i);
                 return fill;
             }
 
@@ -307,17 +296,13 @@ namespace LikesProgram {
                 U'b', U'B', U'f', U'F', U'e', U'E', U'g', U'G',
                 U'c', U'p', U'P', U't', U'T', U'%'
             };
-            for (auto t : types) {
-                if (c == t) return true;
-            }
+            for (auto t : types) if (c == t) return true;
             return false;
         }
 
         [[noreturn]] void FormatParser::ThrowFormatError(const String& msg, const String& context, size_t pos) {
             std::stringstream ss; // 组装异常消息的字节流
-            ss << "[FormatParserError] " << msg.ToStdString()
-                << " pos=" << pos
-                << " context=\"" << context.ToStdString() << "\"";
+            ss << "[FormatParserError] " << msg.ToStdString() << " pos=" << pos << " context=\"" << context.ToStdString() << "\"";
             throw std::runtime_error(ss.str());
         }
     }

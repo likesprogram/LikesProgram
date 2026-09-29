@@ -8,7 +8,7 @@
 
 1. Core 总是构建，不需要额外打开选项。
 2. 使用 Core 时链接 `LikesProgram::Core`。
-3. `LikesProgram::String` 内部是 UTF-16，`Size()` 按 Unicode code point 计数，`Length()`/`size()`/`length()` 按 UTF-16 code unit 计数。
+3. `LikesProgram::String` 内部是 UTF-16，`Size()`/`size()` 按 Unicode code point 计数，`Length()`/`length()` 按 UTF-16 code unit 计数。
 
 ## 构建和链接
 
@@ -132,8 +132,8 @@ String text(U"A😀B");
 auto codePoints = text.Size();    // 3，按 Unicode code point
 auto codeUnits = text.Length();   // 4，UTF-16 中 😀 占两个 code unit
 
-text.size();      // 等价 Length()
-text.length();    // 等价 Length()
+text.size();      // 等价 Size()，结果为 3
+text.length();    // 等价 Length()，结果为 4
 text.Empty();     // 是否为空
 text.empty();     // 等价 Empty()
 ```
@@ -386,7 +386,7 @@ String b = String::Format(u"{:t%Y-%m-%d %H:%M:%S.%3f}", now);
 库内扩展或调试场景下的自定义 formatter：
 
 ```cpp
-#include <stringFormat/FormatInternal.hpp>
+#include "stringFormat/FormatInternal.hpp"
 
 auto& internal = LikesProgram::StringFormat::FormatInternal::Instance();
 internal.RegisterFormatter("upper", [](const LikesProgram::Any& value,
@@ -778,8 +778,8 @@ struct Info {
 - moved-from 的 `String` 会保持为空串状态，可以继续赋值、追加或析构。
 - 拷贝 `Timer` 时不会复制 running 状态，拷贝出来的新计时器是停止状态。
 - 多线程同时只读同一个 `String` 可以正常使用；如果有线程会修改字符串，请在业务层加锁。
-- `String::Length()` 返回 UTF-16 code unit 数，适合需要底层存储长度的场景。
-- `String::Size()` 返回 Unicode code point 数，适合按字符语义截取、查找和遍历。
+- `String::Length()`/`String::length()` 返回 UTF-16 code unit 数，适合需要底层存储长度的场景。
+- `String::Size()`/`String::size()` 返回 Unicode code point 数，适合按字符语义截取、查找和遍历。
 - `String::Format` 会缓存重复格式串的解析结果，常见内建类型也会走较轻量的格式化路径。
 
 ## 使用注意事项

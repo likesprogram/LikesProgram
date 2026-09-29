@@ -6,15 +6,15 @@ namespace LikesProgram {
     namespace Config {
         // Schema 约束类型，和 ConfigValueType 分离以支持 Any/Number 等抽象匹配。
         enum class ConfigSchemaType {
-            Any,
-            Null,
-            String,
-            Int64,
-            Double,
-            Bool,
-            Number,
-            Array,
-            Object
+            Any,    // 未定义
+            Null,   // 空
+            String, // 字符串
+            Int64,  // 整型
+            Double, // 双精度浮点型
+            Bool,   // Bool类型
+            Number, // 数字
+            Array,  // 数组
+            Object  // 对象
         };
 
         // Schema 校验结果，聚合所有错误而不是遇到第一处就返回。

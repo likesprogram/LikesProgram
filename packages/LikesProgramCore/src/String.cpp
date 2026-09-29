@@ -1,6 +1,7 @@
 #include <LikesProgram/Core/String.hpp>
-#include <unicode/Unicode.hpp>
-#include <stringFormat/FormatInternal.hpp>
+#include <LikesProgram/Core/StringView.hpp>
+#include "unicode/Unicode.hpp"
+#include "stringFormat/FormatInternal.hpp"
 #include <stdexcept>
 #include <cwchar>
 #include <atomic>
@@ -28,14 +29,15 @@
 
 namespace LikesProgram {
     struct String::StringImpl {
+        static constexpr size_t InvalidCodePointCount = std::numeric_limits<size_t>::max(); // 未计算数量的哨兵
         mutable std::shared_mutex m_cpCacheMutex; // 保护 code point 数量与偏移缓存
-        mutable std::atomic<size_t> m_cpCount = 0; // 缓存的 Unicode code point 数
+        mutable std::atomic<size_t> m_cpCount = InvalidCodePointCount; // 缓存数量或未计算哨兵
         size_t m_capacity = 0;                    // 已分配的 UTF-16 code unit 容量
         std::unique_ptr<char16_t[]> m_data;  // UTF-16 数据
-        size_t m_size;                        // UTF-16 单元长度
-        Encoding m_encoding;                     // 原始编码
+        size_t m_size = 0;                    // UTF-16 单元长度
+        Encoding m_encoding = Encoding::UTF8; // 原始编码
+        bool m_sharedMovedFrom = false;        // true 表示进程级 moved-from 空实现，不可释放或写入
         mutable std::vector<size_t> m_cpOffsets; // 每个 Unicode code point 在 UTF-16 中的偏移
-        mutable std::atomic<bool> m_cpCountValid = false;   // m_cpCount 是否可直接读取
         mutable std::atomic<bool> m_cpOffsetsValid = false; // m_cpOffsets 是否覆盖当前内容
     };
 
@@ -44,15 +46,11 @@ namespace LikesProgram {
 
         // 追加扩容使用倍增策略，减少高频 Append 的重新分配次数。
         size_t GrowCapacity(size_t current, size_t required) {
-            if (required == std::numeric_limits<size_t>::max()) {
-                throw std::length_error("String capacity overflow");
-            }
+            if (required == std::numeric_limits<size_t>::max()) throw std::length_error("String capacity overflow");
 
             size_t capacity = current < kMinStringCapacity ? kMinStringCapacity : current; // 本轮候选容量
             while (capacity < required) {
-                if (capacity > std::numeric_limits<size_t>::max() / 2) {
-                    return required;
-                }
+                if (capacity > std::numeric_limits<size_t>::max() / 2) return required;
                 capacity *= 2;
             }
             return capacity;
@@ -79,15 +77,9 @@ namespace LikesProgram {
             size_t size = 0; // 输出 UTF-16 code unit 数
             for (char32_t cp : s) {
                 if (cp >= 0xD800 && cp <= 0xDFFF) throw std::runtime_error("Invalid UTF-32 surrogate codepoint");
-                if (cp <= 0xFFFF) {
-                    ++size;
-                }
-                else if (cp <= 0x10FFFF) {
-                    size += 2;
-                }
-                else {
-                    throw std::runtime_error("Invalid UTF-32 codepoint");
-                }
+                if (cp <= 0xFFFF) ++size;
+                else if (cp <= 0x10FFFF) size += 2;
+                else throw std::runtime_error("Invalid UTF-32 codepoint");
             }
             return size;
         }
@@ -96,9 +88,7 @@ namespace LikesProgram {
         void WriteUtf32AsUtf16(std::u32string_view s, char16_t* out) {
             size_t j = 0; // 当前写入的 UTF-16 code unit 偏移
             for (char32_t cp : s) {
-                if (cp <= 0xFFFF) {
-                    out[j++] = static_cast<char16_t>(cp);
-                }
+                if (cp <= 0xFFFF) out[j++] = static_cast<char16_t>(cp);
                 else {
                     cp -= 0x10000;
                     out[j++] = static_cast<char16_t>((cp >> 10) + 0xD800);
@@ -107,8 +97,68 @@ namespace LikesProgram {
             }
         }
 
+        struct DecodedUtf8Buffer {
+            std::unique_ptr<char16_t[]> data; // 已带 NUL 的单次分配结果
+            size_t size = 0;                  // 实际 UTF-16 code unit 数
+            size_t capacity = 0;              // 可复用容量，不含末尾 NUL
+        };
+
+        // 严格校验 UTF-8 并直接写入最终 UTF-16 缓冲，避免中间 string 与二次复制。
+        DecodedUtf8Buffer DecodeUtf8ToBuffer(std::string_view input) {
+            DecodedUtf8Buffer result;
+            result.capacity = input.size(); // UTF-16 code unit 数不会超过 UTF-8 字节数
+            result.data = std::make_unique<char16_t[]>(result.capacity + 1);
+
+            size_t inputOffset = 0;
+            size_t outputOffset = 0;
+            while (inputOffset < input.size()) {
+                const auto lead = static_cast<unsigned char>(input[inputOffset]);
+                uint32_t codePoint = 0;
+                size_t extraBytes = 0;
+                uint32_t minimumCodePoint = 0;
+
+                if (lead <= 0x7F) codePoint = lead;
+                else if ((lead & 0xE0) == 0xC0) {
+                    codePoint = lead & 0x1F;
+                    extraBytes = 1;
+                    minimumCodePoint = 0x80;
+                } else if ((lead & 0xF0) == 0xE0) {
+                    codePoint = lead & 0x0F;
+                    extraBytes = 2;
+                    minimumCodePoint = 0x800;
+                } else if ((lead & 0xF8) == 0xF0) {
+                    codePoint = lead & 0x07;
+                    extraBytes = 3;
+                    minimumCodePoint = 0x10000;
+                } else throw std::runtime_error("Invalid UTF-8 lead byte");
+
+                if (inputOffset + extraBytes >= input.size()) throw std::runtime_error("Unexpected end of UTF-8 string");
+                for (size_t offset = 1; offset <= extraBytes; ++offset) {
+                    const auto continuation = static_cast<unsigned char>(input[inputOffset + offset]);
+                    if ((continuation & 0xC0) != 0x80) throw std::runtime_error("Invalid UTF-8 continuation byte");
+                    codePoint = (codePoint << 6) | (continuation & 0x3F);
+                }
+
+                if (codePoint < minimumCodePoint) throw std::runtime_error("Invalid UTF-8 overlong sequence");
+                if (codePoint >= 0xD800 && codePoint <= 0xDFFF) throw std::runtime_error("Invalid UTF-8 surrogate codepoint");
+                if (codePoint > 0x10FFFF) throw std::runtime_error("Invalid UTF-8 codepoint");
+
+                if (codePoint <= 0xFFFF) result.data[outputOffset++] = static_cast<char16_t>(codePoint);
+                else {
+                    codePoint -= 0x10000;
+                    result.data[outputOffset++] = static_cast<char16_t>((codePoint >> 10) + 0xD800);
+                    result.data[outputOffset++] = static_cast<char16_t>((codePoint & 0x3FF) + 0xDC00);
+                }
+                inputOffset += extraBytes + 1;
+            }
+
+            result.size = outputOffset;
+            result.data[outputOffset] = u'\0';
+            return result;
+        }
+
         // 在已构建的偏移表中查找 UTF-16 偏移对应的 code point 索引。
-        size_t CodePointIndexFromOffset(const std::vector<size_t>& offsets, size_t offset) noexcept {
+        [[maybe_unused]] size_t CodePointIndexFromOffset(const std::vector<size_t>& offsets, size_t offset) noexcept {
             auto it = std::lower_bound(offsets.begin(), offsets.end(), offset); // offset 表中的候选位置
             if (it == offsets.end() || *it != offset) return static_cast<size_t>(-1);
             return static_cast<size_t>(it - offsets.begin());
@@ -119,12 +169,8 @@ namespace LikesProgram {
             size_t count = 0; // 已经过的 code point 数
             size_t i = 0;     // 当前 UTF-16 code unit 偏移
             while (i < offset && i < size) {
-                if (IsHighSurrogate(data[i]) && i + 1 < size && IsLowSurrogate(data[i + 1])) {
-                    i += 2;
-                }
-                else {
-                    ++i;
-                }
+                if (IsHighSurrogate(data[i]) && i + 1 < size && IsLowSurrogate(data[i + 1])) i += 2;
+                else ++i;
                 ++count;
             }
             return count;
@@ -135,12 +181,8 @@ namespace LikesProgram {
             size_t offset = 0; // 当前 UTF-16 code unit 偏移
             size_t count = 0;  // 已经过的 code point 数
             while (offset < size && count < index) {
-                if (IsHighSurrogate(data[offset]) && offset + 1 < size && IsLowSurrogate(data[offset + 1])) {
-                    offset += 2;
-                }
-                else {
-                    ++offset;
-                }
+                if (IsHighSurrogate(data[offset]) && offset + 1 < size && IsLowSurrogate(data[offset + 1])) offset += 2;
+                else ++offset;
                 ++count;
             }
             return offset;
@@ -150,17 +192,17 @@ namespace LikesProgram {
         std::u8string Utf16RangeToUtf8(const char16_t* data, size_t size) {
             if (size == 0) return {};
 #ifdef _WIN32
-            if (size > static_cast<size_t>(std::numeric_limits<int>::max())) {
-                throw std::length_error("UTF-16 input too large");
-            }
+            if (size > static_cast<size_t>(std::numeric_limits<int>::max())) throw std::length_error("UTF-16 input too large");
             const auto* wide = reinterpret_cast<const wchar_t*>(data); // Windows wchar_t 与 UTF-16 code unit 同宽
             const int inputSize = static_cast<int>(size);              // Windows API 接收的 UTF-16 code unit 数
             const int sizeNeeded = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, inputSize, nullptr, 0, nullptr, nullptr); // 目标 UTF-8 字节数
             if (sizeNeeded <= 0) throw std::runtime_error("Invalid UTF-16 string");
 
             std::u8string result(static_cast<size_t>(sizeNeeded), u8'\0'); // 按精确字节数预分配输出
-            const int written = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, inputSize, // 实际写入字节数
-                reinterpret_cast<char*>(result.data()), sizeNeeded, nullptr, nullptr);
+            const int written = WideCharToMultiByte(
+                CP_UTF8, WC_ERR_INVALID_CHARS, wide, inputSize, // 实际写入字节数
+                reinterpret_cast<char*>(result.data()), sizeNeeded, nullptr, nullptr
+            );
             if (written != sizeNeeded) throw std::runtime_error("Utf16ToUtf8 failed");
             return result;
 #else
@@ -217,94 +259,97 @@ namespace LikesProgram {
             if (type == typeid(char)) { outContent = String(std::any_cast<char>(a)); return true; }
             if (type == typeid(char16_t)) { outContent = String(std::any_cast<char16_t>(a)); return true; }
             if (type == typeid(char32_t)) { outContent = String(std::any_cast<char32_t>(a)); return true; }
-        }
-        catch (...) {
+        } catch (...) {
             return false;
         }
         return true;
     }
 
-    String::String(): m_impl(new StringImpl{}) {
-        // 空串也分配 NUL 缓冲，保证 data()/c_str() 始终可用。
-        m_impl->m_data = (std::make_unique<char16_t[]>(1));
-        m_impl->m_size = 0;
-        m_impl->m_encoding = Encoding::UTF8;
+    String::String(UninitializedTag): m_impl(new StringImpl{}) { }
+
+    String::StringImpl* String::SharedMovedFromImpl() {
+        static StringImpl* holder = [] {
+            auto* value = new StringImpl(); // 进程生命周期哨兵，避免全局 String 析构顺序悬空
+            value->m_data = std::make_unique<char16_t[]>(1);
+            value->m_data[0] = u'\0';
+            value->m_cpCount.store(0, std::memory_order_relaxed);
+            value->m_cpOffsetsValid.store(true, std::memory_order_relaxed);
+            value->m_sharedMovedFrom = true;
+            return value;
+        }();
+        return holder;
     }
 
-    String::String(const char* s, Encoding enc): m_impl(new StringImpl{}) {
+    String::String(): String(UninitializedTag{}) {
+        // 公开空串持有 NUL 缓冲，保证所有直接内部访问路径也安全。
+        m_impl->m_data = std::make_unique<char16_t[]>(1);
+        m_impl->m_data[0] = u'\0';
+    }
+
+    String::String(const char* s, Encoding enc): String(UninitializedTag{}) {
         m_impl->m_encoding = enc;
         if (!s) s = "";
 
         switch (enc) {
-        case Encoding::UTF8: {
-            size_t len = std::strlen(s); // 输入 UTF-8 字节串长度
-            auto utf16 = Unicode::Convert::Utf8ToUtf16( // 构造用 UTF-16 中间结果
-                std::u8string(reinterpret_cast<const char8_t*>(s),
-                    reinterpret_cast<const char8_t*>(s) + len)
-            );
-            // 内部统一使用 UTF-16，并额外保留一位 NUL 终止符。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            // 所有构造路径都写入 NUL，保证 c_str() 兼容 C 风格调用。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::GBK: {
-            auto utf16 = Unicode::Convert::GbkToUtf16(std::string(s)); // 构造用 UTF-16 中间结果
-            // GBK 也立即归一到 UTF-16，避免后续操作反复转码。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            // GBK 转换后也保持 NUL 终止，便于后续无分支访问。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::UTF16: {
-            const char16_t* ps = reinterpret_cast<const char16_t*>(s);
-            size_t len = 0; // 输入 UTF-16 NUL 结尾序列长度
-            while (ps[len] != 0) ++len;
-            // UTF-16 输入可以直接拷贝，但仍保持独立拥有的缓冲。
-            m_impl->m_size = len;
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), ps, m_impl->m_size * sizeof(char16_t));
-            // 原始 UTF-16 输入复制后补终止符，不依赖源缓冲。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::UTF32: {
-            const char32_t* ps = reinterpret_cast<const char32_t*>(s);
-            size_t len = 0; // 输入 UTF-32 NUL 结尾序列长度
-            while (ps[len] != 0) ++len;
-            std::u32string_view view(ps, len);
-            // UTF-32 先预估 UTF-16 长度，避免写入时二次扩容。
-            m_impl->m_size = Utf16LengthForUtf32(view);
-            m_impl->m_capacity = m_impl->m_size;
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            // 转写函数只负责内容，终止符由构造函数统一维护。
-            WriteUtf32AsUtf16(view, m_impl->m_data.get());
-            // UTF-32 转写完成后补 NUL，保持内部不变量。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for const char*");
+            case Encoding::UTF8: {
+                auto decoded = DecodeUtf8ToBuffer(std::string_view(s, std::strlen(s)));
+                m_impl->m_size = decoded.size;
+                m_impl->m_capacity = decoded.capacity;
+                m_impl->m_data = std::move(decoded.data);
+                break;
+            }
+            case Encoding::GBK: {
+                auto utf16 = Unicode::Convert::GbkToUtf16(std::string(s)); // 构造用 UTF-16 中间结果
+                // GBK 也立即归一到 UTF-16，避免后续操作反复转码。
+                m_impl->m_size = utf16.size();
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+                // GBK 转换后也保持 NUL 终止，便于后续无分支访问。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            case Encoding::UTF16: {
+                const char16_t* ps = reinterpret_cast<const char16_t*>(s);
+                size_t len = 0; // 输入 UTF-16 NUL 结尾序列长度
+                while (ps[len] != 0) ++len;
+                // UTF-16 输入可以直接拷贝，但仍保持独立拥有的缓冲。
+                m_impl->m_size = len;
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), ps, m_impl->m_size * sizeof(char16_t));
+                // 原始 UTF-16 输入复制后补终止符，不依赖源缓冲。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            case Encoding::UTF32: {
+                const char32_t* ps = reinterpret_cast<const char32_t*>(s);
+                size_t len = 0; // 输入 UTF-32 NUL 结尾序列长度
+                while (ps[len] != 0) ++len;
+                std::u32string_view view(ps, len);
+                // UTF-32 先预估 UTF-16 长度，避免写入时二次扩容。
+                m_impl->m_size = Utf16LengthForUtf32(view);
+                m_impl->m_capacity = m_impl->m_size;
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                // 转写函数只负责内容，终止符由构造函数统一维护。
+                WriteUtf32AsUtf16(view, m_impl->m_data.get());
+                // UTF-32 转写完成后补 NUL，保持内部不变量。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            default: throw std::runtime_error("Unsupported encoding for const char*");
         }
     }
 
-    String::String(const char8_t* s): m_impl(new StringImpl{}) {
+    String::String(const char8_t* s): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF8;
         if (!s) s = u8"";
-        auto utf16 = Unicode::Convert::Utf8ToUtf16(std::u8string(s)); // 构造用 UTF-16 中间结果
-        // char8_t 指针按 UTF-8 解码后复制到内部缓冲。
-        m_impl->m_size = utf16.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-        // 指针构造不能借用外部内存，写入私有 NUL 缓冲。
-        m_impl->m_data[m_impl->m_size] = u'\0';
+        const size_t length = std::char_traits<char8_t>::length(s);
+        auto decoded = DecodeUtf8ToBuffer(std::string_view(reinterpret_cast<const char*>(s), length));
+        m_impl->m_size = decoded.size;
+        m_impl->m_capacity = decoded.capacity;
+        m_impl->m_data = std::move(decoded.data);
     }
 
-    String::String(const char16_t* s): m_impl(new StringImpl{}) {
+    String::String(const char16_t* s): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
         if (!s) s = u"";
         size_t len = 0; // 输入 UTF-16 NUL 结尾序列长度
@@ -317,7 +362,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char16_t* s, size_t length): m_impl(new StringImpl{}) {
+    String::String(const char16_t* s, size_t length): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
         if (!s) {
             s = u"";
@@ -333,7 +378,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char32_t* s): m_impl(new StringImpl{}) {
+    String::String(const char32_t* s): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF32;
         if (!s) s = U"";
         size_t len = 0; // 输入 UTF-32 NUL 结尾序列长度
@@ -349,7 +394,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const String& other): m_impl(new StringImpl{}) {
+    String::String(const String& other): String(UninitializedTag{}) {
 
         std::shared_lock otherLock(other.m_impl->m_cpCacheMutex);
         // 拷贝时连同 NUL 终止符一起复制，保证目标 data() 可直接使用。
@@ -367,84 +412,69 @@ namespace LikesProgram {
         m_impl->m_encoding = other.m_impl->m_encoding;
         // 偏移表可以复制，因为内容缓冲已完整复制。
         m_impl->m_cpOffsets = other.m_impl->m_cpOffsets;
-        m_impl->m_cpCountValid.store(other.m_impl->m_cpCountValid.load(std::memory_order_acquire), std::memory_order_release);
         m_impl->m_cpOffsetsValid.store(other.m_impl->m_cpOffsetsValid.load(std::memory_order_acquire), std::memory_order_release);
-        // code point 数是原子缓存值，复制时不需要额外计算。
-        m_impl->m_cpCount.store(other.m_impl->m_cpCount.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        // 单原子值同时携带数量和失效状态，复制时不需要额外布尔同步。
+        m_impl->m_cpCount.store(other.m_impl->m_cpCount.load(std::memory_order_acquire), std::memory_order_release);
     }
 
-    String::String(String&& other) noexcept : m_impl(other.m_impl) {
-        // moved-from 对象重置为空串，行为对齐 std 容器的可析构可赋值状态。
-        other.m_impl = new StringImpl{};
-        other.m_impl->m_data = std::make_unique<char16_t[]>(1);
-        other.m_impl->m_data[0] = u'\0';
-        // moved-from 对象只保留空内容与可用缓冲。
-        other.m_impl->m_size = 0;
-        other.m_impl->m_capacity = 0;
-        // moved-from 对象统一回到 UTF-8 空串状态。
-        // 空串的 code point 缓存直接标记有效，避免 moved-from 后 Size() 扫描。
-        other.m_impl->m_encoding = Encoding::UTF8;
-        other.m_impl->m_cpCountValid.store(true, std::memory_order_release);
-        other.m_impl->m_cpOffsetsValid.store(true, std::memory_order_release);
+    String::String(String&& other) : m_impl(nullptr) {
+        // 先取得共享空状态；若其首次初始化失败，源对象尚未被修改。
+        StringImpl* movedFrom = SharedMovedFromImpl();
+        m_impl = other.m_impl;
+        other.m_impl = movedFrom;
     }
 
-    String::String(char c, Encoding enc) : m_impl(new StringImpl{}) {
+    String::String(char c, Encoding enc) : String(UninitializedTag{}) {
         m_impl->m_encoding = enc;
 
         switch (enc) {
-        case Encoding::UTF8: {
-            char s[2] = { c, '\0' }; // 单字节输入的 NUL 结尾缓冲
-            auto utf16 = Unicode::Convert::Utf8ToUtf16( // 单字符构造用 UTF-16 中间结果
-                std::u8string(reinterpret_cast<const char8_t*>(s))
-            );
-            // 单字节 UTF-8 输入仍走统一解码，非法字节由转换层拒绝。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
-                m_impl->m_size * sizeof(char16_t));
-            // 单字符转换后也保持内部 NUL 终止。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::GBK: {
-            std::string s(1, c);
-            auto utf16 = Unicode::Convert::GbkToUtf16(s); // 单字符构造用 UTF-16 中间结果
-            // GBK 单字节字符同样归一到 UTF-16 存储。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
-                m_impl->m_size * sizeof(char16_t));
-            // GBK 单字符可能产生一个或多个 UTF-16 单元，尾部统一补 NUL。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::UTF16: {
-            // char 输入按无符号字节提升，避免负 char 符号扩展。
-            m_impl->m_size = 1;
-            m_impl->m_data = std::make_unique<char16_t[]>(2);
-            m_impl->m_data[0] = static_cast<char16_t>(static_cast<unsigned char>(c));
-            // 单单元路径手动写入 NUL 终止符。
-            m_impl->m_data[1] = u'\0';
-            break;
-        }
-        case Encoding::UTF32: {
-            char32_t cp = static_cast<unsigned char>(c); // char 提升后的 Unicode code point
-            auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, cp)); // 单字符构造用 UTF-16 中间结果
-            // UTF-32 单字符也复用转换层，保持异常语义一致。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(),
-                m_impl->m_size * sizeof(char16_t));
-            // UTF-32 单字符转换后写入 NUL 终止符。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for char");
+            case Encoding::UTF8: {
+                char s[2] = { c, '\0' }; // 单字节输入的 NUL 结尾缓冲
+                auto utf16 = Unicode::Convert::Utf8ToUtf16(std::u8string(reinterpret_cast<const char8_t*>(s))); // 单字符构造用 UTF-16 中间结果
+                // 单字节 UTF-8 输入仍走统一解码，非法字节由转换层拒绝。
+                m_impl->m_size = utf16.size();
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+                // 单字符转换后也保持内部 NUL 终止。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            case Encoding::GBK: {
+                std::string s(1, c);
+                auto utf16 = Unicode::Convert::GbkToUtf16(s); // 单字符构造用 UTF-16 中间结果
+                // GBK 单字节字符同样归一到 UTF-16 存储。
+                m_impl->m_size = utf16.size();
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+                // GBK 单字符可能产生一个或多个 UTF-16 单元，尾部统一补 NUL。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            case Encoding::UTF16: {
+                // char 输入按无符号字节提升，避免负 char 符号扩展。
+                m_impl->m_size = 1;
+                m_impl->m_data = std::make_unique<char16_t[]>(2);
+                m_impl->m_data[0] = static_cast<char16_t>(static_cast<unsigned char>(c));
+                // 单单元路径手动写入 NUL 终止符。
+                m_impl->m_data[1] = u'\0';
+                break;
+            }
+            case Encoding::UTF32: {
+                char32_t cp = static_cast<unsigned char>(c); // char 提升后的 Unicode code point
+                auto utf16 = Unicode::Convert::Utf32ToUtf16(std::u32string(1, cp)); // 单字符构造用 UTF-16 中间结果
+                // UTF-32 单字符也复用转换层，保持异常语义一致。
+                m_impl->m_size = utf16.size();
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+                // UTF-32 单字符转换后写入 NUL 终止符。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            default: throw std::runtime_error("Unsupported encoding for char");
         }
     }
 
-    String::String(const char8_t c): m_impl(new StringImpl{}) {
+    String::String(const char8_t c): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF8;
         char8_t buf[2] = { c, 0 }; // 单 char8_t 输入的 NUL 结尾缓冲
         auto utf16 = Unicode::Convert::Utf8ToUtf16(std::u8string(buf)); // 单字符构造用 UTF-16 中间结果
@@ -456,7 +486,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char16_t c): m_impl(new StringImpl{}) {
+    String::String(const char16_t c): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
         // 单 UTF-16 code unit 直接存储，调用方负责不传孤立代理。
         m_impl->m_size = 1;
@@ -466,36 +496,33 @@ namespace LikesProgram {
         m_impl->m_data[1] = u'\0';
     }
 
-    String::String(const size_t count, const char16_t c): m_impl(new StringImpl{}) {
+    String::String(const size_t count, const char16_t c): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
 
         // 重复 BMP code unit 的构造不需要 code point 扫描。
         m_impl->m_size = count;
         m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
 
-        for (size_t i = 0; i < count; ++i) { // 填充重复字符的 UTF-16 下标
-            m_impl->m_data[i] = c;
-        }
+        // 填充重复字符的 UTF-16 下标
+        for (size_t i = 0; i < count; ++i) m_impl->m_data[i] = c;
 
         m_impl->m_data[count] = u'\0';
     }
 
-    String::String(const size_t count, const char32_t c) : m_impl(new StringImpl{}) {
+    String::String(const size_t count, const char32_t c) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF32;
 
         const size_t unitsPerChar = Utf16LengthForUtf32(std::u32string_view(&c, 1)); // 单个码点占用的 UTF-16 单元数
-        if (count != 0 && unitsPerChar > std::numeric_limits<size_t>::max() / count) {
-            throw std::length_error("String length overflow");
-        }
+        if (count != 0 && unitsPerChar > std::numeric_limits<size_t>::max() / count) throw std::length_error("String length overflow");
 
         // 总长度按单个码点占用的 UTF-16 单元数线性计算。
         m_impl->m_size = count * unitsPerChar;
         m_impl->m_capacity = m_impl->m_size;
         m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        if (unitsPerChar == 1) {
-            // BMP 码点可以直接批量填充为一个 UTF-16 单元。
-            std::fill_n(m_impl->m_data.get(), count, static_cast<char16_t>(c));
-        }
+
+        
+        // BMP 码点可以直接批量填充为一个 UTF-16 单元。
+        if (unitsPerChar == 1) std::fill_n(m_impl->m_data.get(), count, static_cast<char16_t>(c));
         else {
             char32_t cp = c - 0x10000; // 转为代理对计算用的补偿码点
             const char16_t pair[2] = { // 当前 SMP 码点对应的 UTF-16 代理对
@@ -510,7 +537,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const char32_t c): m_impl(new StringImpl{}) {
+    String::String(const char32_t c): String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF32;
         // 单 UTF-32 码点先校验并计算最终 UTF-16 长度。
         m_impl->m_size = Utf16LengthForUtf32(std::u32string_view(&c, 1));
@@ -522,57 +549,68 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const std::string& s, Encoding enc) : m_impl(new StringImpl{}) {
+    String::String(const std::string& s, Encoding enc) : String(UninitializedTag{}) {
         m_impl->m_encoding = enc;
         switch (enc) {
-        case Encoding::UTF8: {
-            auto utf16 = Unicode::Convert::Utf8ToUtf16( // 构造用 UTF-16 中间结果
-                std::u8string(reinterpret_cast<const char8_t*>(s.data()),
-                    reinterpret_cast<const char8_t*>(s.data() + s.size()))
-            );
-            // std::string 默认按 UTF-8 解释，符合现代 std 互操作预期。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            // std::string 构造结果持有独立 UTF-16 缓冲。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        case Encoding::GBK: {
-            auto utf16 = Unicode::Convert::GbkToUtf16(s); // 构造用 UTF-16 中间结果
-            // 指定 GBK 时先转码再进入统一 UTF-16 表示。
-            m_impl->m_size = utf16.size();
-            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-            std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-            // GBK std::string 转换结果持有独立 UTF-16 缓冲。
-            m_impl->m_data[m_impl->m_size] = u'\0';
-            break;
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for std::string");
+            case Encoding::UTF8: {
+                auto decoded = DecodeUtf8ToBuffer(s);
+                m_impl->m_size = decoded.size;
+                m_impl->m_capacity = decoded.capacity;
+                m_impl->m_data = std::move(decoded.data);
+                break;
+            }
+            case Encoding::GBK: {
+                auto utf16 = Unicode::Convert::GbkToUtf16(s); // 构造用 UTF-16 中间结果
+                // 指定 GBK 时先转码再进入统一 UTF-16 表示。
+                m_impl->m_size = utf16.size();
+                m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+                std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
+                // GBK std::string 转换结果持有独立 UTF-16 缓冲。
+                m_impl->m_data[m_impl->m_size] = u'\0';
+                break;
+            }
+            default: throw std::runtime_error("Unsupported encoding for std::string");
         }
     }
 
-    String::String(std::string_view s, Encoding enc)
-        : String(std::string(s), enc) {
+    String::String(std::string_view s, Encoding enc) : String(UninitializedTag{}) {
+        m_impl->m_encoding = enc;
+        if (enc == Encoding::UTF8) {
+            auto decoded = DecodeUtf8ToBuffer(s);
+            m_impl->m_size = decoded.size;
+            m_impl->m_capacity = decoded.capacity;
+            m_impl->m_data = std::move(decoded.data);
+            return;
+        }
+        if (enc == Encoding::GBK) {
+            auto utf16 = Unicode::Convert::GbkToUtf16(std::string(s));
+            m_impl->m_size = utf16.size();
+            m_impl->m_capacity = m_impl->m_size;
+            m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
+            std::memcpy(m_impl->m_data.get(), utf16.data(), m_impl->m_size * sizeof(char16_t));
+            m_impl->m_data[m_impl->m_size] = u'\0';
+            return;
+        }
+        throw std::runtime_error("Unsupported encoding for std::string_view");
     }
 
-    String::String(const std::u8string& s) : m_impl(new StringImpl{}) {
+    String::String(const std::u8string& s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF8;
-        auto utf16 = Unicode::Convert::Utf8ToUtf16(s); // 构造用 UTF-16 中间结果
-        // u8string 已明确 UTF-8 编码，直接转换为内部 UTF-16。
-        m_impl->m_size = utf16.size();
-        m_impl->m_data = std::make_unique<char16_t[]>(m_impl->m_size + 1);
-        std::memcpy(m_impl->m_data.get(), utf16.c_str(), m_impl->m_size * sizeof(char16_t));
-        // u8string 转换结果补 NUL 终止符。
-        m_impl->m_data[m_impl->m_size] = u'\0';
+        auto decoded = DecodeUtf8ToBuffer(std::string_view(reinterpret_cast<const char*>(s.data()), s.size()));
+        m_impl->m_size = decoded.size;
+        m_impl->m_capacity = decoded.capacity;
+        m_impl->m_data = std::move(decoded.data);
     }
 
-    String::String(std::u8string_view s)
-        : String(std::u8string(s)) {
+    String::String(std::u8string_view s) : String(UninitializedTag{}) {
+        m_impl->m_encoding = Encoding::UTF8;
+        auto decoded = DecodeUtf8ToBuffer(std::string_view(reinterpret_cast<const char*>(s.data()), s.size()));
+        m_impl->m_size = decoded.size;
+        m_impl->m_capacity = decoded.capacity;
+        m_impl->m_data = std::move(decoded.data);
     }
 
-    String::String(const std::wstring& s) : m_impl(new StringImpl{}) {
+    String::String(const std::wstring& s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
 #if WCHAR_MAX == 0xFFFF  // Windows
         // Windows wchar_t 与 UTF-16 同宽，可以直接复制单元。
@@ -594,11 +632,9 @@ namespace LikesProgram {
 #endif
     }
 
-    String::String(std::wstring_view s)
-        : String(std::wstring(s)) {
-    }
+    String::String(std::wstring_view s) : String(std::wstring(s)) { }
 
-    String::String(const std::u16string& s) : m_impl(new StringImpl{}) {
+    String::String(const std::u16string& s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
         // u16string 已是内部编码，复制后补 NUL 终止符。
         m_impl->m_size = s.size();
@@ -608,7 +644,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(std::u16string_view s) : m_impl(new StringImpl{}) {
+    String::String(std::u16string_view s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF16;
         // view 构造必须立即复制，避免引用外部短生命周期内存。
         m_impl->m_size = s.size();
@@ -620,7 +656,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(const std::u32string& s) : m_impl(new StringImpl{}) {
+    String::String(const std::u32string& s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF32;
         auto utf16 = Unicode::Convert::Utf32ToUtf16(s); // 构造用 UTF-16 中间结果
         // u32string 通过转换层校验 Unicode 范围。
@@ -631,7 +667,7 @@ namespace LikesProgram {
         m_impl->m_data[m_impl->m_size] = u'\0';
     }
 
-    String::String(std::u32string_view s) : m_impl(new StringImpl{}) {
+    String::String(std::u32string_view s) : String(UninitializedTag{}) {
         m_impl->m_encoding = Encoding::UTF32;
         // UTF-32 view 先计算目标长度，再一次性写入 UTF-16 缓冲。
         m_impl->m_size = Utf16LengthForUtf32(s);
@@ -647,25 +683,21 @@ namespace LikesProgram {
         std::wostringstream woss; // 数值到宽字符串的格式化缓冲
         woss << value;
         return woss.str();
-        }()) {
-    }
+    }()) { }
     String::String(uint64_t value) : String([&] {
         std::wostringstream woss; // 数值到宽字符串的格式化缓冲
         woss << value;
         return woss.str();
-        }()) {
-    }
+    }()) { }
     String::String(long double value) : String([&] {
         std::wostringstream woss; // 数值到宽字符串的格式化缓冲
         woss << value;
         return woss.str();
-        }()) {
-    }
-    String::String(bool value) : String(value ? u"true" : u"false") {
-    }
+    }()) { }
+    String::String(bool value) : String(value ? u"true" : u"false") { }
 
     String::~String() {
-        if (m_impl) delete m_impl;
+        if (m_impl && !m_impl->m_sharedMovedFrom) delete m_impl;
         m_impl = nullptr;
     }
 
@@ -678,108 +710,67 @@ namespace LikesProgram {
         return *this;
     }
 
-    String& String::operator=(String&& other) noexcept {
+    String& String::operator=(String&& other) {
         if (this != &other) {
-            // 释放当前实现后直接接管源对象 PImpl。
-            if (m_impl) delete m_impl;
+            // 共享空状态先完成可能失败的初始化，再原子式交换所有权。
+            StringImpl* movedFrom = SharedMovedFromImpl();
+            StringImpl* old = m_impl; // 当前独占实现由本次赋值负责释放
             m_impl = other.m_impl;
-            other.m_impl = new StringImpl{};
-            // 源对象重建为空串，后续析构、赋值、Size() 都保持可靠。
-            other.m_impl->m_data = std::make_unique<char16_t[]>(1);
-            other.m_impl->m_data[0] = u'\0';
-            other.m_impl->m_size = 0;
-            // 源对象容量清零，避免误以为还拥有旧缓冲。
-            other.m_impl->m_capacity = 0;
-            other.m_impl->m_encoding = Encoding::UTF8;
-            // 移动赋值后的源对象缓存也直接标记为空串有效。
-            other.m_impl->m_cpCountValid.store(true, std::memory_order_release);
-            other.m_impl->m_cpOffsetsValid.store(true, std::memory_order_release);
+            other.m_impl = movedFrom;
+            if (old && old != movedFrom) delete old;
         }
         return *this;
     }
 
-    String& String::operator=(const char* s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const char* s) { return *this = String(s); }
 
-    String& String::operator=(const char8_t* s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const char8_t* s) { return *this = String(s); }
 
-    String& String::operator=(const char16_t* s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const char16_t* s) { return *this = String(s); }
 
-    String& String::operator=(const char32_t* s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const char32_t* s) { return *this = String(s); }
 
-    String& String::operator=(const std::string& s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const std::string& s) { return *this = String(s); }
 
-    String& String::operator=(std::string_view s) {
-        return *this = String(s);
-    }
+    String& String::operator=(std::string_view s) { return *this = String(s); }
 
-    String& String::operator=(const std::u8string& s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const std::u8string& s) { return *this = String(s); }
 
-    String& String::operator=(std::u8string_view s) {
-        return *this = String(s);
-    }
+    String& String::operator=(std::u8string_view s) { return *this = String(s); }
 
-    String& String::operator=(const std::wstring& s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const std::wstring& s) { return *this = String(s); }
 
-    String& String::operator=(std::wstring_view s) {
-        return *this = String(s);
-    }
+    String& String::operator=(std::wstring_view s) { return *this = String(s); }
 
-    String& String::operator=(const std::u16string& s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const std::u16string& s) { return *this = String(s); }
 
-    String& String::operator=(std::u16string_view s) {
-        return *this = String(s);
-    }
+    String& String::operator=(std::u16string_view s) { return *this = String(s); }
 
-    String& String::operator=(const std::u32string& s) {
-        return *this = String(s);
-    }
+    String& String::operator=(const std::u32string& s) { return *this = String(s); }
 
-    String& String::operator=(std::u32string_view s) {
-        return *this = String(s);
-    }
+    String& String::operator=(std::u32string_view s) { return *this = String(s); }
 
     size_t String::Size() const {
-        {
-            if (m_impl->m_cpCountValid.load(std::memory_order_acquire)) return m_impl->m_cpCount.load(std::memory_order_relaxed);
-        }
+        const size_t cached = m_impl->m_cpCount.load(std::memory_order_acquire); // 单次原子读取的缓存数量
+        if (cached != StringImpl::InvalidCodePointCount) return cached;
 
         UpdateCodePointCount();
-        return m_impl->m_cpCount.load(std::memory_order_relaxed);
+        return m_impl->m_cpCount.load(std::memory_order_acquire);
     }
 
-    size_t String::Length() const {
-        return m_impl->m_size;
-    }
+    size_t String::Length() const { return m_impl->m_size; }
 
-    bool String::Empty() const {
-        return m_impl->m_size == 0;
-    }
+    bool String::Empty() const { return m_impl->m_size == 0; }
 
     const char16_t* String::data() const noexcept {
         return m_impl && m_impl->m_data ? m_impl->m_data.get() : u"";
     }
 
-    const char16_t* String::c_str() const noexcept {
-        return data();
-    }
+    const char16_t* String::c_str() const noexcept { return data(); }
 
     void String::Clear() {
+        // moved-from 共享状态已经为空，不能写入其进程级缓冲。
+        if (m_impl->m_sharedMovedFrom) return;
         if (m_impl->m_capacity < m_impl->m_size) m_impl->m_capacity = m_impl->m_size;
         if (!m_impl->m_data) {
             m_impl->m_data = std::make_unique<char16_t[]>(1);
@@ -790,8 +781,7 @@ namespace LikesProgram {
         m_impl->m_size = 0;
         std::unique_lock lock(m_impl->m_cpCacheMutex); // 清空后同步重置 code point 缓存
         m_impl->m_cpOffsets.clear();
-        m_impl->m_cpCount.store(0, std::memory_order_relaxed);
-        m_impl->m_cpCountValid.store(true, std::memory_order_release);
+        m_impl->m_cpCount.store(0, std::memory_order_release);
         // 空串没有偏移项，因此偏移缓存同样有效。
         m_impl->m_cpOffsetsValid.store(true, std::memory_order_release);
     }
@@ -808,9 +798,7 @@ namespace LikesProgram {
         return c;
     }
 
-    char32_t String::operator[](size_t index) const {
-        return At(index);
-    }
+    char32_t String::operator[](size_t index) const { return At(index); }
 
     char32_t String::Front() const {
         if (Empty()) throw std::out_of_range("String::Front on empty string");
@@ -831,20 +819,12 @@ namespace LikesProgram {
         return Append(std::u16string_view(str.m_impl->m_data.get(), str.m_impl->m_size));
     }
 
-    String& String::Append(char16_t c) {
-        return Append(std::u16string_view(&c, 1));
-    }
+    String& String::Append(char16_t c) { return Append(std::u16string_view(&c, 1)); }
 
     String& String::Append(char32_t c) {
-        if (c >= 0xD800 && c <= 0xDFFF) {
-            throw std::runtime_error("Invalid UTF-32 surrogate codepoint");
-        }
-        if (c <= 0xFFFF) {
-            return Append(static_cast<char16_t>(c));
-        }
-        if (c > 0x10FFFF) {
-            throw std::runtime_error("Invalid UTF-32 codepoint");
-        }
+        if (c >= 0xD800 && c <= 0xDFFF) throw std::runtime_error("Invalid UTF-32 surrogate codepoint");
+        if (c <= 0xFFFF) return Append(static_cast<char16_t>(c));
+        if (c > 0x10FFFF) throw std::runtime_error("Invalid UTF-32 codepoint");
 
         c -= 0x10000;
         const char16_t pair[2] = { // 当前 SMP 码点对应的 UTF-16 代理对
@@ -856,6 +836,8 @@ namespace LikesProgram {
 
     String& String::Append(std::u16string_view str) {
         if (str.empty()) return *this;
+        // moved-from 对象首次写入时替换为独占 String，保持共享空状态只读。
+        if (m_impl->m_sharedMovedFrom) return *this = String(str);
         const char16_t* source = str.data(); // 追加源缓冲区，可能指向当前 String 内部
         std::u16string ownedSource;          // 自追加或重叠追加时的保护副本
         if (m_impl->m_data) {
@@ -868,14 +850,10 @@ namespace LikesProgram {
         }
         const size_t oldSize = m_impl->m_size; // 追加前 UTF-16 code unit 数
         const size_t appendSize = str.size();  // 本次追加 UTF-16 code unit 数
-        if (appendSize > std::numeric_limits<size_t>::max() - oldSize) {
-            throw std::length_error("String append overflow");
-        }
+        if (appendSize > std::numeric_limits<size_t>::max() - oldSize) throw std::length_error("String append overflow");
 
         const size_t newSize = oldSize + appendSize; // 追加后 UTF-16 code unit 数
-        if (newSize == std::numeric_limits<size_t>::max()) {
-            throw std::length_error("String append overflow");
-        }
+        if (newSize == std::numeric_limits<size_t>::max()) throw std::length_error("String append overflow");
         if (m_impl->m_capacity < oldSize) m_impl->m_capacity = oldSize;
 
         if (newSize > m_impl->m_capacity) {
@@ -902,9 +880,7 @@ namespace LikesProgram {
 #endif
     }
 
-    String& String::operator+=(const String& str) {
-        return Append(str);
-    }
+    String& String::operator+=(const String& str) { return Append(str); }
 
     String operator+(const String& lhs, const String& rhs) {
         String result(lhs); // 以左值副本作为拼接目标
@@ -914,28 +890,27 @@ namespace LikesProgram {
 
     std::ostream& operator<<(std::ostream& os, const String& str) {
         switch (str.m_impl->m_encoding) {
-        case String::Encoding::GBK: {
-            auto gbk = Unicode::Convert::Utf16ToGbk(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 GBK 字节串
-            os << gbk;
-            break;
-        }
-        case String::Encoding::UTF8: {
-            auto utf8 = Unicode::Convert::Utf16ToUtf8(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 UTF-8 字节串
-            os.write(reinterpret_cast<const char*>(utf8.data()), utf8.size() * sizeof(char8_t));
-            break;
-        }
-        case String::Encoding::UTF16: {
-            // 直接输出 UTF-16 编码的原始字节
-            os.write(reinterpret_cast<const char*>(str.m_impl->m_data.get()), str.m_impl->m_size * sizeof(char16_t));
-            break;
-        }
-        case String::Encoding::UTF32: {
-            auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 UTF-32 单元串
-            os.write(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
-            break;
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for output");
+            case String::Encoding::GBK: {
+                auto gbk = Unicode::Convert::Utf16ToGbk(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 GBK 字节串
+                os << gbk;
+                break;
+            }
+            case String::Encoding::UTF8: {
+                auto utf8 = Unicode::Convert::Utf16ToUtf8(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 UTF-8 字节串
+                os.write(reinterpret_cast<const char*>(utf8.data()), utf8.size() * sizeof(char8_t));
+                break;
+            }
+            case String::Encoding::UTF16: {
+                // 直接输出 UTF-16 编码的原始字节
+                os.write(reinterpret_cast<const char*>(str.m_impl->m_data.get()), str.m_impl->m_size * sizeof(char16_t));
+                break;
+            }
+            case String::Encoding::UTF32: {
+                auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(str.m_impl->m_data.get(), str.m_impl->m_size)); // 输出用 UTF-32 单元串
+                os.write(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
+                break;
+            }
+            default: throw std::runtime_error("Unsupported encoding for output");
         }
         return os;
     }
@@ -1013,9 +988,7 @@ namespace LikesProgram {
                 uint32_t upperCp = Unicode::Case::SMPToUpper(cp); // 大写映射后的 code point
 
                 // 转回 UTF-16
-                if (upperCp <= 0xFFFF) {
-                    buf[j++] = static_cast<char16_t>(upperCp);
-                }
+                if (upperCp <= 0xFFFF) buf[j++] = static_cast<char16_t>(upperCp);
                 else {
                     upperCp -= 0x10000;
                     // 大写结果落在补充平面时重新编码为代理对。
@@ -1024,8 +997,7 @@ namespace LikesProgram {
                 }
 
                 i += 2;
-            }
-            else {
+            } else {
                 // BMP 单元可以直接通过 BMP 映射表转换。
                 buf[j++] = Unicode::Case::BMPToUpper(c);
                 ++i;
@@ -1059,9 +1031,7 @@ namespace LikesProgram {
 
                 uint32_t lowerCp = Unicode::Case::SMPToLower(cp); // 小写映射后的 code point
 
-                if (lowerCp <= 0xFFFF) {
-                    buf[j++] = static_cast<char16_t>(lowerCp);
-                }
+                if (lowerCp <= 0xFFFF) buf[j++] = static_cast<char16_t>(lowerCp);
                 else {
                     lowerCp -= 0x10000;
                     // 小写结果落在补充平面时重新编码为代理对。
@@ -1070,8 +1040,7 @@ namespace LikesProgram {
                 }
 
                 i += 2;
-            }
-            else {
+            } else {
                 // BMP 单元可以直接通过 BMP 映射表转换。
                 buf[j++] = Unicode::Case::BMPToLower(c);
                 ++i;
@@ -1107,20 +1076,20 @@ namespace LikesProgram {
         const size_t startOffset = start == 0 ? 0 : OffsetFromCodePointIndexLinear(data, dataSize, start); // 起始 code point 对应的 UTF-16 偏移
         if (startOffset >= dataSize || dataSize - startOffset < patSize) return npos;
 
-        const char16_t first = patData[0]; // 模式串首单元，用于快速跳过不可能位置
-        size_t currentOffset = startOffset; // 当前搜索起点 UTF-16 偏移
-        while (currentOffset + patSize <= dataSize) {
-            const size_t remaining = dataSize - currentOffset; // 当前剩余可搜索 UTF-16 单元数
-            const char16_t* found = std::char_traits<char16_t>::find(data + currentOffset, remaining, first); // 查找首单元候选位置
-            if (!found) return npos;
-            const size_t offset = static_cast<size_t>(found - data); // 匹配位置 UTF-16 偏移
-            if (offset + patSize <= dataSize &&
-                IsCodePointBoundary(data, dataSize, offset) &&
-                IsCodePointBoundary(data, dataSize, offset + patSize) &&
-                std::memcmp(data + offset, patData, patSize * sizeof(char16_t)) == 0) {
+        const std::u16string_view textView(data, dataSize); // 标准库优化查找使用的 UTF-16 视图
+        const std::u16string_view patternView(patData, patSize); // 待匹配 UTF-16 模式视图
+        size_t offset = textView.find(patternView, startOffset); // 当前标准库候选偏移
+        while (offset != std::u16string_view::npos) {
+            if (IsCodePointBoundary(data, dataSize, offset) &&
+                IsCodePointBoundary(data, dataSize, offset + patSize)) {
+                const size_t total = m_impl->m_cpCount.load(std::memory_order_acquire); // 已缓存的总 code point 数
+                if (total != StringImpl::InvalidCodePointCount && offset > dataSize / 2) {
+                    const size_t suffix = CountCodePointsBeforeOffset(data + offset, dataSize - offset, dataSize - offset); // 命中位置到末尾的 code point 数
+                    return total - suffix;
+                }
                 return CountCodePointsBeforeOffset(data, dataSize, offset);
             }
-            currentOffset = offset + 1;
+            offset = textView.find(patternView, offset + 1);
         }
         return npos;
     }
@@ -1142,11 +1111,10 @@ namespace LikesProgram {
         if (patSize <= dataSize) {
             size_t limit = std::min(maxStartOffset, dataSize - patSize); // 反向搜索的最大 UTF-16 起点
             for (size_t offset = limit + 1; offset-- > 0;) {
-                if (IsCodePointBoundary(data, dataSize, offset) &&
-                    IsCodePointBoundary(data, dataSize, offset + patSize) &&
-                    std::memcmp(data + offset, patData, patSize * sizeof(char16_t)) == 0) {
-                    return CountCodePointsBeforeOffset(data, dataSize, offset);
-                }
+                if (IsCodePointBoundary(data, dataSize, offset) && 
+                    IsCodePointBoundary(data, dataSize, offset + patSize) && 
+                    std::memcmp(data + offset, patData, patSize * sizeof(char16_t)) == 0
+                ) return CountCodePointsBeforeOffset(data, dataSize, offset);
                 if (offset == 0) break;
             }
         }
@@ -1198,9 +1166,7 @@ namespace LikesProgram {
     }
 
     bool String::operator<(const String& other) const {
-        return std::lexicographical_compare(
-            m_impl->m_data.get(), m_impl->m_data.get() + m_impl->m_size,
-            other.m_impl->m_data.get(), other.m_impl->m_data.get() + other.m_impl->m_size);
+        return std::lexicographical_compare(m_impl->m_data.get(), m_impl->m_data.get() + m_impl->m_size, other.m_impl->m_data.get(), other.m_impl->m_data.get() + other.m_impl->m_size);
     }
 
     bool String::operator<=(const String& other) const { return !(other < *this); }
@@ -1209,25 +1175,24 @@ namespace LikesProgram {
 
     std::string String::ToStdString(Encoding enc) const {
         switch (enc) {
-        case Encoding::GBK: {
-            auto gbk = Unicode::Convert::Utf16ToGbk(std::u16string(m_impl->m_data.get(), m_impl->m_size)); // GBK 输出字节串
-            return gbk;
-        }
-        case Encoding::UTF8: {
-            auto u8 = Utf16RangeToUtf8(m_impl->m_data.get(), m_impl->m_size); // UTF-8 输出字节串
-            return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
-        }
-        case Encoding::UTF16: {
-            // 将 UTF-16 原始数据按字节放入 std::string
-            return std::string(reinterpret_cast<const char*>(m_impl->m_data.get()), m_impl->m_size * sizeof(char16_t));
-        }
-        case Encoding::UTF32: {
-            // 先转换为 UTF-32，再按字节放入 std::string
-            auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(m_impl->m_data.get(), m_impl->m_size)); // UTF-32 输出单元串
-            return std::string(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
-        }
-        default:
-            throw std::runtime_error("Unsupported encoding for ToStdString");
+            case Encoding::GBK: {
+                auto gbk = Unicode::Convert::Utf16ToGbk(std::u16string(m_impl->m_data.get(), m_impl->m_size)); // GBK 输出字节串
+                return gbk;
+            }
+            case Encoding::UTF8: {
+                auto u8 = Utf16RangeToUtf8(m_impl->m_data.get(), m_impl->m_size); // UTF-8 输出字节串
+                return std::string(reinterpret_cast<const char*>(u8.data()), u8.size());
+            }
+            case Encoding::UTF16: {
+                // 将 UTF-16 原始数据按字节放入 std::string
+                return std::string(reinterpret_cast<const char*>(m_impl->m_data.get()), m_impl->m_size * sizeof(char16_t));
+            }
+            case Encoding::UTF32: {
+                // 先转换为 UTF-32，再按字节放入 std::string
+                auto utf32 = Unicode::Convert::Utf16ToUtf32(std::u16string(m_impl->m_data.get(), m_impl->m_size)); // UTF-32 输出单元串
+                return std::string(reinterpret_cast<const char*>(utf32.data()), utf32.size() * sizeof(char32_t));
+            }
+            default: throw std::runtime_error("Unsupported encoding for ToStdString");
         }
     }
 
@@ -1290,10 +1255,7 @@ namespace LikesProgram {
                         break;
                     }
                 }
-            }
-            else {
-                matched = false;
-            }
+            } else matched = false;
 
             if (matched) {
                 size_t subLength = i - start; // 当前片段 UTF-16 code unit 数
@@ -1310,16 +1272,11 @@ namespace LikesProgram {
 
                 i += sep.m_impl->m_size;
                 start = i;
-            }
-            else {
+            } else {
                 // 跳过一个完整 code point
                 char16_t c = m_impl->m_data[i]; // 当前待跳过 code point 的首个 UTF-16 单元
-                if (c >= 0xD800 && c <= 0xDBFF && i + 1 < m_impl->m_size && m_impl->m_data[i + 1] >= 0xDC00 && m_impl->m_data[i + 1] <= 0xDFFF) {
-                    i += 2;
-                }
-                else {
-                    ++i;
-                }
+                if (c >= 0xD800 && c <= 0xDBFF && i + 1 < m_impl->m_size && m_impl->m_data[i + 1] >= 0xDC00 && m_impl->m_data[i + 1] <= 0xDFFF) i += 2;
+                else ++i;
             }
         }
 
@@ -1346,38 +1303,24 @@ namespace LikesProgram {
 
         for (char32_t c : str) {
             switch (c) {
-            case U'"':  woss << L"\\\""; break;
-            case U'\\': woss << L"\\\\"; break;
-            case U'\b': woss << L"\\b";  break;
-            case U'\f': woss << L"\\f";  break;
-            case U'\n': woss << L"\\n";  break;
-            case U'\r': woss << L"\\r";  break;
-            case U'\t': woss << L"\\t";  break;
-            default:
-                if (c < 0x20 || c == 0x7F) {
-                    // 控制字符
-                    woss << L"\\u";
-                    woss << std::setw(4) << std::setfill(L'0')
-                        << std::hex << std::uppercase << static_cast<uint32_t>(c)
-                        << std::dec;
-                }
-                else if (c <= 0xFFFF) {
-                    // BMP 直接输出
-                    woss << static_cast<wchar_t>(c);
-                }
-                else {
-                    // SMP: 转成 UTF-16 代理对
-                    char32_t cp = c - 0x10000; // 代理对计算用补偿码点
-                    char16_t high = static_cast<char16_t>(0xD800 + (cp >> 10)); // JSON \u 高代理值
-                    char16_t low = static_cast<char16_t>(0xDC00 + (cp & 0x3FF)); // JSON \u 低代理值
+                case U'"':  woss << L"\\\""; break;
+                case U'\\': woss << L"\\\\"; break;
+                case U'\b': woss << L"\\b";  break;
+                case U'\f': woss << L"\\f";  break;
+                case U'\n': woss << L"\\n";  break;
+                case U'\r': woss << L"\\r";  break;
+                case U'\t': woss << L"\\t";  break;
+                default:
+                    if (c < 0x20 || c == 0x7F) woss << L"\\u" << std::setw(4) << std::setfill(L'0') << std::hex << std::uppercase << static_cast<uint32_t>(c) << std::dec; // 控制字符
+                    else if (c <= 0xFFFF) woss << static_cast<wchar_t>(c); // BMP 直接输出
+                    else {
+                        // SMP: 转成 UTF-16 代理对
+                        char32_t cp = c - 0x10000; // 代理对计算用补偿码点
+                        char16_t high = static_cast<char16_t>(0xD800 + (cp >> 10)); // JSON \u 高代理值
+                        char16_t low = static_cast<char16_t>(0xDC00 + (cp & 0x3FF)); // JSON \u 低代理值
 
-                    woss << L"\\u"
-                        << std::setw(4) << std::setfill(L'0')
-                        << std::hex << std::uppercase << static_cast<uint16_t>(high) << L"\\u"
-                        << std::setw(4) << std::setfill(L'0')
-                        << std::hex << std::uppercase << static_cast<uint16_t>(low)
-                        << std::dec;
-                }
+                        woss << L"\\u" << std::setw(4) << std::setfill(L'0') << std::hex << std::uppercase << static_cast<uint16_t>(high) << L"\\u" << std::setw(4) << std::setfill(L'0') << std::hex << std::uppercase << static_cast<uint16_t>(low) << std::dec;
+                    }
             }
         }
 
@@ -1391,36 +1334,29 @@ namespace LikesProgram {
     }
 
     void String::InvalidateCodePointCache() {
-        const bool countWasValid = m_impl->m_cpCountValid.exchange(false, std::memory_order_acq_rel);     // 失效前 Size() 缓存状态
+        const bool countWasValid = m_impl->m_cpCount.exchange(StringImpl::InvalidCodePointCount, std::memory_order_acq_rel) != StringImpl::InvalidCodePointCount; // 失效前 Size() 缓存状态
         const bool offsetsWereValid = m_impl->m_cpOffsetsValid.exchange(false, std::memory_order_acq_rel); // 失效前偏移表缓存状态
         if (!countWasValid && !offsetsWereValid) return;
         std::unique_lock lock(m_impl->m_cpCacheMutex); // 清理偏移表时独占缓存状态
         m_impl->m_cpOffsets.clear();
-        m_impl->m_cpCount.store(0, std::memory_order_relaxed);
     }
 
     void String::UpdateCodePointCount() const {
-        {
-            std::shared_lock lock(m_impl->m_cpCacheMutex); // 先用共享锁做 O(1) 命中判断
-            if (m_impl->m_cpCountValid.load(std::memory_order_acquire)) return;
-        }
+        if (m_impl->m_cpCount.load(std::memory_order_acquire) != StringImpl::InvalidCodePointCount) return;
 
-        std::unique_lock lock(m_impl->m_cpCacheMutex); // 独占刷新 code point 数量缓存
-        if (m_impl->m_cpCountValid.load(std::memory_order_acquire)) return;
+        // 只读线程可以并行扫描；最终用 CAS 发布同一个确定结果，避免短字符串锁升级成本。
         size_t count = 0; // 扫描得到的 code point 数
-        size_t i = 0;     // 当前 UTF-16 code unit 偏移
-        while (i < m_impl->m_size) {
-            char16_t c = m_impl->m_data[i]; // 当前 UTF-16 code unit
-            if (IsHighSurrogate(c) && i + 1 < m_impl->m_size && IsLowSurrogate(m_impl->m_data[i + 1])) {
-                i += 2;
-            }
-            else {
-                ++i;
-            }
+        const size_t size = m_impl->m_size; // 本次只读扫描的稳定长度快照
+        const char16_t* data = m_impl->m_data.get(); // 避免循环内重复解引用 PImpl 与 unique_ptr
+        const char16_t* current = data; // 指针游标避免循环内重复计算索引地址
+        const char16_t* end = data + size;
+        while (current < end) {
+            const char16_t c = *current++;
+            if (IsHighSurrogate(c) && current < end && IsLowSurrogate(*current)) ++current;
             ++count;
         }
-        m_impl->m_cpCount.store(count, std::memory_order_relaxed);
-        m_impl->m_cpCountValid.store(true, std::memory_order_release);
+        // 并发只读扫描会得到相同确定值，直接发布比 CAS 更适合短格式化结果。
+        m_impl->m_cpCount.store(count, std::memory_order_release);
     }
 
     void String::UpdateCodePointCache() const {
@@ -1436,13 +1372,10 @@ namespace LikesProgram {
         while (i < m_impl->m_size) {
             m_impl->m_cpOffsets.push_back(i);
             char16_t c = m_impl->m_data[i]; // 当前 code point 的首个 UTF-16 code unit
-            if (IsHighSurrogate(c) && i + 1 < m_impl->m_size && IsLowSurrogate(m_impl->m_data[i + 1]))
-                i += 2;
-            else
-                ++i;
+            if (IsHighSurrogate(c) && i + 1 < m_impl->m_size && IsLowSurrogate(m_impl->m_data[i + 1])) i += 2;
+            else ++i;
         }
-        m_impl->m_cpCount.store(m_impl->m_cpOffsets.size(), std::memory_order_relaxed);
-        m_impl->m_cpCountValid.store(true, std::memory_order_release);
+        m_impl->m_cpCount.store(m_impl->m_cpOffsets.size(), std::memory_order_release);
         m_impl->m_cpOffsetsValid.store(true, std::memory_order_release);
     }
 
@@ -1454,6 +1387,12 @@ namespace LikesProgram {
     String String::FormatViews(const String& fmt, const StringFormat::FormatArgView* args, size_t argCount) {
         auto& instance = StringFormat::FormatInternal::Instance();
         return instance.FormatViews(fmt, args, argCount);
+    }
+
+    String String::FormatLiteralViews(const String& fmt, const StringFormat::FormatArgView* args,
+        size_t argCount, const void* literalKey) {
+        auto& instance = StringFormat::FormatInternal::Instance();
+        return instance.FormatViewsStable(fmt, args, argCount, literalKey);
     }
 
     const String& String::CachedFormatString(std::u16string_view fmt) {
@@ -1481,4 +1420,36 @@ namespace LikesProgram {
         }
         return cache.value;
     }
+
+    const String& String::CachedFormatLiteral(const char16_t* fmt, size_t length) {
+        struct Cache {
+            const char16_t* source = nullptr; // 当前稳定字面量地址
+            size_t length = 0;                // 当前字面量 UTF-16 长度
+            String value;                     // 对应的拥有型格式串
+        };
+        thread_local Cache cache; // 字面量地址命中时不比较内容
+        if (cache.source != fmt || cache.length != length) {
+            cache.source = fmt;
+            cache.length = length;
+            cache.value = String(fmt, length);
+        }
+        return cache.value;
+    }
+
+    const String& String::CachedFormatLiteral(const char32_t* fmt, size_t length) {
+        struct Cache {
+            const char32_t* source = nullptr; // 当前稳定 UTF-32 字面量地址
+            size_t length = 0;                // 当前字面量 UTF-32 长度
+            String value;                     // 对应的拥有型格式串
+        };
+        thread_local Cache cache; // 字面量地址命中时不比较内容
+        if (cache.source != fmt || cache.length != length) {
+            cache.source = fmt;
+            cache.length = length;
+            cache.value = String(std::u32string_view(fmt, length));
+        }
+        return cache.value;
+    }
+
+    StringView::StringView(const String& text) noexcept : m_data(text.m_impl->m_data.get()), m_length(text.m_impl->m_size) { }
 }

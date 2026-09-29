@@ -1,6 +1,7 @@
 #include <LikesProgram/Threading/Threading.hpp>
 #include <LikesProgram/Core/Version.hpp>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -122,6 +123,7 @@ namespace {
         LikesProgram::Threading::ThreadPool::Options options(1, 2, 8);
         LikesProgram::Threading::ThreadPool pool(observer, options);
 
+        const auto earliestTimestamp = std::chrono::system_clock::now() - std::chrono::seconds(1); // 时间戳允许的下界
         pool.Start();
         auto future = pool.Submit([](int left, int right) {
             return left + right;
@@ -130,10 +132,19 @@ namespace {
         pool.Shutdown();
         Require(pool.AwaitTermination(std::chrono::seconds(5)), "ThreadPool should terminate");
         pool.JoinAll();
+        const auto latestTimestamp = std::chrono::system_clock::now() + std::chrono::seconds(1); // 时间戳允许的上界
 
         auto stats = pool.Snapshot();
         Require(stats.submitted == 1, "Statistics should count submitted task");
         Require(stats.completed == 1, "Statistics should count completed task");
+        Require(stats.lastSubmitTime != LikesProgram::Time::TimePoint{},
+            "Statistics should retain the latest submit time");
+        Require(stats.lastFinishTime >= stats.lastSubmitTime,
+            "Statistics finish time should not precede submit time");
+        Require(stats.lastSubmitTime >= earliestTimestamp && stats.lastSubmitTime <= latestTimestamp,
+            "Statistics submit time should use the current system-clock epoch");
+        Require(stats.lastFinishTime >= earliestTimestamp && stats.lastFinishTime <= latestTimestamp,
+            "Statistics finish time should use the current system-clock epoch");
         Require(observer->Submitted() == 1, "Observer should see submitted event");
         Require(observer->Started() == 1, "Observer should see started event");
         Require(observer->Completed() == 1, "Observer should see completed event");
@@ -236,6 +247,31 @@ namespace {
             "Post task exception should be routed to exception handler exactly once");
     }
 
+    void TestParkedWorkerWakeup() {
+        LikesProgram::Threading::ThreadPool::Options options(1, 1, 8,
+            LikesProgram::Threading::ThreadPool::RejectPolicy::Block,
+            std::chrono::seconds(30), false, u"");
+        LikesProgram::Threading::ThreadPool pool(options);
+        pool.Start();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        for (int round = 0; round < 32; ++round) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            auto future = pool.Submit([round] { return round; });
+            Require(future.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+                "Parked worker should wake for a sparse submitted task");
+            Require(future.get() == round, "Sparse submitted task should preserve its result");
+        }
+
+        pool.Shutdown();
+        Require(pool.AwaitTermination(std::chrono::seconds(5)),
+            "Sparse wakeup pool should terminate");
+        pool.JoinAll();
+        const auto stats = pool.Snapshot();
+        Require(stats.submitted == 32 && stats.completed == 32,
+            "Sparse wakeup tasks should retain submitted/completed statistics");
+    }
+
     void TestSubmitExceptionFuture() {
         std::atomic<size_t> exceptions{ 0 }; // Submit 异常只应进入 future
         LikesProgram::Threading::ThreadPool::Options options(1, 1, 4);
@@ -262,6 +298,65 @@ namespace {
         Require(threw, "Submit task exception should be observed through future");
         Require(exceptions.load(std::memory_order_relaxed) == 0,
             "Submit packaged_task exception should not be double-reported");
+
+        // 异常 future 已就绪时立即关闭，重复覆盖 worker 的 wait predicate 竞态。
+        for (int round = 0; round < 32; ++round) {
+            LikesProgram::Threading::ThreadPool repeat(options);
+            repeat.Start();
+            auto repeatFuture = repeat.Submit([]() -> int {
+                throw std::runtime_error("repeat submit failure");
+            });
+            try {
+                (void)repeatFuture.get();
+            }
+            catch (const std::runtime_error&) {
+            }
+            repeat.Shutdown();
+            Require(repeat.AwaitTermination(std::chrono::seconds(5)),
+                "Repeated submit exception pool should terminate");
+            repeat.JoinAll();
+        }
+    }
+
+    void TestMoveOnlyTaskTypes() {
+        LikesProgram::Threading::ThreadPool::Options options(1, 1, 8);
+        LikesProgram::Threading::ThreadPool pool(options);
+        std::atomic<int> postedValue{ 0 }; // 大体积 Post callable 执行结果
+
+        struct LargeMoveOnlyTask {
+            std::unique_ptr<int> value;     // move-only 所有权输入
+            std::array<unsigned char, 128> padding{}; // 覆盖大体积 move-only callable
+            std::atomic<int>* output = nullptr;       // 测试结果写入位置
+
+            LargeMoveOnlyTask(std::unique_ptr<int> input, std::atomic<int>* result)
+                : value(std::move(input)), output(result) { }
+            LargeMoveOnlyTask(LargeMoveOnlyTask&&) noexcept = default;
+            LargeMoveOnlyTask& operator=(LargeMoveOnlyTask&&) noexcept = default;
+            LargeMoveOnlyTask(const LargeMoveOnlyTask&) = delete;
+            LargeMoveOnlyTask& operator=(const LargeMoveOnlyTask&) = delete;
+
+            void operator()() {
+                output->store(*value, std::memory_order_release);
+            }
+        };
+
+        pool.Start();
+        auto future = pool.Submit([value = std::make_unique<int>(42)] {
+            return *value;
+        });
+        Require(pool.Post(LargeMoveOnlyTask(std::make_unique<int>(7), &postedValue)),
+            "Large move-only Post task should be accepted");
+        Require(future.get() == 42, "Move-only Submit task should preserve its result");
+        pool.Shutdown();
+        Require(pool.AwaitTermination(std::chrono::seconds(5)),
+            "Move-only task-type pool should terminate");
+        pool.JoinAll();
+
+        Require(postedValue.load(std::memory_order_acquire) == 7,
+            "Large move-only Post task should execute");
+        const auto stats = pool.Snapshot(); // 两类 move-only 任务应共享同一统计契约
+        Require(stats.submitted == 2 && stats.completed == 2,
+            "Move-only task types should retain submitted/completed statistics");
     }
 
     void TestConcurrentSubmitAndMaxThreads() {
@@ -371,6 +466,40 @@ namespace {
         pool.JoinAll();
     }
 
+    void TestBlockPolicyUnblocksOnQueueSpace() {
+        LikesProgram::Threading::ThreadPool::Options options(1, 1, 1,
+            LikesProgram::Threading::ThreadPool::RejectPolicy::Block);
+        LikesProgram::Threading::ThreadPool pool(options);
+        std::atomic<bool> release{ false }; // 控制首任务释放 worker
+        std::atomic<bool> blockingStarted{ false }; // 确认队列填充前 worker 已被占用
+
+        pool.Start();
+        Require(pool.Post([&release, &blockingStarted] {
+            blockingStarted.store(true, std::memory_order_release);
+            while (!release.load(std::memory_order_acquire)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }), "Blocking task should be accepted");
+        while (!blockingStarted.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        Require(pool.Post([] {}), "Queued task should fill capacity");
+
+        auto blockedSubmit = std::async(std::launch::async, [&pool] {
+            return pool.Post([] {});
+        });
+        Require(blockedSubmit.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout,
+            "Block policy should wait while the queue remains full");
+        release.store(true, std::memory_order_release);
+        Require(blockedSubmit.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+            "Blocked submitter should wake when a queue slot becomes available");
+        Require(blockedSubmit.get(), "Blocked submitter should enqueue after capacity is released");
+
+        pool.Shutdown();
+        Require(pool.AwaitTermination(std::chrono::seconds(5)), "Block policy pool should terminate");
+        pool.JoinAll();
+    }
+
     void TestRepeatedStartStopAndSnapshot() {
         LikesProgram::Threading::ThreadPool::Options options(1, 2, 8);
         LikesProgram::Threading::ThreadPool pool(options);
@@ -405,10 +534,13 @@ int main() {
         TestObserverExceptionIsolation();
         TestShutdownNowCancelsQueue();
         TestPostExceptionIsReported();
+        TestParkedWorkerWakeup();
         TestSubmitExceptionFuture();
+        TestMoveOnlyTaskTypes();
         TestConcurrentSubmitAndMaxThreads();
         TestDiscardOldPolicy();
         TestBlockPolicyUnblocksOnShutdown();
+        TestBlockPolicyUnblocksOnQueueSpace();
         TestRepeatedStartStopAndSnapshot();
     }
     catch (const std::exception& ex) {

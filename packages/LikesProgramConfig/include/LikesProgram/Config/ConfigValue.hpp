@@ -10,19 +10,19 @@ namespace LikesProgram {
     namespace Config {
         // 配置值的实际存储类型，供类型检查、Schema 校验和序列化分支使用。
         enum class ConfigValueType {
-            Null,
-            String,
-            Int64,
-            Double,
-            Bool,
-            Array,
-            Object
+            Null,   // 空
+            String, // 字符串
+            Int64,  // 整型
+            Double, // 双精度浮点型
+            Bool,   // Bool型
+            Array,  // 数组
+            Object  // 对象
         };
 
         // 内部访问桥接结构，只允许包内实现查看 PImpl 存储。
         struct ConfigValueAccess;
 
-        // 通用配置值树，支持标量、数组、对象以及 JSON/YAML/TOML 往返。
+        // 通用配置值树，支持标量、数组、对象以及 JSON5/YAML/TOML 往返。
         class LIKESPROGRAM_CONFIG_API ConfigValue {
         public:
             // 构造 null 值。
@@ -30,6 +30,9 @@ namespace LikesProgram {
 
             // 从字符串标量构造配置值。
             explicit ConfigValue(const String& raw);
+
+            // 移动字符串标量构造配置值，解析器可避免重复复制临时文本。
+            explicit ConfigValue(String&& raw);
 
             // 从 UTF-16 C 字符串构造配置值，空指针按空字符串处理。
             ConfigValue(const char16_t* raw);
@@ -151,14 +154,23 @@ namespace LikesProgram {
             // 返回对象字段名快照，保持插入顺序。
             std::vector<String> Keys() const;
 
-            // 尝试从 JSON 文本解析配置值树。
+            // 尝试从 JSON5 文本解析配置值树；严格 JSON 仍作为 JSON5 子集接受。
             static Result<ConfigValue> TryParseJson(const String& text);
 
-            // 从 JSON 文本解析配置值树，失败时抛出异常。
+            // 从 JSON5 文本解析配置值树，失败时抛出异常。
             static ConfigValue FromJson(const String& text);
 
-            // 序列化为 JSON，indent < 0 时输出紧凑格式。
+            // 序列化为 JSON5，indent < 0 时输出紧凑格式。
             String ToJson(int indent = 2) const;
+
+            // 尝试从 JSON5 文本解析配置值树，是 TryParseJson 的显式命名别名。
+            static Result<ConfigValue> TryParseJson5(const String& text);
+
+            // 从 JSON5 文本解析配置值树，是 FromJson 的显式命名别名。
+            static ConfigValue FromJson5(const String& text);
+
+            // 序列化为 JSON5，是 ToJson 的显式命名别名。
+            String ToJson5(int indent = 2) const;
 
             // 尝试从 YAML 文本解析配置值树。
             static Result<ConfigValue> TryParseYaml(const String& text);
@@ -187,6 +199,9 @@ namespace LikesProgram {
         private:
             struct ConfigValueImpl;
             ConfigValueImpl* m_impl = nullptr; // 唯一拥有的配置值存储对象
+
+            // 包内访问桥可用已完成的根 PImpl 直接构造，避免默认 null 后再替换。
+            explicit ConfigValue(ConfigValueImpl* impl) noexcept : m_impl(impl) { }
 
             // 懒初始化 PImpl，保证 moved-from 对象可继续使用。
             void EnsureImpl();

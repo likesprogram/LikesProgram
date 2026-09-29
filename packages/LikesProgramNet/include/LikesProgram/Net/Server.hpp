@@ -3,7 +3,8 @@
 #include <LikesProgram/Net/Address.hpp>
 #include <LikesProgram/Net/Channel.hpp>
 #include <LikesProgram/Net/ConnectionFactory.hpp>
-#include <LikesProgram/Net/Transport.hpp>
+#include <LikesProgram/Net/Protocol.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -42,16 +43,22 @@ namespace LikesProgram {
             Status GetStatus() const noexcept;
             // 返回实际监听地址，端口为 0 时可在 Start 后读取系统分配端口。
             std::vector<Address> GetListenAddresses() const;
+            // 设置 worker EventLoop 数量；必须在 Start 前调用，0 表示单 Reactor。
+            void SetWorkerThreads(std::size_t workerCount);
 
         private:
             struct ServerImpl;
 
             // 创建并绑定所有监听 socket。
             void Listen();
-            // 处理指定监听 socket 的 accept 事件。
-            void AcceptReady(SocketType listenFd);
+            // 消费一个 accept completion 并创建连接。
+            void HandleAccepted(SocketType clientFd, EventLoop* ownerLoop);
             // 为 UDP 监听 socket 创建连接对象。
             void AttachDatagramConnection(SocketType fd);
+            // 选择连接所属 EventLoop，未启用 worker 时回退到主 loop。
+            EventLoop* PickConnectionLoop() noexcept;
+            // 在指定 loop 持有并启动连接。
+            void AttachConnectionToLoop(const std::shared_ptr<Connection>& connection, EventLoop* ownerLoop);
             // 原子设置状态并通知等待者。
             void SetStatus(Status status);
 

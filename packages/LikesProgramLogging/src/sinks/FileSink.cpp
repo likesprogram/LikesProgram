@@ -1,10 +1,11 @@
 #include <LikesProgram/Logging/sinks/FileSink.hpp>
 #include <LikesProgram/Core/time/Time.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <memory>
 #include <mutex>
@@ -18,6 +19,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <share.h>
 #include <windows.h>
 #else
 #include <cerrno>
@@ -61,6 +63,15 @@ namespace LikesProgram {
             uint64_t LockTimeoutMilliseconds(std::chrono::milliseconds timeout) {
                 if (timeout.count() <= 0) return 0;
                 return static_cast<uint64_t>(timeout.count());
+            }
+
+            // FileSink 已持有实例互斥锁，使用无锁 stdio 入口避免重复获取 FILE 内部锁。
+            size_t WriteFileUnlocked(std::FILE* file, const char* data, size_t size) noexcept {
+#ifdef _WIN32
+                return ::_fwrite_nolock(data, 1, size, file);
+#else
+                return ::fwrite_unlocked(data, 1, size, file);
+#endif
             }
 
             // RAII 跨进程文件锁，保护 FileSink 的轮转、写入和保留策略临界区。
@@ -192,49 +203,53 @@ namespace LikesProgram {
                 m_multiProcess(multiProcess) {
                 if (m_path.Empty()) m_path = u"./logs";
                 if (m_filename.Empty()) m_filename = u"Logger.log";
-                ProcessFileLockGuard processLock(m_multiProcess, BuildLockSource()); // 打开/轮转前的跨进程互斥保护
+                ProcessFileLockGuard processLock(m_multiProcess,
+                    m_multiProcess.enabled ? BuildLockSource() : std::string()); // 打开/轮转前的跨进程互斥保护
                 OpenNewFileLocked(std::chrono::system_clock::now());
             }
 
-            // 析构时关闭文件流，Flush 失败只能由显式 Flush 路径暴露。
+            // 析构时关闭文件句柄，Flush 失败只能由显式 Flush 路径暴露。
             ~FileSinkImpl() {
-                if (m_file.is_open()) m_file.close(); // 明确释放 Windows 文件句柄，避免依赖成员析构顺序
+                CloseFile();
             }
 
             // 写入一条已格式化日志；必要时根据大小或日期触发轮转。
-            void Write(const String& formatted, String::Encoding encoding,
+            void Write(const std::string& encoded,
                 std::chrono::system_clock::time_point timestamp) {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                ProcessFileLockGuard processLock(m_multiProcess, BuildLockSource()); // 覆盖跨进程尺寸检查、轮转和写入
+                ProcessFileLockGuard processLock(m_multiProcess,
+                    m_multiProcess.enabled ? BuildLockSource() : std::string()); // 覆盖跨进程尺寸检查、轮转和写入
                 if (m_multiProcess.enabled && !m_currentFilePath.empty()) {
                     std::error_code ec; // 读取 peer 进程写入后的实际文件大小错误码
                     auto size = std::filesystem::file_size(m_currentFilePath, ec); // 当前文件真实字节数
                     if (!ec) m_currentSize = static_cast<size_t>(size);
                 }
                 if (NeedRotate(timestamp)) OpenNewFileLocked(timestamp);
-                if (!m_file.is_open()) throw std::runtime_error("Log file stream is not open");
+                if (!m_file) throw std::runtime_error("Log file stream is not open");
 
-                std::string encoded = formatted.ToStdString(encoding); // 目标编码下的单条日志字节串
-                m_file << encoded << '\n';
-                if (!m_file) throw std::runtime_error("Failed to write log file");
+                const size_t written = WriteFileUnlocked(m_file, encoded.data(), encoded.size());
+                if (written != encoded.size()) {
+                    throw std::runtime_error("Failed to write log file");
+                }
 
-                m_currentSize += encoded.size() + 1;
+                m_currentSize += encoded.size();
             }
 
             // 刷新当前文件流；跨进程模式下刷新后重开文件以观察 peer 写入。
             void Flush() {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                if (!m_file.is_open()) return;
+                if (!m_file) return;
 
-                ProcessFileLockGuard processLock(m_multiProcess, BuildLockSource()); // 保护 flush 与可选重开窗口
+                ProcessFileLockGuard processLock(m_multiProcess,
+                    m_multiProcess.enabled ? BuildLockSource() : std::string()); // 保护 flush 与可选重开窗口
                 if (m_multiProcess.enabled && !m_currentFilePath.empty()) {
                     std::error_code ec; // 读取当前文件大小的错误码
                     auto size = std::filesystem::file_size(m_currentFilePath, ec); // flush 前同步后的文件大小
                     if (!ec) m_currentSize = static_cast<size_t>(size);
                 }
-                m_file.flush();
-                if (!m_file) throw std::runtime_error("Failed to flush log file");
-
+                if (std::fflush(m_file) != 0) {
+                    throw std::runtime_error("Failed to flush log file");
+                }
                 if (m_multiProcess.enabled && !m_currentFilePath.empty()) {
                     ReopenCurrentFileLocked();
                 }
@@ -243,7 +258,8 @@ namespace LikesProgram {
             // 热更新文件轮转和保留策略，并立即执行一次保留清理。
             void Configure(const FileSinkOptions& options) {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                ProcessFileLockGuard processLock(m_multiProcess, BuildLockSource()); // 防止配置期间 peer 同时轮转/清理
+                ProcessFileLockGuard processLock(m_multiProcess,
+                    m_multiProcess.enabled ? BuildLockSource() : std::string()); // 防止配置期间 peer 同时轮转/清理
                 m_options = NormalizeOptions(options);
                 EnforceRetention();
             }
@@ -255,6 +271,31 @@ namespace LikesProgram {
             }
 
         private:
+            void CloseFile() noexcept {
+                if (!m_file) return;
+                std::fclose(m_file);
+                m_file = nullptr;
+            }
+
+            void OpenFile(const std::filesystem::path& path, const char* failurePrefix) {
+                CloseFile();
+#ifdef _WIN32
+                m_file = _wfsopen(path.c_str(), L"ab", _SH_DENYNO);
+                if (!m_file) {
+#else
+                m_file = std::fopen(path.c_str(), "ab");
+                if (!m_file) {
+#endif
+                    throw std::runtime_error(std::string(failurePrefix) + path.string());
+                }
+                if (std::setvbuf(m_file, m_fileBuffer.data(), _IOFBF,
+                    m_fileBuffer.size()) != 0) {
+                    CloseFile();
+                    throw std::runtime_error(std::string("Failed to configure log file buffer: ") +
+                        path.string());
+                }
+            }
+
             struct ManagedFile {
                 std::filesystem::path path;                         // 被当前 FileSink 命名规则托管的日志文件
                 std::filesystem::file_time_type writeTime;           // 最近修改时间，用于保留天数和淘汰排序
@@ -277,12 +318,35 @@ namespace LikesProgram {
                 return source.string();
             }
 
+            // 缓存当前本地日期的时间边界，避免每条日志重复执行本地时区转换。
+            void UpdateDateBoundaries(std::chrono::system_clock::time_point timestamp) {
+                std::time_t current = std::chrono::system_clock::to_time_t(timestamp); // 消息对应的本地日期
+                std::tm local = LikesProgram::Time::ToLocalTime(current); // 线程安全的本地时间快照
+                local.tm_hour = 0;
+                local.tm_min = 0;
+                local.tm_sec = 0;
+                local.tm_isdst = -1;
+
+                const std::time_t dayStart = std::mktime(&local); // 当前本地日开始
+                local.tm_mday += 1;
+                local.tm_isdst = -1;
+                const std::time_t nextDayStart = std::mktime(&local); // 下一本地日开始，保留 DST 语义
+                if (dayStart == static_cast<std::time_t>(-1) ||
+                    nextDayStart == static_cast<std::time_t>(-1)) {
+                    throw std::runtime_error("Failed to calculate log rotation date boundary");
+                }
+
+                m_currentDayStart = std::chrono::system_clock::from_time_t(dayStart);
+                m_nextDayStart = std::chrono::system_clock::from_time_t(nextDayStart);
+            }
+
             // 打开当天可写日志文件；若现有文件达到大小上限则推进轮转索引。
             void OpenNewFileLocked(std::chrono::system_clock::time_point timestamp) {
-                if (m_file.is_open()) m_file.close();
+                CloseFile();
 
                 m_currentSize = 0;
                 m_lastRotateTime = timestamp;
+                UpdateDateBoundaries(timestamp);
                 LikesProgram::String timeDir = LikesProgram::Time::FormatTime(m_lastRotateTime, u"%Y-%m-%d"); // 日期目录名
 
                 std::filesystem::path dir = std::filesystem::path(m_path.ToStdString()) / timeDir.ToStdString(); // 当天日志目录
@@ -303,22 +367,14 @@ namespace LikesProgram {
                     ++m_fileIndex;
                 }
 
-                m_file.open(filePath, std::ios::out | std::ios::app);
-                if (!m_file) throw std::runtime_error("Failed to open log file: " + filePath);
-
                 m_currentFilePath = std::filesystem::path(filePath);
+                OpenFile(m_currentFilePath, "Failed to open log file: ");
                 EnforceRetention();
             }
 
             // 跨进程模式下重新打开当前文件，避免长时间持有陈旧文件状态。
             void ReopenCurrentFileLocked() {
-                if (m_file.is_open()) m_file.close();
-
-                m_file.open(m_currentFilePath, std::ios::out | std::ios::app);
-                if (!m_file) {
-                    throw std::runtime_error("Failed to reopen log file after flush: " +
-                        m_currentFilePath.string());
-                }
+                OpenFile(m_currentFilePath, "Failed to reopen log file after flush: ");
 
                 std::error_code ec; // 文件大小读取错误码
                 auto size = std::filesystem::file_size(m_currentFilePath, ec); // 重开后真实文件大小
@@ -327,19 +383,14 @@ namespace LikesProgram {
 
             // 判断是否需要按大小或日期轮转，必要时更新下一文件索引。
             bool NeedRotate(std::chrono::system_clock::time_point time) {
-                if (!m_file.is_open()) return false;
+                if (!m_file) return false;
 
                 if (m_options.maxFileSizeBytes > 0 && m_currentSize >= m_options.maxFileSizeBytes) {
                     ++m_fileIndex;
                     return true;
                 }
 
-                std::time_t nowTime = std::chrono::system_clock::to_time_t(time); // 当前消息时间
-                std::time_t lastTime = std::chrono::system_clock::to_time_t(m_lastRotateTime); // 上次轮转时间
-                std::tm nowTm = LikesProgram::Time::ToLocalTime(nowTime); // 当前本地日期
-                std::tm lastTm = LikesProgram::Time::ToLocalTime(lastTime); // 上次轮转本地日期
-
-                if (nowTm.tm_year != lastTm.tm_year || nowTm.tm_mon != lastTm.tm_mon || nowTm.tm_mday != lastTm.tm_mday) {
+                if (time < m_currentDayStart || time >= m_nextDayStart) {
                     m_fileIndex = 0;
                     return true;
                 }
@@ -449,7 +500,8 @@ namespace LikesProgram {
             }
 
         private:
-            std::ofstream m_file;                                      // 当前持有的日志文件流
+            std::FILE* m_file = nullptr;                               // 当前持有的二进制追加文件句柄
+            std::array<char, 64 * 1024> m_fileBuffer{};                // 减少小日志写入的系统调用频率
             LikesProgram::String m_path;                               // 日志根目录
             size_t m_fileIndex = 0;                                    // 同一天内的轮转文件索引
             LikesProgram::String m_filename;                           // 基础文件名
@@ -458,6 +510,8 @@ namespace LikesProgram {
             MultiProcessFileConfig m_multiProcess;                       // 可选跨进程文件锁配置
             std::filesystem::path m_currentFilePath;                    // 当前打开文件路径，清理时避免删除
             std::chrono::system_clock::time_point m_lastRotateTime;    // 上次打开文件的时间
+            std::chrono::system_clock::time_point m_currentDayStart;   // 当前文件对应本地日期的开始时间
+            std::chrono::system_clock::time_point m_nextDayStart;      // 下一本地日期开始，作为日期轮转上界
             mutable std::mutex m_mutex;                                // 保护文件流、策略和当前文件路径
         };
 
@@ -493,8 +547,10 @@ namespace LikesProgram {
         void FileSink::Write(const Message& message) {
             if (!m_impl) return;
 
-            LikesProgram::String formatted = FormatLogMessage(message);
-            m_impl->Write(formatted, message.encoding, message.timestamp);
+            thread_local std::string formatted; // 同一写线程复用容量，避免每条日志重新分配
+            FormatLogMessageBytes(message, message.encoding, formatted);
+            formatted.push_back('\n'); // 与 spdlog 一样将正文和换行合并为单次缓冲写入
+            m_impl->Write(formatted, message.timestamp);
         }
 
         void FileSink::Flush() {

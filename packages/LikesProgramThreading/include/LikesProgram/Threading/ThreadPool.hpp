@@ -2,6 +2,7 @@
 #include <LikesProgram/Threading/ThreadPoolObserver.hpp>
 #include <LikesProgram/Core/String.hpp>
 #include <chrono>
+#include <exception>
 #include <functional>
 #include <future>
 #include <memory>
@@ -14,6 +15,50 @@
 
 namespace LikesProgram {
     namespace Threading {
+        namespace Detail {
+            // 线程池内部 move-only 任务擦除；队列项只持有一个唯一所有权指针。
+            class ThreadPoolTask {
+            public:
+                ThreadPoolTask() = default;
+
+                template<typename F,
+                    typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, ThreadPoolTask>>>
+                explicit ThreadPoolTask(F&& function)
+                    : m_task(std::make_unique<TaskModel<std::decay_t<F>>>(std::forward<F>(function))) { }
+
+                ThreadPoolTask(ThreadPoolTask&&) noexcept = default;
+                ThreadPoolTask& operator=(ThreadPoolTask&&) noexcept = default;
+                ThreadPoolTask(const ThreadPoolTask&) = delete;
+                ThreadPoolTask& operator=(const ThreadPoolTask&) = delete;
+                ~ThreadPoolTask() = default;
+
+                // 执行已擦除任务；空任务只用于 worker 局部占位。
+                void operator()() {
+                    if (m_task) m_task->Run();
+                }
+
+                explicit operator bool() const noexcept { return static_cast<bool>(m_task); }
+
+            private:
+                struct TaskConcept {
+                    virtual ~TaskConcept() = default;
+                    virtual void Run() = 0;
+                };
+
+                template<typename Callable>
+                struct TaskModel final : TaskConcept {
+                    explicit TaskModel(Callable&& function) : m_function(std::move(function)) { }
+
+                    // 单次任务执行后不再复用存储的 callable。
+                    void Run() override { std::invoke(m_function); }
+
+                    Callable m_function; // 具体 move-only callable
+                };
+
+                std::unique_ptr<TaskConcept> m_task; // 唯一拥有的任务实现
+            };
+        }
+
         // 任务队列满时的处理策略。
         enum class ThreadPoolRejectPolicy {
             Block,
@@ -72,8 +117,8 @@ namespace LikesProgram {
             size_t aliveThreads = 0;    // 存活工作线程数
             size_t largestPoolSize = 0; // 历史最大线程数
             size_t peakQueueSize = 0;   // 历史最大队列长度
-            Time::TimePoint lastSubmitTime{}; // 最近一次提交时间
-            Time::TimePoint lastFinishTime{}; // 最近一次完成时间
+            Time::TimePoint lastSubmitTime{}; // 最近一次采样提交时间
+            Time::TimePoint lastFinishTime{}; // 最近一次采样完成时间
 
             // 生成可读统计文本。
             String ToString() const {
@@ -86,9 +131,9 @@ namespace LikesProgram {
                 stats.Append(String(u"存活工作线程数：")).Append(String(std::to_string(aliveThreads))).Append(String(u"\r\n"));
                 stats.Append(String(u"历史最大线程数：")).Append(String(std::to_string(largestPoolSize))).Append(String(u"\r\n"));
                 stats.Append(String(u"队列峰值：")).Append(String(std::to_string(peakQueueSize))).Append(String(u"\r\n"));
-                stats.Append(String(u"最后一次提交时间："))
+                stats.Append(String(u"最近采样提交时间："))
                     .Append(Time::FormatTime(lastSubmitTime, u"%Y-%m-%d %H:%M:%S.%f")).Append(String(u"\r\n"));
-                stats.Append(String(u"最后一次完成时间："))
+                stats.Append(String(u"最近采样完成时间："))
                     .Append(Time::FormatTime(lastFinishTime, u"%Y-%m-%d %H:%M:%S.%f")).Append(String(u"\r\n"));
                 return stats;
             }
@@ -132,48 +177,60 @@ namespace LikesProgram {
             // 等待 worker 退出，timeout=0 表示非阻塞检查。
             bool AwaitTermination(std::chrono::milliseconds timeout);
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // 支持静态可知必然抛出的 callable，异常仍由 future 接收
+#endif
             // 提交有返回值任务。
             template<typename F, typename... Args>
             auto Submit(F&& function, Args&&... args)
                 -> std::future<std::invoke_result_t<F, Args...>> {
                 using Ret = std::invoke_result_t<F, Args...>;
 
-                auto task = std::make_shared<std::packaged_task<Ret()>>(
-                    [fn = std::forward<F>(function),
-                    tup = std::make_tuple(std::forward<Args>(args)...)]() mutable -> Ret {
-                        return std::apply(std::move(fn), std::move(tup));
-                    });
-                std::future<Ret> future = task->get_future(); // 调用方持有的结果通道
-
-                auto wrapper = [task]() {
-                    // packaged_task 会把任务异常转发给 future。
-                    (*task)();
+                std::promise<Ret> promise; // 本任务唯一结果生产端
+                std::future<Ret> future = promise.get_future(); // 调用方持有的结果通道
+                auto task = [promise = std::move(promise), fn = std::forward<F>(function),
+                    tup = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                    try {
+                        if constexpr (std::is_void_v<Ret>) {
+                            std::apply(std::move(fn), std::move(tup));
+                            promise.set_value();
+                        }
+                        else {
+                            promise.set_value(std::apply(std::move(fn), std::move(tup)));
+                        }
+                    }
+                    catch (...) {
+                        // future 保留任务原始异常；worker 继续处理后续任务。
+                        try { promise.set_exception(std::current_exception()); }
+                        catch (...) { }
+                    }
                 };
 
-                if (!EnqueueTask(std::function<void()>(wrapper))) {
-                    std::promise<Ret> promise; // 拒绝时返回已失败 future
-                    promise.set_exception(std::make_exception_ptr(std::runtime_error("ThreadPool: Task rejected")));
-                    return promise.get_future();
+                if (!EnqueueTask(Detail::ThreadPoolTask(std::move(task)))) {
+                    std::promise<Ret> rejectedPromise; // 拒绝时返回已失败 future
+                    rejectedPromise.set_exception(
+                        std::make_exception_ptr(std::runtime_error("ThreadPool: Task rejected")));
+                    return rejectedPromise.get_future();
                 }
                 return future;
             }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
             // 提交无返回值任务，返回是否成功入队。
             template<typename F, typename... Args>
             bool Post(F&& function, Args&&... args) {
                 using Fn = std::decay_t<F>;
 
-                auto taskState = std::make_shared<std::tuple<Fn, std::decay_t<Args>...>>(
-                    Fn(std::forward<F>(function)), std::forward<Args>(args)...);
-
-                auto wrapper = [taskState]() mutable {
+                auto wrapper = [fn = Fn(std::forward<F>(function)),
+                    tup = std::make_tuple(std::forward<Args>(args)...)]() mutable {
                     // Post 没有 future 返回通道，任务异常必须交给 worker 的异常隔离路径处理。
-                    std::apply([](auto& fn, auto&... boundArgs) {
-                        std::invoke(std::move(fn), std::move(boundArgs)...);
-                    }, *taskState);
+                    std::apply(std::move(fn), std::move(tup));
                 };
 
-                bool success = EnqueueTask(std::function<void()>(wrapper)); // 入队结果
+                bool success = EnqueueTask(Detail::ThreadPoolTask(std::move(wrapper))); // 入队结果
                 if (!success) ReportException(std::make_exception_ptr(std::runtime_error("Task rejected")));
                 return success;
             }
@@ -220,11 +277,14 @@ namespace LikesProgram {
             ThreadPool(ThreadPool&&) noexcept = delete;
             ThreadPool& operator=(ThreadPool&&) noexcept = delete;
 
-            // 尝试入队任务，并按拒绝策略处理满队列。
+            // 保留旧 DLL 符号，兼容已按 std::function 提交任务的安装态 consumer。
             bool EnqueueTask(std::function<void()>&& task);
 
+            // 新头内模板使用 move-only 擦除任务入队，并按拒绝策略处理满队列。
+            bool EnqueueTask(Detail::ThreadPoolTask&& task);
+
             // worker 主循环。
-            void WorkerLoop();
+            void WorkerLoop(size_t statisticsSlot);
 
             // 尝试创建一个 worker，返回是否实际新增线程。
             bool SpawnWorker();
